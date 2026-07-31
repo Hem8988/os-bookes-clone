@@ -1,0 +1,433 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Unit {
+  id                String  @id
+  code              String
+  name              String
+  symbol            String
+  isDecimalAllowed  Boolean @default(false)
+}
+
+model Category {
+  id                String  @id
+  name              String
+  hsnDefault        String?
+  itemCount         Int     @default(0)
+  active            Boolean @default(true)
+  purchaseDiscount  Float?
+  saleDiscount      Float?
+  image             String?
+}
+
+model Brand {
+  id            String @id
+  name          String
+  manufacturer  String
+}
+
+model Tax {
+  id    String @id
+  name  String
+  rate  Float
+  cgst  Float
+  sgst  Float
+  igst  Float
+}
+
+model Bank {
+  id              String  @id
+  accountName     String
+  bankName        String
+  accountNumber   String
+  ifscCode        String
+  branch          String
+  openingBalance  Float   @default(0)
+  currentBalance  Float   @default(0)
+  upiId           String?
+  qrCodeUrl       String?
+  address         String?
+  bookType        String?
+}
+
+model BookType {
+  id    String @id @default(cuid())
+  name  String @unique
+}
+
+model Employee {
+  id                        String  @id
+  name                      String
+  role                      String
+  phone                     String
+  email                     String
+  salary                    Float   @default(0)
+  commissionPercent         Float   @default(0)
+  active                    Boolean @default(true)
+  city                      String?
+  joiningDate               String?
+  designation               String?
+  salaryType                String?
+  paidHoliday               Int?
+  specialCommission         Float?
+  totalSaleCommission       Float?
+  commissionOnManufacturing Boolean?
+}
+
+model Expense {
+  id             String  @id
+  categoryName   String
+  hsnSac         String?
+  gstRate        Float   @default(0)
+  monthlyBudget  Float   @default(0)
+  ytdSpent       Float   @default(0)
+  active         Boolean @default(true)
+  expenseHead    String
+  expenseType    String
+}
+
+model Income {
+  id          String @id
+  sourceName  String
+  hsnSac      String?
+  gstRate     Float  @default(0)
+  ytdEarned   Float  @default(0)
+}
+
+model PaymentModeMaster {
+  id                    String  @id
+  modeName              String
+  linkedAccount         String
+  transactionFeePercent Float   @default(0)
+  active                Boolean @default(true)
+}
+
+model Bom {
+  id                String  @id
+  finishedGoodId    String
+  finishedGoodName  String
+  bomCode           String
+  laborCost         Float   @default(0)
+  totalCost         Float   @default(0)
+  active            Boolean @default(true)
+  components        Json
+}
+
+model Company {
+  id            String  @id
+  companyName   String
+  tradeName     String
+  gstin         String
+  pan           String
+  phone         String
+  email         String
+  address       String
+  city          String
+  state         String
+  stateCode     String
+  pincode       String
+  isMainBranch  Boolean @default(false)
+}
+
+model Account {
+  id              String  @id
+  accountName     String
+  group           String
+  openingBalance  Float   @default(0)
+  currentBalance  Float   @default(0)
+  gstin           String?
+  phone           String?
+  city            String?
+  state           String?
+  address         String?
+}
+
+model Product {
+  id                        String   @id
+  name                      String
+  category                  String
+  brand                     String?
+  sku                       String
+  barcode                   String?
+  hsnCode                   String
+  unit                      String
+  purchasePrice             Float    @default(0)
+  salePrice                 Float    @default(0)
+  mrp                       Float?
+  taxRate                   Float    @default(0)
+  stock                     Float    @default(0)
+  minStockAlert             Float    @default(0)
+  maxStockLimit             Float?
+  rackLocation              String?
+  batchNumber               String?
+  expiryDate                String?
+  groupCode                 String?
+  active                    Boolean  @default(true)
+  gstApplicable             Boolean?
+  autoQty                   Float?
+  productType               String?
+  isMoreInfo                Boolean?
+  isRawMaterial             Boolean?
+  isSubItem                 Boolean?
+  image                     String?
+  size                      String?
+  colour                    String?
+  expiryMonth               Int?
+  productHindiName          String?
+  description               String?
+  termsAndCondition         String?
+  productTags               String[]
+  parentProductId           String?
+  parentProductName         String?
+  subItemConversionQty      Float?
+  rawMaterialComponents     ProductRawMaterialComponent[]
+}
+
+model ProductRawMaterialComponent {
+  id              String  @id @default(cuid())
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId       String
+  componentProductId    String
+  componentProductName  String
+  productCode     String?
+  quantity        Float
+  unit            String
+  unitCost        Float
+  mrp             Float?
+  salePrice       Float?
+  wholesalePrice  Float?
+  image           String?
+  customValues    Json?
+}
+
+model Customer {
+  id              String   @id
+  name            String
+  phone           String
+  email           String
+  gstin           String?
+  address         String
+  city            String
+  state           String
+  stateCode       String?
+  balance         Float    @default(0)
+  creditLimit     Float    @default(0)
+  creditDays      Int?
+  type            String
+  accountGroup    String
+  active          Boolean? @default(true)
+  dueDays         Int?
+  tags            String[]
+  isMoreInfo      Boolean?
+  isWholeParty    Boolean?
+  isSezParty      Boolean?
+  isFocParty      Boolean?
+  isShowPartyRate Boolean?
+  pincode         String?
+  gstApplicable   String?
+  partyType       String?
+  otherMobile     String?
+  interestRate    Float?
+  loyaltyPoints   Float?
+  joiningDate     String?
+  rateMode        String?
+  partyRates      PartyRate[]
+  followUps       FollowUp[]
+}
+
+model PartyRate {
+  id          String   @id @default(cuid())
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId  String
+  productId   String
+  productName String
+  price       Float
+}
+
+model FollowUp {
+  id            String   @id
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId    String
+  type          String
+  note          String
+  followUpDate  String
+  createdAt     String
+}
+
+model Invoice {
+  id              String        @id
+  invoiceNumber   String
+  date            String
+  dueDate         String
+  customerId      String
+  customerName    String
+  customerGstin   String?
+  customerPhone   String
+  salesmanId      String?
+  salesmanName    String?
+  subTotal        Float         @default(0)
+  totalDiscount   Float         @default(0)
+  totalCgst       Float         @default(0)
+  totalSgst       Float         @default(0)
+  totalIgst       Float         @default(0)
+  roundOff        Float         @default(0)
+  grandTotal      Float         @default(0)
+  paymentMode     String
+  bankAccountId   String?
+  status          String
+  isIgst          Boolean       @default(false)
+  notes           String?
+  items           InvoiceItem[]
+}
+
+model InvoiceItem {
+  id              String  @id @default(cuid())
+  invoice         Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId       String
+  productId       String
+  productName     String
+  hsnCode         String
+  quantity        Float
+  unit            String
+  unitPrice       Float
+  mrp             Float?
+  discountPercent Float   @default(0)
+  taxRate         Float   @default(0)
+  taxableAmount   Float   @default(0)
+  cgstAmount      Float   @default(0)
+  sgstAmount      Float   @default(0)
+  igstAmount      Float   @default(0)
+  totalAmount     Float   @default(0)
+}
+
+model PurchaseOrder {
+  id            String @id
+  poNumber      String
+  vendorName    String
+  vendorGstin   String?
+  date          String
+  expectedDate  String
+  itemsCount    Int    @default(0)
+  totalAmount   Float  @default(0)
+  status        String
+}
+
+model PurchaseInvoice {
+  id                    String @id
+  purchaseNumber        String
+  vendorInvoiceNumber   String
+  vendorName            String
+  vendorGstin           String
+  date                  String
+  subTotal              Float  @default(0)
+  itcEligibleAmount     Float  @default(0)
+  grandTotal            Float  @default(0)
+  status                String
+}
+
+model ReturnDocument {
+  id                String @id
+  docNumber         String
+  originalInvNumber String
+  partyName         String
+  date              String
+  returnReason      String
+  amount            Float  @default(0)
+  status            String
+  kind              String // 'Purchase' | 'Sales'
+}
+
+model SaleOrder {
+  id            String @id
+  soNumber      String
+  customerName  String
+  date          String
+  validUntil    String
+  totalAmount   Float  @default(0)
+  status        String
+}
+
+model DeliveryChallan {
+  id              String @id
+  challanNumber   String
+  customerName    String
+  vehicleNumber   String
+  dispatchDate    String
+  itemsCount      Int    @default(0)
+  totalQty        Float  @default(0)
+  status          String
+}
+
+model Quotation {
+  id            String @id
+  quoteNumber   String
+  customerName  String
+  customerPhone String
+  date          String
+  validDays     Int    @default(0)
+  grandTotal    Float  @default(0)
+  status        String
+}
+
+model StockAdjustment {
+  id              String @id
+  adjustCode      String
+  date            String
+  productName     String
+  adjustmentType  String
+  qty             Float  @default(0)
+  reason          String
+  approvedBy      String
+}
+
+model BranchStockTransfer {
+  id              String @id
+  transferNumber  String
+  type            String
+  fromBranch      String
+  toBranch        String
+  date            String
+  itemsCount      Int    @default(0)
+  totalQty        Float  @default(0)
+  status          String
+}
+
+model LedgerEntry {
+  id              String @id @default(cuid())
+  ledgerType      String // 'customer' | 'company' | 'bank' | 'employee' | 'expenses' | 'incomes' | 'payment'
+  date            String
+  voucherNumber   String
+  accountName     String
+  particulars     String
+  debit           Float  @default(0)
+  credit          Float  @default(0)
+  balance         Float  @default(0)
+}
+
+model AuditLog {
+  id          String @id
+  timestamp   String
+  actorEmail  String
+  action      String
+  details     String
+}
+
+model Attendance {
+  id              String @id
+  employeeId      String
+  employeeName    String
+  date            String
+  checkIn         String
+  checkOut        String
+  status          String
+  overtimeHours   Float  @default(0)
+}

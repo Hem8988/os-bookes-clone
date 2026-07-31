@@ -64,7 +64,7 @@ export const StockPriceUpdateModule: React.FC<StockPriceUpdateModuleProps> = ({
         ? currentMod[bulkField] 
         : (p[bulkField] as number || 0);
       
-      let newValue = currentValue;
+      let newValue = Number(currentValue) || 0;
       
       if (bulkOperation === 'set') {
         newValue = valueNum;

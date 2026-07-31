@@ -1,4 +1,5 @@
-import { PrismaClient } from '../lib/generated/prisma';
+import { PrismaClient } from '../lib/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import {
   INITIAL_CUSTOMERS,
   INITIAL_PRODUCTS,
@@ -35,7 +36,10 @@ import {
   INITIAL_AUDIT_LOG,
 } from '../lib/mockData';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL!
+});
+const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_BOOK_TYPES = [
   'BANK BOOK',

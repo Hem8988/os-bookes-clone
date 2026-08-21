@@ -4,6 +4,7 @@ import ApprovalQueueModule from '../components/ApprovalQueueModule';
 import DeliveryBoyModule from '../components/DeliveryBoyModule';
 import DeliveryGpsTrackingModule from '../components/DeliveryGpsTrackingModule';
 import SaasTenantModule from '../components/SaasTenantModule';
+import WhatsAppInvoiceSenderModule from '../components/WhatsAppInvoiceSenderModule';
 
 
 import React, { useState, useEffect } from 'react';
@@ -713,6 +714,7 @@ export default function Home() {
       {activeTab === 'delivery-app' && <DeliveryBoyModule />}
       {activeTab === 'gps-tracking' && <DeliveryGpsTrackingModule />}
       {activeTab === 'saas-tenants' && <SaasTenantModule />}
+      {activeTab === 'whatsapp-sender' && <WhatsAppInvoiceSenderModule />}
       {activeTab === 'dashboard' && (
             <Dashboard
               invoices={invoices}

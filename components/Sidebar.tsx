@@ -203,6 +203,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
+        {/* WhatsApp Invoice Sender Tool */}
+        <button
+          onClick={() => setActiveTab('whatsapp-sender')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'whatsapp-sender' ? 'bg-emerald-600 text-white font-semibold shadow-md' : 'text-emerald-300 hover:text-emerald-100 hover:bg-slate-800/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <RefreshCw className="h-4 w-4 text-emerald-400" />
+            <span>WhatsApp Bill & QR Sender</span>
+          </div>
+        </button>
+
         {/* Phase 2 & 3 Navigation */}
         <button
           onClick={() => setActiveTab('gps-tracking')}

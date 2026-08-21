@@ -240,8 +240,15 @@ model Customer {
   loyaltyPoints   Float?
   joiningDate     String?
   rateMode        String?
+  whatsappNumber  String?
+  area            String?
+  route           String?
+  defaultDeliveryBoyId String?
+  defaultProductIds String[]
+  openingEmptyCylinderQty Float? @default(0)
   partyRates      PartyRate[]
   followUps       FollowUp[]
+  cylinderInventories CustomerCylinderInventory[]
 }
 
 model PartyRate {
@@ -431,3 +438,145 @@ model Attendance {
   status          String
   overtimeHours   Float  @default(0)
 }
+
+model CustomerCylinderInventory {
+  id                   String   @id @default(cuid())
+  customer             Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId           String
+  productId            String
+  productName          String
+  openingQty           Float    @default(0)
+  deliveredQtyTotal    Float    @default(0)
+  emptyReceivedTotal   Float    @default(0)
+  adjustmentQty        Float    @default(0)
+  currentEmptyBalance  Float    @default(0)
+  currentFullBalance   Float    @default(0)
+  updatedAt            DateTime @updatedAt
+}
+
+model CylinderOrder {
+  id                    String              @id @default(cuid())
+  orderNumber           String              @unique
+  customerId            String
+  customerName          String
+  customerPhone         String
+  whatsappNumber        String?
+  source                String              @default("MANUAL") // 'WHATSAPP' | 'MANUAL' | 'ADMIN'
+  status                String              @default("PENDING_APPROVAL") // 'WHATSAPP_RECEIVED' | 'PENDING_APPROVAL' | 'APPROVED' | 'ASSIGNED' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'PENDING_VERIFICATION' | 'COMPLETED' | 'REJECTED'
+  requestedDeliveryDate String
+  deliveryAddress       String?
+  area                  String?
+  route                 String?
+  assignedDeliveryBoyId String?
+  assignedDeliveryBoyName String?
+  approvedBy            String?
+  approvedAt            String?
+  rejectionReason       String?
+  isCreditOverLimit     Boolean             @default(false)
+  items                 CylinderOrderItem[]
+  deliveries            CylinderDelivery[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+}
+
+model CylinderOrderItem {
+  id              String        @id @default(cuid())
+  order           CylinderOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId         String
+  productId       String
+  productName     String
+  orderedQty      Float
+  unitPrice       Float         @default(0)
+  totalAmount     Float         @default(0)
+}
+
+model CylinderDelivery {
+  id                    String                 @id @default(cuid())
+  deliveryNumber        String                 @unique
+  orderId               String
+  order                 CylinderOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId            String
+  customerName          String
+  deliveryBoyId         String
+  deliveryBoyName       String
+  deliveryDate          String
+  deliveredQtyTotal     Float                  @default(0)
+  emptyReceivedTotal    Float                  @default(0)
+  paymentMode           String                 @default("COD") // 'CASH' | 'ONLINE' | 'CHEQUE' | 'CREDIT'
+  paymentAmount         Float                  @default(0)
+  transactionId         String?
+  chequeNumber          String?
+  paymentProofPhotoUrl  String?
+  deliveryProofPhotoUrl String?
+  remarks               String?
+  status                String                 @default("PENDING_VERIFICATION") // 'PENDING_VERIFICATION' | 'VERIFIED' | 'REJECTED'
+  verifiedBy            String?
+  verifiedAt            String?
+  verificationNotes     String?
+  items                 CylinderDeliveryItem[]
+  createdAt             DateTime               @default(now())
+}
+
+model CylinderDeliveryItem {
+  id                   String           @id @default(cuid())
+  delivery             CylinderDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  deliveryId           String
+  productId            String
+  productName          String
+  deliveredQty         Float
+  emptyReceivedQty     Float            @default(0)
+  unitPrice            Float            @default(0)
+  totalAmount          Float            @default(0)
+}
+
+model ApprovalQueueItem {
+  id            String   @id @default(cuid())
+  requestType   String   // 'ORDER_APPROVAL' | 'DELIVERY_VERIFICATION' | 'CASH_SUBMISSION' | 'STOCK_TRANSFER' | 'CREDIT_OVERRIDE'
+  referenceId   String
+  requestedBy   String
+  status        String   @default("PENDING") // 'PENDING' | 'APPROVED' | 'REJECTED'
+  assignedTo    String?  // 'MANAGER' | 'ACCOUNTANT' | 'ADMIN'
+  payload       Json?
+  notes         String?
+  actionBy      String?
+  actionAt      DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model DeliveryBoyWallet {
+  id                    String   @id @default(cuid())
+  deliveryBoyId         String   @unique
+  deliveryBoyName       String
+  openingCash           Float    @default(0)
+  collectedCashTotal    Float    @default(0)
+  submittedCashTotal    Float    @default(0)
+  currentCashBalance    Float    @default(0)
+  openingCylinderStock  Json?
+  currentCylinderStock  Json?
+  lastClosedAt          String?
+  updatedAt             DateTime @updatedAt
+}
+
+model CashSubmission {
+  id                String   @id @default(cuid())
+  submissionNumber  String   @unique
+  deliveryBoyId     String
+  deliveryBoyName   String
+  amount            Float
+  proofPhotoUrl     String?
+  status            String   @default("PENDING") // 'PENDING' | 'APPROVED' | 'REJECTED'
+  verifiedBy        String?
+  verifiedAt        String?
+  notes             String?
+  createdAt         DateTime @default(now())
+}
+
+model WhatsAppSession {
+  id            String   @id @default(cuid())
+  phone         String   @unique
+  customerId    String?
+  step          String   @default("IDLE") // 'IDLE' | 'SELECT_PRODUCT' | 'ENTER_QTY' | 'SELECT_DATE' | 'CONFIRM'
+  draftOrder    Json?
+  lastMessageAt DateTime @updatedAt
+}
+

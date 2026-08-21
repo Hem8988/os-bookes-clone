@@ -1,4 +1,10 @@
 'use client';
+import CylinderBalanceModule from '../components/CylinderBalanceModule';
+import ApprovalQueueModule from '../components/ApprovalQueueModule';
+import DeliveryBoyModule from '../components/DeliveryBoyModule';
+import DeliveryGpsTrackingModule from '../components/DeliveryGpsTrackingModule';
+import SaasTenantModule from '../components/SaasTenantModule';
+
 
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '../components/Navbar';
@@ -702,7 +708,12 @@ export default function Home() {
 
         {/* Dynamic Content View Area */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-950/90 text-slate-100">
-          {activeTab === 'dashboard' && (
+          {activeTab === 'cylinder-inventory' && <CylinderBalanceModule />}
+      {activeTab === 'approval-queue' && <ApprovalQueueModule />}
+      {activeTab === 'delivery-app' && <DeliveryBoyModule />}
+      {activeTab === 'gps-tracking' && <DeliveryGpsTrackingModule />}
+      {activeTab === 'saas-tenants' && <SaasTenantModule />}
+      {activeTab === 'dashboard' && (
             <Dashboard
               invoices={invoices}
               products={products}

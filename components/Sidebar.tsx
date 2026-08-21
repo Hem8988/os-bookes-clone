@@ -203,6 +203,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
+        {/* Phase 2 & 3 Navigation */}
+        <button
+          onClick={() => setActiveTab('gps-tracking')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'gps-tracking' ? 'bg-sky-600 text-white font-semibold shadow-md' : 'text-sky-300 hover:text-sky-100 hover:bg-slate-800/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Truck className="h-4 w-4 text-sky-400" />
+            <span>GPS Tracking & AI Route</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('saas-tenants')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'saas-tenants' ? 'bg-purple-600 text-white font-semibold shadow-md' : 'text-purple-300 hover:text-purple-100 hover:bg-slate-800/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Building2 className="h-4 w-4 text-purple-400" />
+            <span>SaaS Tenants Platform</span>
+          </div>
+        </button>
+
+        {/* Cylinder Navigation */}
+        <button
+          onClick={() => setActiveTab('approval-queue')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'approval-queue' ? 'bg-amber-600 text-white font-semibold shadow-md' : 'text-amber-400 hover:text-amber-200 hover:bg-slate-800/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <RefreshCw className="h-4 w-4 text-amber-400" />
+            <span>Approval Queue</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cylinder-inventory')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'cylinder-inventory' ? 'bg-indigo-600 text-white font-semibold shadow-md' : 'text-indigo-300 hover:text-indigo-100 hover:bg-slate-800/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Package className="h-4 w-4 text-indigo-400" />
+            <span>Cylinder Inventory</span>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('delivery-app')}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'delivery-app' ? 'bg-emerald-600 text-white font-semibold shadow-md' : 'text-emerald-300 hover:text-emerald-100 hover:bg-slate-800/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Truck className="h-4 w-4 text-emerald-400" />
+            <span>Delivery Boy App</span>
+          </div>
+        </button>
+
         {/* Dashboard */}
         <button
           onClick={() => setActiveTab('dashboard')}

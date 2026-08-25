@@ -54,16 +54,16 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({
           <div className="flex justify-between items-start border-b border-slate-300 pb-4">
             <div>
               <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                OS TECH SOLUTIONS PVT LTD
+                PRAMUKH INDANE GAS AGENCY
               </h1>
               <p className="text-slate-600 text-[11px] font-medium mt-0.5">
-                GSTIN: <strong className="text-slate-900">23AAACO8991F1Z2</strong> | State Code: 23 (MP)
+                GSTIN: <strong className="text-slate-900">24AAAFP1234F1Z5</strong> | State Code: 23 (MP)
               </p>
               <p className="text-slate-500 text-[11px]">
-                102 MG Road, Main Business Center, Indore - 452001
+                Indane Gas Godown Road, Main Market, Indore - 452001
               </p>
               <p className="text-slate-500 text-[11px]">
-                Phone: +91 731 4987654 | Email: billing@os-books.com
+                Phone: +91 98765 43210 | Email: billing@pramukhindane.com
               </p>
             </div>
 

@@ -73,24 +73,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </span>
           </h2>
           <p className="text-xs md:text-sm text-slate-300 mt-1">
-            Store: <strong className="text-emerald-400">OS TECH SOLUTIONS (Indore)</strong> | Financial Year 2026-27
+            Store: <strong className="text-emerald-400">PRAMUKH INDANE GAS AGENCY</strong> | Financial Year 2026-27
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => setActiveTab('billing')}
-            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-4 py-2 rounded-xl text-xs md:text-sm shadow-md transition-all active:scale-95"
+            onClick={() => setActiveTab('approval-queue')}
+            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-3.5 py-2 rounded-xl text-xs md:text-sm shadow-md transition-all active:scale-95"
           >
-            <PlusCircle className="h-4 w-4" />
-            <span>Create Invoice (F2)</span>
+            <FileCheck2 className="h-4 w-4" />
+            <span>Approval Queue</span>
           </button>
           <button
-            onClick={() => setActiveTab('gst-reports')}
+            onClick={() => setActiveTab('cylinder-inventory')}
             className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
           >
-            <Download className="h-3.5 w-3.5 text-emerald-400" />
-            <span>GSTR Summary</span>
+            <Package className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Cylinder Inventory</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('delivery-app')}
+            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+          >
+            <Users className="h-3.5 w-3.5 text-amber-400" />
+            <span>Delivery Fleet</span>
           </button>
         </div>
       </div>

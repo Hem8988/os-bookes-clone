@@ -180,6 +180,9 @@ export interface Product {
   gstApplicable?: boolean;
   autoQty?: number;
   productType?: 'Product' | 'Service';
+  gasType?: string;
+  weightVolume?: number;
+  emptyDepositValue?: number;
   isMoreInfo?: boolean;
   isRawMaterial?: boolean;
   isSubItem?: boolean;
@@ -197,9 +200,23 @@ export interface Product {
   subItemConversionQty?: number;
 }
 
+export interface CustomerAddress {
+  id?: string;
+  label: string;
+  address: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  area?: string;
+  route?: string;
+  isDefault?: boolean;
+}
+
 export interface Customer {
   id: string;
   name: string;
+  tradeName?: string;
+  contactPerson?: string;
   phone: string;
   email: string;
   gstin?: string;
@@ -213,6 +230,8 @@ export interface Customer {
   type: 'Customer' | 'Vendor';
   accountGroup: 'Sundry Debtors' | 'Sundry Creditors';
   active?: boolean;
+  status?: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+  internalNotes?: string;
   dueDays?: number;
   tags?: string[];
   isMoreInfo?: boolean;
@@ -228,7 +247,13 @@ export interface Customer {
   loyaltyPoints?: number;
   joiningDate?: string;
   rateMode?: 'item' | 'company';
+  whatsappNumber?: string;
+  area?: string;
+  route?: string;
+  defaultDeliveryBoyId?: string;
+  openingEmptyCylinderQty?: number;
   partyRates?: PartyRate[];
+  deliveryAddresses?: CustomerAddress[];
 }
 
 export interface PartyRate {

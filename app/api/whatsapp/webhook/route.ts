@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { handleIncomingWhatsAppMessage } from '@/lib/whatsapp';
 
+// In-memory set for WhatsApp Message ID Deduplication
+const processedMessageIds = new Set<string>();
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('hub.mode');
@@ -18,19 +21,37 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
+    // Support standard Meta Cloud API webhook & custom Deskshark simulation payloads
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
-    const message = value?.messages?.[0];
+    const message = value?.messages?.[0] || body.message;
 
-    if (message) {
-      const from = message.from;
-      const text = message.text?.body || message.interactive?.button_reply?.id || '';
+    const from = message?.from || body.from;
+    const text = message?.text?.body || message?.interactive?.button_reply?.id || body.text || '';
+    const messageId = message?.id || body.messageId || `msg_${from}_${Date.now()}`;
+
+    if (from && text) {
+      // Deduplication Check
+      if (processedMessageIds.has(messageId)) {
+        console.log(`[WhatsApp Webhook] Duplicate message skipped: ${messageId}`);
+        return NextResponse.json({ status: 'duplicate_skipped' });
+      }
+
+      processedMessageIds.add(messageId);
+      // Keep deduplication set bounded to last 1000 messages
+      if (processedMessageIds.size > 1000) {
+        const first = processedMessageIds.values().next().value;
+        if (first) processedMessageIds.delete(first);
+      }
+
       await handleIncomingWhatsAppMessage(from, text);
     }
 
     return NextResponse.json({ status: 'success' });
   } catch (error: any) {
+    console.error('[WhatsApp Webhook Exception]:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

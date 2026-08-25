@@ -128,7 +128,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               <input
                 type="text"
                 required
-                placeholder="e.g. OS TECH SOLUTIONS - Bhopal Branch"
+                placeholder="e.g. PRAMUKH INDANE - Bhopal Depot"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs md:text-sm rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -142,7 +142,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. OS-Books Bhopal Store"
+                placeholder="e.g. Pramukh Indane Gas"
                 value={tradeName}
                 onChange={(e) => setTradeName(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -156,7 +156,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. 23AAACO8991F2Z1"
+                placeholder="e.g. 24AAAFP1234F1Z5"
                 value={gstin}
                 onChange={(e) => setGstin(e.target.value.toUpperCase())}
                 className="w-full px-3.5 py-2 text-xs font-mono uppercase rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -170,7 +170,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. +91 755 2445566"
+                placeholder="e.g. +91 98765 43210"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -184,7 +184,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               </label>
               <input
                 type="email"
-                placeholder="e.g. bhopal@os-books.com"
+                placeholder="e.g. depot@pramukhindane.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"

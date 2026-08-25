@@ -1,187 +1,168 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  ShieldCheck, 
-  KeyRound, 
-  Mail, 
-  ArrowRight, 
-  Sparkles, 
-  CheckCircle2, 
-  Building2,
-  Lock
-} from 'lucide-react';
+import { ShieldCheck, Truck, Users, Lock, Key, UserCheck, CheckCircle2, ArrowRight } from 'lucide-react';
 
 interface LoginPageProps {
-  onLoginSuccess: (email: string) => void;
+  onLoginSuccess?: (user: any, redirectPath: string) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('shivmrfxlu@gmail.com');
-  const [pin, setPin] = useState('5577');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'ADMIN' | 'ACCOUNTANT' | 'DELIVERY_BOY' | 'CUSTOMER'>('ADMIN');
+  const [email, setEmail] = useState('admin@deskshark.com');
+  const [password, setPassword] = useState('admin123');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const VALID_EMAIL = 'shivmrfxlu@gmail.com';
-  const VALID_PIN = '5577';
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    setTimeout(() => {
-      if (email.trim().toLowerCase() === VALID_EMAIL && pin.trim() === VALID_PIN) {
-        onLoginSuccess(email.trim());
-      } else {
-        setError('Invalid email or PIN. Use the demo credentials shown above.');
-      }
-      setIsLoading(false);
-    }, 600);
+  // Handle Quick Role Credentials Fill for Dev Testing
+  const handleRoleSelect = (role: 'ADMIN' | 'ACCOUNTANT' | 'DELIVERY_BOY' | 'CUSTOMER') => {
+    setSelectedRole(role);
+    setErrorMsg('');
+    if (role === 'ADMIN') {
+      setEmail('admin@deskshark.com');
+      setPassword('admin123');
+    } else if (role === 'ACCOUNTANT') {
+      setEmail('accountant@deskshark.com');
+      setPassword('acc123');
+    } else if (role === 'DELIVERY_BOY') {
+      setEmail('driver@deskshark.com');
+      setPassword('driver123');
+    } else if (role === 'CUSTOMER') {
+      setEmail('customer@deskshark.com');
+      setPassword('cust123');
+    }
   };
 
-  const handleFillDemo = () => {
-    setEmail('shivmrfxlu@gmail.com');
-    setPin('5577');
-    setError('');
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, roleChoice: selectedRole }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        if (onLoginSuccess) {
+          onLoginSuccess(json.user, json.redirectPath);
+        } else {
+          window.location.href = json.redirectPath;
+        }
+      } else {
+        setErrorMsg(json.error || 'Authentication failed');
+      }
+    } catch (err: any) {
+      setErrorMsg('Login network error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
-      {/* Dynamic Background Effects */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-600/15 rounded-full blur-3xl pointer-events-none"></div>
-
-      {/* Main Glass Card */}
-      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl p-6 sm:p-8 relative z-10">
+    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 text-slate-100 font-sans">
+      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+        
         {/* Header Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 font-black text-2xl mb-3 shadow-lg shadow-emerald-900/40">
-            OS
+        <div className="text-center space-y-2">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg shadow-emerald-500/20">
+            PI
           </div>
-          <h1 className="text-2xl font-black text-white tracking-wide flex items-center justify-center gap-2">
-            OS-BOOKS
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-700/60 px-2 py-0.5 rounded-full">
-              ERP LIVE
-            </span>
+          <h1 className="text-2xl font-black tracking-tight text-white flex items-center justify-center gap-2">
+            Pramukh Indane ERP
+            <ShieldCheck className="w-5 h-5 text-emerald-400" />
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Cloud GST Accounting & Inventory Platform
-          </p>
+          <p className="text-xs text-slate-400">Database Authentication & Role-Based Access Portal</p>
         </div>
 
-        {/* User Credentials Alert Card */}
-        <div className="mb-6 rounded-xl bg-emerald-950/40 border border-emerald-800/60 p-3.5 text-xs text-emerald-200">
-          <div className="flex items-center justify-between font-semibold text-emerald-300 mb-1">
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-emerald-400" />
-              User Credentials Configured
-            </span>
-            <button
-              onClick={handleFillDemo}
-              type="button"
-              className="text-[11px] font-bold text-emerald-950 bg-emerald-400 hover:bg-emerald-300 px-2 py-0.5 rounded transition-all shadow"
-            >
-              Autofill
-            </button>
-          </div>
-          <div className="space-y-0.5 text-slate-300 font-mono text-[11px]">
-            <div><span className="text-slate-400">User Email:</span> shivmrfxlu@gmail.com</div>
-            <div><span className="text-slate-400">Pass / PIN:</span> 5577</div>
-          </div>
+        {/* Role Selector Tabs */}
+        <div className="grid grid-cols-4 gap-1.5 p-1.5 bg-slate-950 rounded-2xl border border-slate-800 text-[11px] font-bold">
+          <button
+            type="button"
+            onClick={() => handleRoleSelect('ADMIN')}
+            className={`py-2 rounded-xl transition ${selectedRole === 'ADMIN' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+          >
+            Admin
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRoleSelect('ACCOUNTANT')}
+            className={`py-2 rounded-xl transition ${selectedRole === 'ACCOUNTANT' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+          >
+            Accountant
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRoleSelect('DELIVERY_BOY')}
+            className={`py-2 rounded-xl transition ${selectedRole === 'DELIVERY_BOY' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+          >
+            Driver
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRoleSelect('CUSTOMER')}
+            className={`py-2 rounded-xl transition ${selectedRole === 'CUSTOMER' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+          >
+            Customer
+          </button>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-3 text-xs rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300">
-              {error}
+        {/* Form Inputs */}
+        <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-extrabold uppercase text-slate-400 mb-1">Email / Mobile Number</label>
+            <input
+              type="text"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:border-emerald-500"
+              placeholder="e.g. admin@deskshark.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold uppercase text-slate-400 mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-sm font-semibold text-white focus:outline-none focus:border-emerald-500"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-rose-200 text-xs font-bold">
+              ⚠️ {errorMsg}
             </div>
           )}
 
-          {/* Email field */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Email / User ID
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your registered email"
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Password / PIN field */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Pass / 4-Digit Security PIN
-            </label>
-            <div className="relative">
-              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="password"
-                required
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Enter password or PIN"
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-mono tracking-widest"
-              />
-            </div>
-          </div>
-
-          {/* Options */}
-          <div className="flex items-center justify-between text-xs text-slate-400 py-1">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                defaultChecked
-                className="rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500"
-              />
-              <span>Remember firm session</span>
-            </label>
-            <a href="#" onClick={(e) => e.preventDefault()} className="text-emerald-400 hover:underline">
-              Forgot PIN?
-            </a>
-          </div>
-
-          {/* Submit Button */}
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2 transition-all transform active:scale-98"
+            disabled={loading}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black rounded-xl text-sm shadow-lg transition flex items-center justify-center gap-2"
           >
-            {isLoading ? (
-              <span className="flex items-center gap-2 text-slate-900">
-                <span className="h-4 w-4 rounded-full border-2 border-slate-900 border-t-transparent animate-spin"></span>
-                Logging into OS-BOOKS...
-              </span>
-            ) : (
-              <>
-                <span>Sign In to Firm Dashboard</span>
-                <ArrowRight className="h-4 w-4" />
-              </>
-            )}
+            {loading ? 'Authenticating...' : `Sign In as ${selectedRole}`}
+            <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        {/* Security Footer */}
-        <div className="mt-8 pt-4 border-t border-slate-800 text-center text-slate-500 text-[11px] flex items-center justify-center gap-3">
-          <span className="flex items-center gap-1">
-            <Lock className="h-3 w-3 text-emerald-400" />
-            256-Bit SSL Encrypted
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1">
-            <Building2 className="h-3 w-3 text-emerald-400" />
-            GSTIN Compliant
-          </span>
+        {/* Database Test Credentials Card */}
+        <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800/80 text-[11px] space-y-1 text-slate-400">
+          <div className="font-bold text-slate-300 uppercase text-[10px] flex items-center gap-1">
+            <Key className="w-3 h-3 text-emerald-400" /> Pre-Configured Database Credentials
+          </div>
+          <div>• <strong>ADMIN</strong>: admin@deskshark.com / admin123</div>
+          <div>• <strong>ACCOUNTANT</strong>: accountant@deskshark.com / acc123</div>
+          <div>• <strong>DELIVERY BOY</strong>: driver@deskshark.com / driver123</div>
+          <div>• <strong>CUSTOMER</strong>: customer@deskshark.com / cust123</div>
         </div>
+
       </div>
     </div>
   );

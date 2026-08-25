@@ -174,7 +174,10 @@ model Product {
   active                    Boolean  @default(true)
   gstApplicable             Boolean?
   autoQty                   Float?
-  productType               String?
+  productType               String?  // 'LPG_COMMERCIAL' | 'LPG_INDUSTRIAL' | 'MEDICAL_OXYGEN' | 'NITROGEN' | 'ARGON'
+  gasType                   String?  @default("LPG")
+  weightVolume              Float?   @default(0)
+  emptyDepositValue         Float    @default(0)
   isMoreInfo                Boolean?
   isRawMaterial             Boolean?
   isSubItem                 Boolean?
@@ -211,7 +214,10 @@ model ProductRawMaterialComponent {
 
 model Customer {
   id              String   @id
+  tenantId        String   @default("tenant_default")
   name            String
+  tradeName       String?
+  contactPerson   String?
   phone           String
   email           String
   gstin           String?
@@ -225,6 +231,8 @@ model Customer {
   type            String
   accountGroup    String
   active          Boolean? @default(true)
+  status          String   @default("ACTIVE") // 'ACTIVE' | 'INACTIVE' | 'BLOCKED'
+  internalNotes   String?
   dueDays         Int?
   tags            String[]
   isMoreInfo      Boolean?
@@ -249,6 +257,73 @@ model Customer {
   partyRates      PartyRate[]
   followUps       FollowUp[]
   cylinderInventories CustomerCylinderInventory[]
+  vouchers        CylinderVoucher[]
+  deliveryAddresses CustomerAddress[]
+}
+
+model CustomerAddress {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("tenant_default")
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label       String   // e.g. 'Godown 1', 'Main Factory'
+  address     String
+  city        String?
+  state       String?
+  pincode     String?
+  area        String?
+  route       String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Area {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("tenant_default")
+  code        String   @unique
+  name        String
+  routeId     String?
+  route       Route?   @relation(fields: [routeId], references: [id])
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Route {
+  id                    String   @id @default(cuid())
+  tenantId              String   @default("tenant_default")
+  code                  String   @unique
+  name                  String
+  defaultDeliveryBoyId  String?
+  areas                 Area[]
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String    @default("tenant_default")
+  name          String
+  email         String    @unique
+  mobile        String?
+  password      String
+  role          String    // 'ADMIN' | 'ACCOUNTANT' | 'DELIVERY_BOY' | 'CUSTOMER'
+  status        String    @default("ACTIVE") // 'ACTIVE' | 'INACTIVE'
+  customerId    String?
+  deliveryBoyId String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model UserRole {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("tenant_default")
+  email       String   @unique
+  name        String
+  role        String   // 'SUPER_ADMIN' | 'MANAGER' | 'ACCOUNTANT' | 'DELIVERY_BOY'
+  permissions String[]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
 }
 
 model PartyRate {
@@ -272,6 +347,7 @@ model FollowUp {
 
 model Invoice {
   id              String        @id
+  tenantId        String        @default("tenant_default")
   invoiceNumber   String
   date            String
   dueDate         String
@@ -410,6 +486,7 @@ model BranchStockTransfer {
 
 model LedgerEntry {
   id              String @id @default(cuid())
+  tenantId        String @default("tenant_default")
   ledgerType      String // 'customer' | 'company' | 'bank' | 'employee' | 'expenses' | 'incomes' | 'payment'
   date            String
   voucherNumber   String
@@ -421,11 +498,30 @@ model LedgerEntry {
 }
 
 model AuditLog {
-  id          String @id
-  timestamp   String
+  id          String   @id @default(cuid())
+  tenantId    String   @default("tenant_default")
+  timestamp   DateTime @default(now())
   actorEmail  String
   action      String
   details     String
+  ipAddress   String?  @default("127.0.0.1")
+  deviceInfo  String?  @default("Web Dashboard")
+  oldValue    String?
+  newValue    String?
+  reference   String?
+  reason      String?
+}
+
+model DeliveryBoyDevice {
+  id               String   @id @default(cuid())
+  tenantId         String   @default("tenant_default")
+  deliveryBoyId    String   @unique
+  deliveryBoyName  String
+  deviceId         String   @unique
+  deviceModel      String
+  isVerified       Boolean  @default(true)
+  registeredAt     DateTime @default(now())
+  lastActiveAt     DateTime @updatedAt
 }
 
 model Attendance {
@@ -441,6 +537,7 @@ model Attendance {
 
 model CustomerCylinderInventory {
   id                   String   @id @default(cuid())
+  tenantId             String   @default("tenant_default")
   customer             Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   customerId           String
   productId            String
@@ -451,11 +548,60 @@ model CustomerCylinderInventory {
   adjustmentQty        Float    @default(0)
   currentEmptyBalance  Float    @default(0)
   currentFullBalance   Float    @default(0)
+  defectiveQty         Float    @default(0)
+  inTransitRefillQty   Float    @default(0)
   updatedAt            DateTime @updatedAt
+}
+
+model InventoryTransaction {
+  id               String   @id @default(cuid())
+  tenantId         String   @default("tenant_default")
+  referenceNumber  String
+  transactionType  String   // 'PURCHASE_RECEIPT' | 'WAREHOUSE_TO_DRIVER' | 'DRIVER_TO_CUSTOMER' | 'CUSTOMER_EMPTY_RETURN' | 'DRIVER_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE' | 'DEFECTIVE_RETURN' | 'MANUAL_ADJUSTMENT'
+  sourceType       String   // 'WAREHOUSE' | 'DELIVERY_BOY' | 'CUSTOMER' | 'PLANT'
+  sourceId         String?
+  targetType       String   // 'WAREHOUSE' | 'DELIVERY_BOY' | 'CUSTOMER' | 'PLANT'
+  targetId         String?
+  productId        String
+  productName      String
+  fullQty          Float    @default(0)
+  emptyQty         Float    @default(0)
+  adjustmentQty    Float    @default(0)
+  performedBy      String
+  reason           String?
+  createdAt        DateTime @default(now())
+}
+
+model StockTransfer {
+  id               String              @id @default(cuid())
+  tenantId         String              @default("tenant_default")
+  transferNumber   String              @unique
+  transferType     String              // 'WAREHOUSE_TO_DRIVER' | 'DRIVER_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE'
+  fromLocationType String              // 'WAREHOUSE' | 'DELIVERY_BOY'
+  fromLocationId   String
+  toLocationType   String              // 'WAREHOUSE' | 'DELIVERY_BOY'
+  toLocationId     String
+  status           String              @default("PENDING_APPROVAL") // 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
+  approvedBy       String?
+  approvedAt       DateTime?
+  notes            String?
+  items            StockTransferItem[]
+  createdAt        DateTime            @default(now())
+}
+
+model StockTransferItem {
+  id              String        @id @default(cuid())
+  transfer        StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  transferId      String
+  productId       String
+  productName     String
+  fullQty         Float         @default(0)
+  emptyQty        Float         @default(0)
 }
 
 model CylinderOrder {
   id                    String              @id @default(cuid())
+  tenantId              String              @default("tenant_default")
   orderNumber           String              @unique
   customerId            String
   customerName          String
@@ -492,6 +638,7 @@ model CylinderOrderItem {
 
 model CylinderDelivery {
   id                    String                 @id @default(cuid())
+  tenantId              String                 @default("tenant_default")
   deliveryNumber        String                 @unique
   orderId               String
   order                 CylinderOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -502,10 +649,15 @@ model CylinderDelivery {
   deliveryDate          String
   deliveredQtyTotal     Float                  @default(0)
   emptyReceivedTotal    Float                  @default(0)
+  hasVariance           Boolean                @default(false)
+  varianceNotes         String?
   paymentMode           String                 @default("COD") // 'CASH' | 'ONLINE' | 'CHEQUE' | 'CREDIT'
   paymentAmount         Float                  @default(0)
   transactionId         String?
   chequeNumber          String?
+  chequeBank            String?
+  chequeDate            String?
+  chequePhotoUrl        String?
   paymentProofPhotoUrl  String?
   deliveryProofPhotoUrl String?
   remarks               String?
@@ -515,6 +667,45 @@ model CylinderDelivery {
   verificationNotes     String?
   items                 CylinderDeliveryItem[]
   createdAt             DateTime               @default(now())
+}
+
+model DeliveryBoyDayLog {
+  id                    String    @id @default(cuid())
+  tenantId              String    @default("tenant_default")
+  deliveryBoyId         String
+  deliveryBoyName       String
+  date                  String
+  dayStatus             String    @default("DAY_STARTED") // 'DAY_STARTED' | 'DAY_CLOSED'
+  openingFullCylinders  Float     @default(0)
+  openingEmptyCylinders Float     @default(0)
+  openingCash           Float     @default(0)
+  closingFullCylinders  Float?
+  closingEmptyCylinders Float?
+  closingCash           Float?
+  totalCashCollected    Float     @default(0)
+  totalOnlineCollected  Float     @default(0)
+  totalCreditDelivered  Float     @default(0)
+  totalCashSubmitted    Float     @default(0)
+  startedAt             DateTime  @default(now())
+  closedAt              DateTime?
+}
+
+model DayLock {
+  id               String    @id @default(cuid())
+  tenantId         String    @default("tenant_default")
+  date             String    @unique
+  isLocked         Boolean   @default(true)
+  lockedBy         String
+  lockedAt         DateTime  @default(now())
+  reopenedBy       String?
+  reopenedAt       DateTime?
+  reopenReason     String?
+  expectedCash     Float     @default(0)
+  actualCash       Float     @default(0)
+  cashDifference   Float     @default(0)
+  expectedStock    Float     @default(0)
+  actualStock      Float     @default(0)
+  stockDifference  Float     @default(0)
 }
 
 model CylinderDeliveryItem {
@@ -531,6 +722,7 @@ model CylinderDeliveryItem {
 
 model ApprovalQueueItem {
   id            String   @id @default(cuid())
+  tenantId      String   @default("tenant_default")
   requestType   String   // 'ORDER_APPROVAL' | 'DELIVERY_VERIFICATION' | 'CASH_SUBMISSION' | 'STOCK_TRANSFER' | 'CREDIT_OVERRIDE'
   referenceId   String
   requestedBy   String
@@ -572,11 +764,28 @@ model CashSubmission {
 }
 
 model WhatsAppSession {
+  id             String   @id @default(cuid())
+  phone          String   @unique
+  customerId     String?
+  step           String   @default("IDLE") // 'IDLE' | 'MENU' | 'SELECT_PRODUCT' | 'ENTER_QTY' | 'SELECT_DATE' | 'CONFIRM'
+  failedAttempts Int      @default(0)
+  draftOrder     Json?
+  lastMessageAt  DateTime @updatedAt
+}
+
+model CylinderVoucher {
   id            String   @id @default(cuid())
-  phone         String   @unique
-  customerId    String?
-  step          String   @default("IDLE") // 'IDLE' | 'SELECT_PRODUCT' | 'ENTER_QTY' | 'SELECT_DATE' | 'CONFIRM'
-  draftOrder    Json?
-  lastMessageAt DateTime @updatedAt
+  tenantId      String   @default("tenant_default")
+  voucherNumber String   @unique
+  voucherType   String   // 'SV' (Subscription Voucher) | 'TV' (Transfer Voucher)
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  cylinderQty   Int      @default(1)
+  regulatorQty  Int      @default(1)
+  depositAmount Float    @default(0)
+  issueDate     String
+  status        String   @default("ACTIVE") // 'ACTIVE' | 'CANCELLED' | 'TRANSFERRED'
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 

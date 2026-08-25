@@ -4,11 +4,11 @@ import React, { useState } from 'react';
 import { Settings, Save, CheckCircle2, ShieldCheck, Building, KeyRound } from 'lucide-react';
 
 export const SettingsModule: React.FC = () => {
-  const [firmName, setFirmName] = useState('OS TECH SOLUTIONS PVT LTD');
-  const [gstin, setGstin] = useState('23AAACO8991F1Z2');
-  const [phone, setPhone] = useState('+91 731 4987654');
-  const [email, setEmail] = useState('billing@os-books.com');
-  const [address, setAddress] = useState('102 MG Road, Main Business Center, Indore - 452001');
+  const [firmName, setFirmName] = useState('PRAMUKH INDANE GAS AGENCY');
+  const [gstin, setGstin] = useState('24AAAFP1234F1Z5');
+  const [phone, setPhone] = useState('+91 98765 43210');
+  const [email, setEmail] = useState('billing@pramukhindane.com');
+  const [address, setAddress] = useState('Indane Gas Godown Road, Main Market, Indore - 452001');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {

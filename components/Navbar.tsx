@@ -78,7 +78,21 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [authName, setAuthName] = useState<string>(typeof userEmail === 'string' ? userEmail : 'Dhananjay (Admin)');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(json => {
+        if (json.authenticated && json.user) {
+          const val = json.user.name || json.user.email;
+          if (val && typeof val === 'string') setAuthName(val);
+          else if (val) setAuthName(String(val));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -150,7 +164,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800 dark:text-emerald-300">
           <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           <span className="hidden sm:inline">Active Firm:</span>
-          <span className="font-bold">OS TECH SOLUTIONS (Indore)</span>
+          <span className="font-bold">PRAMUKH INDANE GAS AGENCY</span>
           <span className="ml-1 rounded bg-emerald-200 dark:bg-emerald-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 dark:text-emerald-100 font-extrabold">
             GSTIN Active
           </span>
@@ -290,26 +304,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         {/* User profile dropdown badge */}
-        <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
-          <div className="h-8 w-8 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-inner">
-            {userEmail.substring(0, 2).toUpperCase()}
-          </div>
-          <div className="hidden lg:flex flex-col text-left">
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight flex items-center gap-1">
-              {userEmail}
-              <UserCheck className="h-3 w-3 text-emerald-500" />
-            </span>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400">Admin Account</span>
-          </div>
-          
-          <button
-            onClick={onLogout}
-            title="Logout of OS-BOOKS"
-            className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors ml-1"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+        {(() => {
+          const displayName = typeof authName === 'string' && authName.trim() ? authName.trim() : 'Dhananjay (Admin)';
+          const avatarInitials = displayName.substring(0, 2).toUpperCase();
+          return (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+              <div className="h-8 w-8 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-inner">
+                {avatarInitials}
+              </div>
+              <div className="hidden lg:flex flex-col text-left">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight flex items-center gap-1">
+                  {displayName}
+                  <UserCheck className="h-3 w-3 text-emerald-500" />
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">Authenticated Session</span>
+              </div>
+              
+              <button
+                onClick={onLogout}
+                title="Logout"
+                className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors ml-1"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })()}
       </div>
     </header>
   );

@@ -56,6 +56,17 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
   const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
+  // Additional B2B LPG Cylinder ERP Foundation Fields
+  const [tradeName, setTradeName] = useState('');
+  const [contactPerson, setContactPerson] = useState('');
+  const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'BLOCKED'>('ACTIVE');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [areaName, setAreaName] = useState('');
+  const [routeName, setRouteName] = useState('');
+  const [defaultDeliveryBoyId, setDefaultDeliveryBoyId] = useState('');
+  const [openingEmptyQty, setOpeningEmptyQty] = useState<number | ''>(0);
+  const [internalNotes, setInternalNotes] = useState('');
+
   // Limits & Numbers
   const [otherMobileNo, setOtherMobileNo] = useState('');
   const [partyLimit, setPartyLimit] = useState<number | ''>(0);
@@ -68,10 +79,19 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     if (customerToEdit) {
       setPartyCategory(customerToEdit.type || defaultType);
       setPartyName(customerToEdit.name || '');
+      setTradeName(customerToEdit.tradeName || '');
+      setContactPerson(customerToEdit.contactPerson || '');
+      setStatus(customerToEdit.status || (customerToEdit.active === false ? 'INACTIVE' : 'ACTIVE'));
       setActive(customerToEdit.active !== undefined ? customerToEdit.active : true);
       setDueDays(customerToEdit.dueDays !== undefined ? customerToEdit.dueDays : 7);
       setMobileNumber(customerToEdit.phone || '');
+      setWhatsappNumber(customerToEdit.whatsappNumber || customerToEdit.phone || '');
       setCity(customerToEdit.city || '');
+      setAreaName(customerToEdit.area || '');
+      setRouteName(customerToEdit.route || '');
+      setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || '');
+      setOpeningEmptyQty(customerToEdit.openingEmptyCylinderQty || 0);
+      setInternalNotes(customerToEdit.internalNotes || '');
       setPartyTags(customerToEdit.tags?.join(', ') || '');
       setIsMoreInfo(customerToEdit.isMoreInfo !== undefined ? customerToEdit.isMoreInfo : true);
       setIsWholeParty(customerToEdit.isWholeParty || false);
@@ -84,7 +104,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setPinCode(customerToEdit.pincode || '');
       setGstin(customerToEdit.gstin || '');
       setGstApplicable(customerToEdit.gstApplicable || 'GST');
-      setStateName(customerToEdit.state || 'Telangana');
+      setStateName(customerToEdit.state || 'Madhya Pradesh');
       setEmailAddress(customerToEdit.email || '');
       setPartyType(customerToEdit.partyType || (customerToEdit.type === 'Vendor' ? 'vendor' : 'customer'));
       setOtherMobileNo(customerToEdit.otherMobile || '');
@@ -95,10 +115,19 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     } else {
       setPartyCategory(defaultType);
       setPartyName('');
+      setTradeName('');
+      setContactPerson('');
+      setStatus('ACTIVE');
       setActive(true);
       setDueDays(7);
       setMobileNumber('');
-      setCity('');
+      setWhatsappNumber('');
+      setCity('Indore');
+      setAreaName('');
+      setRouteName('');
+      setDefaultDeliveryBoyId('');
+      setOpeningEmptyQty(0);
+      setInternalNotes('');
       setPartyTags('');
       setIsMoreInfo(true);
       setIsWholeParty(false);
@@ -108,10 +137,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setRateMode('item');
       setPartyRates([]);
       setAddress('');
-      setPinCode('');
+      setPinCode('452001');
       setGstin('');
       setGstApplicable('GST');
-      setStateName('Telangana');
+      setStateName('Madhya Pradesh');
       setEmailAddress('');
       setPartyType(defaultType === 'Vendor' ? 'vendor' : 'customer');
       setOtherMobileNo('');
@@ -155,19 +184,28 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     const savedCustomer: Customer = {
       id: customerToEdit?.id || `party-${Date.now()}`,
       name: partyName.trim(),
+      tradeName: tradeName.trim() || undefined,
+      contactPerson: contactPerson.trim() || undefined,
+      status,
       phone: mobileNumber.trim() || '+91 98260 00000',
+      whatsappNumber: whatsappNumber.trim() || mobileNumber.trim() || '+91 98260 00000',
       email: emailAddress.trim() || 'party@domain.com',
       gstin: gstin.trim().toUpperCase() || undefined,
-      address: address.trim() || 'Main City Area',
+      address: address.trim() || 'Main Commercial Area',
       city: city.trim() || 'Indore',
-      state: stateName.trim() || 'Telangana',
-      stateCode: '36',
+      area: areaName.trim() || undefined,
+      route: routeName.trim() || undefined,
+      defaultDeliveryBoyId: defaultDeliveryBoyId || undefined,
+      openingEmptyCylinderQty: Number(openingEmptyQty) || 0,
+      internalNotes: internalNotes.trim() || undefined,
+      state: stateName.trim() || 'Madhya Pradesh',
+      stateCode: '23',
       balance: 0,
       creditLimit: Number(partyLimit) || 0,
       creditDays: Number(dueDays) || 7,
       type: partyCategory,
       accountGroup: partyCategory === 'Vendor' ? 'Sundry Creditors' : 'Sundry Debtors',
-      active,
+      active: status === 'ACTIVE',
       dueDays: Number(dueDays) || 7,
       tags: partyTags ? partyTags.split(',').map((t) => t.trim()) : [],
       isMoreInfo,

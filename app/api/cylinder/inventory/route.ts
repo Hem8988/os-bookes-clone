@@ -53,7 +53,15 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { customerId, productName, currentEmptyBalance, currentFullBalance } = body;
+    const {
+      customerId,
+      productName,
+      currentEmptyBalance,
+      currentFullBalance,
+      defectiveQty = 0,
+      inTransitRefillQty = 0,
+      actionType = 'SET_STOCK'
+    } = body;
 
     const customerNames: any = {
       'cust_demo_1': 'Hotel Rajdhani (Connaught Place)',
@@ -87,11 +95,26 @@ export async function POST(request: Request) {
 
       let dbResult;
       if (existing) {
+        let newEmpty = Number(currentEmptyBalance !== undefined ? currentEmptyBalance : existing.currentEmptyBalance);
+        let newFull = Number(currentFullBalance !== undefined ? currentFullBalance : existing.currentFullBalance);
+        let newDefective = Number(defectiveQty !== undefined ? defectiveQty : existing.defectiveQty);
+        let newInTransit = Number(inTransitRefillQty !== undefined ? inTransitRefillQty : existing.inTransitRefillQty);
+
+        if (actionType === 'PLANT_REFILL') {
+          // Empty stock dispatched to Bottling Plant for refill
+          newEmpty = Math.max(0, existing.currentEmptyBalance - Number(inTransitRefillQty));
+          newInTransit = existing.inTransitRefillQty + Number(inTransitRefillQty);
+        } else if (actionType === 'DEFECTIVE_RETURN') {
+          newDefective = existing.defectiveQty + Number(defectiveQty);
+        }
+
         dbResult = await prisma.customerCylinderInventory.update({
           where: { id: existing.id },
           data: {
-            currentEmptyBalance: Number(currentEmptyBalance || 0),
-            currentFullBalance: Number(currentFullBalance || 0),
+            currentEmptyBalance: newEmpty,
+            currentFullBalance: newFull,
+            defectiveQty: newDefective,
+            inTransitRefillQty: newInTransit,
           },
         });
       } else {
@@ -103,6 +126,8 @@ export async function POST(request: Request) {
             openingQty: Number(currentEmptyBalance || 0),
             currentEmptyBalance: Number(currentEmptyBalance || 0),
             currentFullBalance: Number(currentFullBalance || 0),
+            defectiveQty: Number(defectiveQty || 0),
+            inTransitRefillQty: Number(inTransitRefillQty || 0),
           },
         });
       }
@@ -118,8 +143,10 @@ export async function POST(request: Request) {
     );
 
     if (existingMem) {
-      existingMem.currentEmptyBalance = Number(currentEmptyBalance || 0);
-      existingMem.currentFullBalance = Number(currentFullBalance || 0);
+      existingMem.currentEmptyBalance = Number(currentEmptyBalance !== undefined ? currentEmptyBalance : existingMem.currentEmptyBalance);
+      existingMem.currentFullBalance = Number(currentFullBalance !== undefined ? currentFullBalance : existingMem.currentFullBalance);
+      existingMem.defectiveQty = Number(defectiveQty || existingMem.defectiveQty || 0);
+      existingMem.inTransitRefillQty = Number(inTransitRefillQty || existingMem.inTransitRefillQty || 0);
       existingMem.updatedAt = new Date().toISOString();
     } else {
       memoryInventoryStore.unshift({
@@ -129,6 +156,8 @@ export async function POST(request: Request) {
         productName,
         currentEmptyBalance: Number(currentEmptyBalance || 0),
         currentFullBalance: Number(currentFullBalance || 0),
+        defectiveQty: Number(defectiveQty || 0),
+        inTransitRefillQty: Number(inTransitRefillQty || 0),
         updatedAt: new Date().toISOString(),
         customer: { name: customerName }
       });

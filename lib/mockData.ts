@@ -31,13 +31,13 @@ import {
 export const INITIAL_COMPANIES: CompanyMaster[] = [
   {
     id: 'comp-1',
-    companyName: 'OS TECH SOLUTIONS PVT LTD',
-    tradeName: 'OS-Books Indore HQ',
-    gstin: '23AAACO8991F1Z2',
-    pan: 'AAACO8991F',
-    phone: '+91 731 4987654',
-    email: 'billing@os-books.com',
-    address: '102 MG Road, Main Business Center',
+    companyName: 'PRAMUKH INDANE GAS AGENCY',
+    tradeName: 'Pramukh Indane Main Agency',
+    gstin: '24AAAFP1234F1Z5',
+    pan: 'AAAFP1234F',
+    phone: '+91 98765 43210',
+    email: 'billing@pramukhindane.com',
+    address: 'Indane Gas Godown Road, Main Market',
     city: 'Indore',
     state: 'Madhya Pradesh',
     stateCode: '23',
@@ -46,13 +46,13 @@ export const INITIAL_COMPANIES: CompanyMaster[] = [
   },
   {
     id: 'comp-2',
-    companyName: 'OS TECH SOLUTIONS - Bhopal Branch',
-    tradeName: 'OS-Books Bhopal',
-    gstin: '23AAACO8991F2Z1',
-    pan: 'AAACO8991F',
-    phone: '+91 755 2445566',
-    email: 'bhopal@os-books.com',
-    address: '45 MP Nagar Zone 1',
+    companyName: 'PRAMUKH INDANE - Regional Depot',
+    tradeName: 'Pramukh Indane Depot',
+    gstin: '23AAAFP1234F2Z4',
+    pan: 'AAAFP1234F',
+    phone: '+91 98765 43211',
+    email: 'depot@pramukhindane.com',
+    address: '45 Industrial Area, Gas Plant Zone',
     city: 'Bhopal',
     state: 'Madhya Pradesh',
     stateCode: '23',
@@ -73,8 +73,8 @@ export const INITIAL_CUSTOMER_LEDGER: LedgerEntry[] = [
 ];
 
 export const INITIAL_COMPANY_LEDGER: LedgerEntry[] = [
-  { id: 'cled-1', date: '2026-07-01', voucherNumber: 'JNL-001', accountName: 'OS TECH SOLUTIONS PVT LTD', particulars: 'Capital Opening Reserve', debit: 0, credit: 5000000, balance: 5000000 },
-  { id: 'cled-2', date: '2026-07-27', voucherNumber: 'OS-2026-0891', accountName: 'OS TECH SOLUTIONS PVT LTD', particulars: 'Daily Sales Realized', debit: 0, credit: 19751, balance: 5019751 },
+  { id: 'cled-1', date: '2026-07-01', voucherNumber: 'JNL-001', accountName: 'PRAMUKH INDANE GAS AGENCY', particulars: 'Capital Opening Reserve', debit: 0, credit: 5000000, balance: 5000000 },
+  { id: 'cled-2', date: '2026-07-27', voucherNumber: 'OS-2026-0891', accountName: 'PRAMUKH INDANE GAS AGENCY', particulars: 'Daily Sales Realized', debit: 0, credit: 19751, balance: 5019751 },
 ];
 
 export const INITIAL_BANK_BOOK: LedgerEntry[] = [

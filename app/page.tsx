@@ -114,8 +114,25 @@ export default function Home() {
     window.history.pushState(null, '', newUrl);
   };
 
-  // Sync state from Browser URL Bar on Initial Mount
+  // Sync session & role redirection from API on Initial Mount
   useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(json => {
+        if (json.authenticated && json.user) {
+          setIsLoggedIn(true);
+          setUserEmail(json.user.email || json.user.name);
+          if (json.user.role === 'CUSTOMER' && window.location.pathname !== '/customer') {
+            window.location.href = '/customer';
+          } else if (json.user.role === 'ACCOUNTANT' && window.location.pathname !== '/accountant') {
+            window.location.href = '/accountant';
+          } else if (json.user.role === 'DELIVERY_BOY' && window.location.pathname !== '/delivery') {
+            window.location.href = '/delivery';
+          }
+        }
+      })
+      .catch(() => {});
+
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const urlTab = params.get('tab');
@@ -260,23 +277,24 @@ export default function Home() {
     ]);
   };
 
-  const handleLoginSuccess = (email: string) => {
-    setUserEmail(email);
+  const handleLoginSuccess = (userOrEmail: any, redirectPath?: string) => {
+    const email = typeof userOrEmail === 'string' ? userOrEmail : userOrEmail?.email;
+    const targetPath = redirectPath || (typeof userOrEmail === 'object' ? userOrEmail?.redirectPath : null);
+
+    setUserEmail(email || 'user');
     setIsLoggedIn(true);
-    setAuditLog((prev) => [
-      {
-        id: `audit-${Date.now()}`,
-        timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        actorEmail: email,
-        action: 'Login',
-        details: 'Signed in to OS-BOOKS Firm Dashboard',
-      },
-      ...prev,
-    ]);
+
+    if (targetPath) {
+      window.location.href = targetPath;
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
     setIsLoggedIn(false);
+    window.location.href = '/login';
   };
 
   const handleTabChange = (tab: string, subTab?: string, cat?: string) => {
@@ -681,7 +699,7 @@ export default function Home() {
   const unpaidCount = invoices.filter((i) => i.status === 'Unpaid').length;
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-100 font-sans flex flex-col">
+    <div className="min-h-screen w-full bg-slate-100 text-slate-900 font-sans flex flex-col">
       {/* Navbar */}
       <Navbar
         userEmail={userEmail}
@@ -708,13 +726,12 @@ export default function Home() {
         />
 
         {/* Dynamic Content View Area */}
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-950/90 text-slate-100">
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-100 text-slate-900">
           {activeTab === 'cylinder-inventory' && <CylinderBalanceModule />}
-      {activeTab === 'approval-queue' && <ApprovalQueueModule />}
-      {activeTab === 'delivery-app' && <DeliveryBoyModule />}
-      {activeTab === 'gps-tracking' && <DeliveryGpsTrackingModule />}
-      {activeTab === 'saas-tenants' && <SaasTenantModule />}
-      {activeTab === 'whatsapp-sender' && <WhatsAppInvoiceSenderModule />}
+          {activeTab === 'approval-queue' && <ApprovalQueueModule />}
+          {activeTab === 'delivery-app' && <DeliveryBoyModule />}
+          {activeTab === 'whatsapp-sender' && <WhatsAppInvoiceSenderModule />}
+          {activeTab === 'customer-360' && <CustomersModule customers={customers} onAddCustomer={handleAddCustomer} />}
       {activeTab === 'dashboard' && (
             <Dashboard
               invoices={invoices}

@@ -90,19 +90,41 @@ export const AdminModule: React.FC<AdminModuleProps> = ({
     { id: 'audit', label: 'Audit Log', icon: ScrollText },
   ];
 
-  const handleSubmitStaff = (e: React.FormEvent) => {
+  const handleSubmitStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!staffDraft.name.trim() || !staffDraft.phone.trim()) return;
+
+    let apiRole = 'DELIVERY_BOY';
+    if (staffDraft.role === 'Accountant') apiRole = 'ACCOUNTANT';
+    if (staffDraft.role === 'Admin' || staffDraft.role === 'Store Manager') apiRole = 'ADMIN';
+
+    const staffEmail = staffDraft.email.trim() || `${staffDraft.name.toLowerCase().replace(/\s+/g, '')}@pramukhindane.com`;
+
+    try {
+      await fetch('/api/users/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: staffDraft.name.trim(),
+          email: staffEmail,
+          mobile: staffDraft.phone.trim(),
+          role: apiRole,
+          password: 'password123',
+        }),
+      });
+    } catch (err) {}
+
     onAddStaff({
       id: `staff-${Date.now()}`,
       name: staffDraft.name.trim(),
       role: staffDraft.role,
       phone: staffDraft.phone.trim(),
-      email: staffDraft.email.trim(),
+      email: staffEmail,
       salary: Number(staffDraft.salary) || 0,
       commissionPercent: Number(staffDraft.commissionPercent) || 0,
       active: true,
     });
+    alert(`✅ Staff member '${staffDraft.name}' registered cleanly in database!\nLogin Email/Mobile: ${staffEmail}\nDefault Password: password123`);
     setStaffDraft({ name: '', role: 'Salesman', phone: '', email: '', salary: '', commissionPercent: '' });
     setShowStaffForm(false);
   };

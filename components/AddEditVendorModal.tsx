@@ -229,10 +229,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-screen h-screen overflow-hidden text-xs font-semibold text-slate-800 dark:text-slate-200 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex justify-end overflow-hidden animate-in fade-in duration-200">
       
-      {/* Top Header Bar (Fixed Full-Width) */}
-      <div className="bg-[#00a8b5] px-6 py-3.5 flex items-center justify-between text-white shadow-md shrink-0">
+      {/* Right Slide-Over Drawer Container */}
+      <div className="w-full max-w-4xl h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 border-l border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200">
+        
+        {/* Drawer Top Header Bar */}
+        <div className="bg-[#00a8b5] px-6 py-4 flex items-center justify-between text-white shadow-md shrink-0">
           <h2 className="text-lg font-extrabold tracking-wide flex items-center gap-2">
             <span>Party Master</span>
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-white/20 uppercase">
@@ -796,6 +799,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
         </form>
+
+      </div>
     </div>
   );
 };

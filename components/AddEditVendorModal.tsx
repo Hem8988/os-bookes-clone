@@ -92,14 +92,14 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || '');
       setOpeningEmptyQty(customerToEdit.openingEmptyCylinderQty || 0);
       setInternalNotes(customerToEdit.internalNotes || '');
-      setPartyTags(customerToEdit.tags?.join(', ') || '');
+      setPartyTags(Array.isArray(customerToEdit.tags) ? customerToEdit.tags.join(', ') : String(customerToEdit.tags || ''));
       setIsMoreInfo(customerToEdit.isMoreInfo !== undefined ? customerToEdit.isMoreInfo : true);
       setIsWholeParty(customerToEdit.isWholeParty || false);
       setIsSezParty(customerToEdit.isSezParty !== undefined ? customerToEdit.isSezParty : true);
       setIsFocParty(customerToEdit.isFocParty !== undefined ? customerToEdit.isFocParty : true);
       setIsShowPartyRate(customerToEdit.isShowPartyRate !== undefined ? customerToEdit.isShowPartyRate : true);
       setRateMode(customerToEdit.rateMode || 'item');
-      setPartyRates(customerToEdit.partyRates || []);
+      setPartyRates(Array.isArray(customerToEdit.partyRates) ? customerToEdit.partyRates : []);
       setAddress(customerToEdit.address || '');
       setPinCode(customerToEdit.pincode || '');
       setGstin(customerToEdit.gstin || '');
@@ -158,11 +158,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   };
 
   const handleRateRowChange = (index: number, field: 'productId' | 'price', value: string) => {
+    const safeProducts = Array.isArray(products) ? products : [];
     setPartyRates((rows) =>
       rows.map((row, i) => {
         if (i !== index) return row;
         if (field === 'productId') {
-          const selected = products.find((p) => p.id === value);
+          const selected = safeProducts.find((p) => p.id === value);
           return { ...row, productId: value, productName: selected?.name || '' };
         }
         return { ...row, price: value === '' ? 0 : Number(value) };

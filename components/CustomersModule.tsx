@@ -107,10 +107,10 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({ customers, onA
         })}
       </div>
 
-      {/* Modal for adding vendor / customer */}
+      {/* Modal for adding customer / vendor */}
       <AddEditVendorModal
         isOpen={isModalOpen}
-        defaultType="Vendor"
+        defaultType="Customer"
         onClose={() => setIsModalOpen(false)}
         onSave={onAddCustomer}
       />

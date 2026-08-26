@@ -813,7 +813,7 @@ export default function ApprovalQueueModule() {
                   type="text"
                   value={lateCustomerName}
                   onChange={e => setLateCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg font-bold"
+                  className="w-full px-3 py-2 border rounded-lg font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700"
                   required
                 />
               </div>
@@ -825,7 +825,7 @@ export default function ApprovalQueueModule() {
                     type="number"
                     value={lateAmount}
                     onChange={e => setLateAmount(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg font-extrabold text-emerald-600"
+                    className="w-full px-3 py-2 border rounded-lg font-extrabold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                     required
                   />
                 </div>
@@ -835,7 +835,7 @@ export default function ApprovalQueueModule() {
                   <select
                     value={latePaymentMode}
                     onChange={e => setLatePaymentMode(e.target.value as any)}
-                    className="w-full px-3 py-2 border rounded-lg font-bold"
+                    className="w-full px-3 py-2 border rounded-lg font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700 cursor-pointer"
                   >
                     <option value="ONLINE">Online UPI</option>
                     <option value="CASH">Cash</option>
@@ -850,7 +850,7 @@ export default function ApprovalQueueModule() {
                   type="text"
                   value={lateTransactionId}
                   onChange={e => setLateTransactionId(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg font-mono font-bold"
+                  className="w-full px-3 py-2 border rounded-lg font-mono font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700"
                   required
                 />
               </div>

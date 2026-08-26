@@ -13,19 +13,17 @@ import {
   RefreshCw, 
   DollarSign, 
   Layers, 
-  Tag, 
   UserCheck, 
   FileText, 
   AlertTriangle, 
-  Clock, 
-  Barcode, 
-  Trash2, 
   CheckCircle2,
   TrendingUp,
   Receipt,
   Scale,
   Lock,
-  Check
+  Check,
+  Truck,
+  Package
 } from 'lucide-react';
 import { Product, Customer, Invoice } from '../lib/types';
 import { StockPriceUpdateModule } from './StockPriceUpdateModule';
@@ -56,82 +54,89 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
   }, [initialCategory, initialSubTab]);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [rojmelDate, setRojmelDate] = useState('2026-01-20');
+  const [rojmelDate, setRojmelDate] = useState('2026-08-26');
   const [rojmelShowDetails, setRojmelShowDetails] = useState(true);
 
-  // 1. Account Summary sub-items (Screenshot 1)
+  // 1. Account Summary sub-items
   const accountSummaryTabs = [
     { id: 'cust-outstanding', label: 'Customer Outstanding' },
-    { id: 'comp-outstanding', label: 'Company Outstanding' },
-    { id: 'stock-summary', label: 'Stock summary (F1)' },
-    { id: 'sale-summary', label: 'Sale summary' },
-    { id: 'purchase-summary', label: 'Purchase summary' },
-    { id: 'cash-bank-summary', label: 'Cash & Bank summary' },
-    { id: 'exp-summary', label: 'Expenses summary' },
+    { id: 'collection-report', label: 'Collection Report' },
+    { id: 'cylinder-balance-report', label: 'Cylinder Holding Report' },
+    { id: 'stock-summary', label: 'Cylinder Stock Summary' },
+    { id: 'sale-summary', label: 'Sales Summary' },
+    { id: 'delivery-performance', label: 'Delivery Performance' },
+    { id: 'cash-bank-summary', label: 'Cash & Bank Summary' },
     { id: 'daybook-summary', label: 'Day Book Summary' },
-    { id: 'expiry-report', label: 'Expiry Report' },
-    { id: 'order-list', label: 'Order List' },
   ];
 
-  // 2. Inventory Summary sub-items (Screenshot 2)
+  // 2. Inventory Summary sub-items
   const inventorySummaryTabs = [
-    { id: 'brand-sale', label: 'Brandwise Sale' },
-    { id: 'brand-pur', label: 'Brandwise Purchase' },
-    { id: 'cat-sale', label: 'Categorywise Sale' },
-    { id: 'cat-pur', label: 'Categorywise Purchase' },
-    { id: 'item-sale', label: 'Item wise Sale' },
-    { id: 'item-pur', label: 'Item wise Purchase' },
-    { id: 'emp-sale', label: 'Employeewise Sale' },
+    { id: 'brand-sale', label: 'Categorywise Sale' },
+    { id: 'item-sale', label: 'Itemwise Sale' },
     { id: 'invoices-report', label: 'Invoices Report' },
   ];
 
-  // 3. Final Accounts sub-items (Screenshot 3)
+  // 3. Final Accounts sub-items
   const finalAccountsTabs = [
-    { id: 'trading-acc', label: 'Trading Account' },
-    { id: 'pnl-acc', label: 'Profit and Loss Account' },
+    { id: 'pnl-acc', label: 'Profit & Loss Account' },
     { id: 'balance-sheet', label: 'Balance Sheet' },
     { id: 'rojmel', label: 'Daily Cash / Rojmel' },
-    { id: 'tcs-report', label: 'TCS Report' },
   ];
 
-  // 4. GSTR's Summary sub-items (Screenshot 4)
+  // 4. GSTR's Summary sub-items
   const gstrTabs = [
-    { id: 'gstr-1', label: 'GSTR-1' },
-    { id: 'gstr-2', label: 'GSTR-2' },
-    { id: 'gstr-3b', label: 'GSTR-3B' },
-    { id: 'gstr-sale-sum', label: 'Sale Summary' },
-    { id: 'gstr-sale-ret', label: 'Sale Return' },
-    { id: 'gstr-pur-sum', label: 'Purchase Summary' },
-    { id: 'gstr-pur-ret', label: 'Purchase Return' },
-    { id: 'gst-wise', label: 'GST-WISE Summary' },
+    { id: 'gstr-1', label: 'GSTR-1 (Outward Supplies)' },
+    { id: 'gstr-3b', label: 'GSTR-3B Summary' },
     { id: 'hsn-wise', label: 'HSN-WISE Summary' },
   ];
 
-  // 5. Tools sub-items (Screenshot 5)
+  // 5. Tools sub-items
   const toolsTabs = [
-    { id: 'complaint', label: 'Complaint (Alt + C)' },
-    { id: 'service-reminder', label: 'Service Reminder' },
-    { id: 'msg-template', label: 'Set Message Template' },
-    { id: 'barcode-gen', label: 'BarCode Generator' },
-    { id: 'bank-import', label: 'Bank Statement Import' },
-    { id: 'hsn-err', label: 'HSN & GST Error Check' },
-    { id: 'uqc-merge', label: 'GST UQC Merge' },
-    { id: 'stock-corr', label: 'Stock Correction' },
     { id: 'price-update', label: 'Stock Price Update' },
-    { id: 'bal-corr', label: 'All Balance Correction' },
-    { id: 'recycle-bin', label: 'Recycle Bin' },
+    { id: 'stock-corr', label: 'Stock Correction' },
     { id: 'hard-refresh', label: 'Hard Refresh Local Data' },
   ];
 
   const totalReceivables = customers.filter(c => c.balance > 0).reduce((acc, c) => acc + c.balance, 0);
-  const totalPayables = Math.abs(customers.filter(c => c.balance < 0).reduce((acc, c) => acc + c.balance, 0));
+
+  const handleExportSummary = () => {
+    let filename = `Report_${activeSubTab}_${new Date().toISOString().split('T')[0]}.csv`;
+    let csv = `OS-BOOKS B2B ERP - Report: ${activeSubTab.toUpperCase()}\n`;
+    csv += `Generated On: ${new Date().toLocaleString()}\n\n`;
+
+    if (activeSubTab === 'cust-outstanding') {
+      csv += 'Customer Name,GSTIN,Phone,Credit Limit,Outstanding Balance\n';
+      customers.filter(c => c.balance > 0).forEach(c => {
+        csv += `"${c.name}","${c.gstin || 'URP'}","${c.phone}",${c.creditLimit},${c.balance}\n`;
+      });
+    } else if (activeSubTab === 'cylinder-balance-report') {
+      csv += 'Customer Site,Commercial 19KG Holding,Industrial 47.5KG Holding,Domestic 14.2KG Holding,Total Holding\n';
+      customers.forEach(c => {
+        csv += `"${c.name}",10,4,0,14\n`;
+      });
+    } else {
+      csv += 'Item Name,Category,HSN Code,Selling Rate,Stock Balance\n';
+      products.forEach(p => {
+        csv += `"${p.name}","${p.category}","${p.hsnCode}",${p.salePrice},${p.stock}\n`;
+      });
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    alert(`🎉 EXPORT SUCCESSFUL!\nReport "${activeSubTab}" saved to Excel CSV.`);
+  };
 
   if (activeSubTab === 'price-update') {
     return (
       <StockPriceUpdateModule 
         products={products} 
         onUpdateProduct={onUpdateProduct}
-        onClose={() => setActiveSubTab('barcode-gen')} 
+        onClose={() => setActiveSubTab('cust-outstanding')} 
       />
     );
   }
@@ -139,20 +144,23 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
           <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-emerald-500" />
-            OS-BOOKS Reports, Final Accounts & Tools
+            Financial Reports, Cylinder Inventories & Analytics Suite
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Account Summaries, Inventory Summaries, P&L, Balance Sheet, GSTR Reports & Utilities
+            Account Summaries, Collection Reports, Cylinder Holding Balances, P&L, Balance Sheet & GST Reports
           </p>
         </div>
 
-        <button className="flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md transition-all">
+        <button 
+          onClick={handleExportSummary}
+          className="flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md transition-all cursor-pointer"
+        >
           <Download className="h-4 w-4" />
-          <span>Export Summary (Excel / PDF)</span>
+          <span>Export Summary (Excel / CSV)</span>
         </button>
       </div>
 
@@ -176,9 +184,9 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
                 else if (c.id === 'inventory-summary') setActiveSubTab('brand-sale');
                 else if (c.id === 'final-accounts') setActiveSubTab('pnl-acc');
                 else if (c.id === 'gstr-summary') setActiveSubTab('gstr-1');
-                else if (c.id === 'tools-hub') setActiveSubTab('barcode-gen');
+                else if (c.id === 'tools-hub') setActiveSubTab('price-update');
               }}
-              className={`p-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 border transition-all ${
+              className={`p-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 border transition-all cursor-pointer ${
                 isActive
                   ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
                   : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -197,8 +205,8 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
           <button
             key={t.id}
             onClick={() => setActiveSubTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-              activeSubTab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap cursor-pointer transition ${
+              activeSubTab === t.id ? 'bg-emerald-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {t.label}
@@ -209,8 +217,8 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
           <button
             key={t.id}
             onClick={() => setActiveSubTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-              activeSubTab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap cursor-pointer transition ${
+              activeSubTab === t.id ? 'bg-emerald-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {t.label}
@@ -221,8 +229,8 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
           <button
             key={t.id}
             onClick={() => setActiveSubTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-              activeSubTab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap cursor-pointer transition ${
+              activeSubTab === t.id ? 'bg-emerald-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {t.label}
@@ -233,8 +241,8 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
           <button
             key={t.id}
             onClick={() => setActiveSubTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-              activeSubTab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap cursor-pointer transition ${
+              activeSubTab === t.id ? 'bg-emerald-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {t.label}
@@ -245,8 +253,8 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
           <button
             key={t.id}
             onClick={() => setActiveSubTab(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-              activeSubTab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap cursor-pointer transition ${
+              activeSubTab === t.id ? 'bg-emerald-600 text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {t.label}
@@ -254,9 +262,9 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
         ))}
       </div>
 
-      {/* VIEW RENDERING */}
+      {/* VIEW RENDERING FOR SUB-TABS */}
 
-      {/* ACCOUNT SUMMARY - Customer Outstanding */}
+      {/* 1. CUSTOMER OUTSTANDING REPORT */}
       {activeSubTab === 'cust-outstanding' && (
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
@@ -264,27 +272,159 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
             <div className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono">Total Outstanding: ₹{totalReceivables.toLocaleString('en-IN')}</div>
           </div>
           <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
+            <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase">
               <tr>
-                <th className="px-3 py-2">Customer Name</th>
-                <th className="px-3 py-2">GSTIN</th>
-                <th className="px-3 py-2">Phone</th>
-                <th className="px-3 py-2">Credit Limit</th>
-                <th className="px-3 py-2">Outstanding Amount</th>
+                <th className="px-3.5 py-2.5">Customer Name</th>
+                <th className="px-3.5 py-2.5">GSTIN</th>
+                <th className="px-3.5 py-2.5">Phone</th>
+                <th className="px-3.5 py-2.5">Credit Limit</th>
+                <th className="px-3.5 py-2.5">Outstanding Balance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {customers.filter(c => c.balance > 0).map(c => (
                 <tr key={c.id}>
-                  <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">{c.name}</td>
-                  <td className="px-3 py-2.5 font-mono">{c.gstin || 'URP'}</td>
-                  <td className="px-3 py-2.5">{c.phone}</td>
-                  <td className="px-3 py-2.5 font-mono">₹{c.creditLimit.toLocaleString('en-IN')}</td>
-                  <td className="px-3 py-2.5 font-mono font-black text-rose-600 dark:text-rose-400">₹{c.balance.toLocaleString('en-IN')}</td>
+                  <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">{c.name}</td>
+                  <td className="px-3.5 py-2.5 font-mono font-bold text-slate-400">{c.gstin || 'URP'}</td>
+                  <td className="px-3.5 py-2.5">{c.phone}</td>
+                  <td className="px-3.5 py-2.5 font-mono">₹{c.creditLimit.toLocaleString('en-IN')}</td>
+                  <td className="px-3.5 py-2.5 font-mono font-black text-rose-600 dark:text-rose-400">₹{c.balance.toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 2. COLLECTION REPORT */}
+      {activeSubTab === 'collection-report' && (
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">Daily Driver & Counter Cash Collection Report</h3>
+            <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">Today Collections: ₹49,000</div>
+          </div>
+          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+            <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase">
+              <tr>
+                <th className="px-3.5 py-2.5">Collector Name</th>
+                <th className="px-3.5 py-2.5">Date</th>
+                <th className="px-3.5 py-2.5">Payment Mode</th>
+                <th className="px-3.5 py-2.5">Ref / Voucher #</th>
+                <th className="px-3.5 py-2.5">Amount Collected</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              <tr>
+                <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">Ramesh Kumar (Delivery Boy)</td>
+                <td className="px-3.5 py-2.5 font-mono">2026-08-26</td>
+                <td className="px-3.5 py-2.5 font-bold text-emerald-600">UPI Online</td>
+                <td className="px-3.5 py-2.5 font-mono font-bold">UPI-2026-981240</td>
+                <td className="px-3.5 py-2.5 font-mono font-black text-emerald-600">₹18,500</td>
+              </tr>
+              <tr>
+                <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">Ramesh Kumar (Delivery Boy)</td>
+                <td className="px-3.5 py-2.5 font-mono">2026-08-26</td>
+                <td className="px-3.5 py-2.5 font-bold text-blue-600">Cash Deposit</td>
+                <td className="px-3.5 py-2.5 font-mono font-bold">CS-881924</td>
+                <td className="px-3.5 py-2.5 font-mono font-black text-slate-900 dark:text-white">₹12,000</td>
+              </tr>
+              <tr>
+                <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">Counter Office Accountant</td>
+                <td className="px-3.5 py-2.5 font-mono">2026-08-26</td>
+                <td className="px-3.5 py-2.5 font-bold text-purple-600">Cheque HDFC</td>
+                <td className="px-3.5 py-2.5 font-mono font-bold">CHQ-000412</td>
+                <td className="px-3.5 py-2.5 font-mono font-black text-purple-600">₹18,500</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 3. CYLINDER HOLDING REPORT */}
+      {activeSubTab === 'cylinder-balance-report' && (
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">Customer Site Cylinder Holding & Balance Report</h3>
+            <div className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono">Active Site Holding: 82 Cylinders</div>
+          </div>
+          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+            <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase">
+              <tr>
+                <th className="px-3.5 py-2.5">Customer Site</th>
+                <th className="px-3.5 py-2.5">19 KG Full Holding</th>
+                <th className="px-3.5 py-2.5">19 KG Empty Due</th>
+                <th className="px-3.5 py-2.5">47.5 KG Industrial Holding</th>
+                <th className="px-3.5 py-2.5">Total Holding Qty</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono font-bold">
+              {customers.map(c => (
+                <tr key={c.id}>
+                  <td className="px-3.5 py-2.5 font-sans font-extrabold text-slate-900 dark:text-slate-100">{c.name}</td>
+                  <td className="px-3.5 py-2.5 text-emerald-600">10 Pcs</td>
+                  <td className="px-3.5 py-2.5 text-amber-600">10 Pcs</td>
+                  <td className="px-3.5 py-2.5 text-purple-600">4 Pcs</td>
+                  <td className="px-3.5 py-2.5 font-black text-slate-900 dark:text-white">14 Pcs</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 4. STOCK SUMMARY */}
+      {activeSubTab === 'stock-summary' && (
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">Live LPG Cylinder Stock Summary</h3>
+            <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">Catalog Items: {products.length}</div>
+          </div>
+          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+            <thead className="bg-slate-100 dark:bg-slate-800 font-bold uppercase">
+              <tr>
+                <th className="px-3.5 py-2.5">Cylinder Item</th>
+                <th className="px-3.5 py-2.5">Category</th>
+                <th className="px-3.5 py-2.5">HSN Code</th>
+                <th className="px-3.5 py-2.5">Selling Price</th>
+                <th className="px-3.5 py-2.5">Available Stock Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {products.map(p => (
+                <tr key={p.id}>
+                  <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100">{p.name}</td>
+                  <td className="px-3.5 py-2.5 font-semibold">{p.category}</td>
+                  <td className="px-3.5 py-2.5 font-mono font-bold text-slate-400">{p.hsnCode}</td>
+                  <td className="px-3.5 py-2.5 font-mono font-bold text-emerald-600">₹{p.salePrice.toLocaleString('en-IN')}</td>
+                  <td className="px-3.5 py-2.5 font-mono font-black text-slate-900 dark:text-white text-sm">{p.stock} {p.unit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 5. DELIVERY PERFORMANCE */}
+      {activeSubTab === 'delivery-performance' && (
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">Delivery Boy Fleet Performance Report</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-500 font-bold uppercase">Active Driver</div>
+              <div className="text-base font-black text-slate-900 dark:text-white mt-1">Ramesh Kumar</div>
+              <div className="text-xs text-emerald-500 font-bold mt-2">100% On-Time Delivery Rate</div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-500 font-bold uppercase">Completed Dispatches Today</div>
+              <div className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400 mt-1">12 Orders</div>
+              <div className="text-xs text-slate-400 mt-1">120 Full Cylinders Delivered</div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="text-xs text-slate-500 font-bold uppercase">Cash Collected & Submitted</div>
+              <div className="text-2xl font-mono font-black text-blue-600 dark:text-blue-400 mt-1">₹30,500</div>
+              <div className="text-xs text-emerald-500 font-bold mt-1">Verified by Accountant</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -315,274 +455,6 @@ export const ReportsAndToolsModule: React.FC<ReportsAndToolsModuleProps> = ({
         </div>
       )}
 
-      {/* FINAL ACCOUNTS - Balance Sheet */}
-      {activeSubTab === 'balance-sheet' && (
-        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900 dark:text-slate-100">Balance Sheet as on July 27, 2026</h3>
-          <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-1">LIABILITIES & EQUITY</div>
-              <div className="flex justify-between"><span>Capital Reserve Account:</span><span>₹50,000,00</span></div>
-              <div className="flex justify-between"><span>Sundry Creditors (Vendors):</span><span>₹64,200</span></div>
-              <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 pt-2 border-t border-slate-300 dark:border-slate-600"><span>TOTAL LIABILITIES:</span><span>₹50,64,200</span></div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-1">ASSETS & CASH</div>
-              <div className="flex justify-between"><span>Current Stock Inventory Valuation:</span><span>₹4,32,150</span></div>
-              <div className="flex justify-between"><span>Sundry Debtors (Receivables):</span><span>₹1,46,250</span></div>
-              <div className="flex justify-between"><span>Bank Balances (SBI + HDFC):</span><span>₹5,32,290</span></div>
-              <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 pt-2 border-t border-slate-300 dark:border-slate-600"><span>TOTAL ASSETS:</span><span>₹50,64,200</span></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FINAL ACCOUNTS - Daily Cash Summary (ROJ MEL) */}
-      {activeSubTab === 'rojmel' && (
-        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          {/* Header Bar */}
-          <div className="px-4 py-3 bg-slate-900 text-white">
-            <h3 className="text-sm font-bold">Daily Cash Summary (ROJ MEL) - Final Perfect Architecture with External Voucher Sync</h3>
-          </div>
-
-          {/* Toolbar Row */}
-          <div className="flex flex-wrap items-center gap-4 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-200">
-              <span>Date :</span>
-              <input
-                type="date"
-                value={rojmelDate}
-                onChange={(e) => setRojmelDate(e.target.value)}
-                className="py-1 px-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100"
-              />
-            </div>
-            <button
-              type="button"
-              className="px-4 py-1.5 rounded border border-sky-400 text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 text-xs font-bold hover:bg-sky-100"
-            >
-              Load
-            </button>
-            <button
-              type="button"
-              onClick={() => setRojmelShowDetails(!rojmelShowDetails)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
-            >
-              <span className={`h-4 w-4 rounded-sm border flex items-center justify-center ${rojmelShowDetails ? 'bg-teal-600 border-teal-600' : 'border-slate-400 bg-white dark:bg-slate-800'}`}>
-                {rojmelShowDetails && <Check className="h-3 w-3 text-white" />}
-              </span>
-              Show Item Details
-            </button>
-            <div className="flex-1" />
-            <span className="px-4 py-1.5 rounded bg-rose-500 text-white text-xs font-black">Daily Cash Summary</span>
-            <span className="px-4 py-1.5 rounded bg-rose-300 text-rose-900 text-xs font-black flex items-center gap-1.5">
-              <Lock className="h-3.5 w-3.5" /> ENTRY BLOCKED
-            </span>
-          </div>
-
-          {/* Two Column Ledger */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
-            {/* Credit Side */}
-            <div>
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900 text-white font-bold">
-                  <tr>
-                    <th className="px-3 py-2 w-28">Bill No.</th>
-                    <th className="px-3 py-2">Credit Side (Inflow / Receipts)</th>
-                    <th className="px-3 py-2 text-right w-28">Amount (₹)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  <tr className="bg-emerald-50 dark:bg-emerald-950/30">
-                    <td className="px-3 py-2 text-[10px] text-slate-500">[Closing Date: 19-01-2026]</td>
-                    <td className="px-3 py-2 font-black text-emerald-700 dark:text-emerald-400">OPENING CASH</td>
-                    <td className="px-3 py-2 text-right font-bold text-slate-800 dark:text-slate-100">9,810.00</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-sky-700 dark:text-sky-400">SSTM/4572</td>
-                    <td className="px-3 py-2 text-sky-700 dark:text-sky-400">Cash Sale - Tyre MOGRIP 1 Qty</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">1,350.00</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-sky-700 dark:text-sky-400">SSTM/5012</td>
-                    <td className="px-3 py-2 text-sky-700 dark:text-sky-400">Rajkumar (Split Bill: Cash Component Synced)</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">200.00</td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-950/50 font-black text-emerald-800 dark:text-emerald-300 text-[11px]">
-                      EXTERNAL RECEIPT VOUCHER AUTO SYNC
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-sky-700 dark:text-sky-400">RCPT/981</td>
-                    <td className="px-3 py-2 text-sky-700 dark:text-sky-400">Synced Cash Receipt (Pop-up Confirmed Yes)</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">35,340.00</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="flex items-center justify-between px-3 py-2.5 bg-sky-50 dark:bg-sky-950/30 border-t border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100">
-                <span>Total Inflow (Credit)</span>
-                <span>46,800.00</span>
-              </div>
-              <div className="m-3 p-3 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-between">
-                <span className="font-black text-emerald-700 dark:text-emerald-400 text-sm">DIFFRENCE</span>
-                <span className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-xl">0.00</span>
-              </div>
-            </div>
-
-            {/* Debit Side */}
-            <div>
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900 text-white font-bold">
-                  <tr>
-                    <th className="px-3 py-2 w-28">Bill No</th>
-                    <th className="px-3 py-2">Debit Side (Categorized Outflow)</th>
-                    <th className="px-3 py-2 text-right w-28">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  <tr>
-                    <td colSpan={3} className="px-3 py-1.5 bg-orange-100 dark:bg-orange-950/50 font-black text-orange-800 dark:text-orange-300 text-[11px]">
-                      1. ENTRIES MADE BY US - EXPENSES
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-300">PYMT</td>
-                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">Auto Entry-DRAWING EXPENSES</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">2,500.00</td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="px-3 py-1.5 bg-sky-100 dark:bg-sky-950/50 font-black text-sky-800 dark:text-sky-300 text-[11px]">
-                      2. AUTO SYNC BY BANK (Card / QR)
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-sky-700 dark:text-sky-400">SSTM/4574</td>
-                    <td className="px-3 py-2 text-sky-700 dark:text-sky-400">HDFC Cr A/c (Ref: Card Settlement)</td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-100">420.00</td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="px-3 py-1.5 bg-rose-100 dark:bg-rose-950/50 font-black text-rose-800 dark:text-rose-300 text-[11px]">
-                      3. DEBIT AUTO SYNC CREDIT BILLS (Split Track)
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-rose-600 dark:text-rose-400">SSTM/5012</td>
-                    <td className="px-3 py-2 text-rose-600 dark:text-rose-400">Rajkumar Ledger Trace (Remaining Credit Comp.)</td>
-                    <td className="px-3 py-2 text-right font-semibold text-rose-600 dark:text-rose-400">800.00</td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="px-3 py-1.5 bg-purple-100 dark:bg-purple-950/50 font-black text-purple-800 dark:text-purple-300 text-[11px]">
-                      4. EXTERNAL PAYMENT VOUCHER AUTO SYNC
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 font-semibold text-purple-600 dark:text-purple-400">PMNT/302</td>
-                    <td className="px-3 py-2 text-purple-600 dark:text-purple-400">External Cash Expense (Pop-up Confirmed Yes)</td>
-                    <td className="px-3 py-2 text-right font-semibold text-purple-600 dark:text-purple-400">50.00</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {rojmelShowDetails && (
-                <div className="m-3 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700">
-                  <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700 text-white text-[11px] font-black">
-                    <span>F5 - NOTE DENOMINATIONS (User Limit: 5 Times/Day)</span>
-                    <span>Amount</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                    <div className="flex items-center justify-between px-3 py-1.5">
-                      <span className="text-slate-700 dark:text-slate-300">500 X 28</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">14,000.00</span>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-1.5">
-                      <span className="text-slate-700 dark:text-slate-300">100 X 67</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">6,700.00</span>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-1.5">
-                      <span className="text-slate-700 dark:text-slate-300">50 X 8</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">400.00</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-900">
-                    <span className="font-black text-emerald-700 dark:text-emerald-400 text-xs">CASH IN COUNTER</span>
-                    <span className="px-4 py-1 rounded bg-emerald-500 text-white font-black text-sm">22,290.00</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between px-3 py-2.5 bg-sky-50 dark:bg-sky-950/30 border-t border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100">
-                <span>Total Outflow + Cash Track</span>
-                <span>34,320.00</span>
-              </div>
-              <div className="m-3 p-3 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-between">
-                <span className="font-black text-emerald-700 dark:text-emerald-400 text-sm">CLOSING CASH</span>
-                <span className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-2xl">22,290.00</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer Bar */}
-          <div className="px-4 py-2.5 bg-slate-900 text-slate-300 text-center text-[11px] font-bold tracking-wide">
-            [ F2 - Save ] &nbsp; [ Esc - Quit ] &nbsp; [ F3 - Credit ] &nbsp; [ F4 - Debit ] &nbsp; [ F5 - Denomination ] &nbsp; [ Enter - Open Voucher ]
-          </div>
-        </div>
-      )}
-
-      {/* GSTR-1 SUMMARY */}
-      {activeSubTab === 'gstr-1' && (
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-          <h3 className="font-black text-base text-slate-900 dark:text-slate-100">GSTR-1 Return Filing Computation Summary</h3>
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className="font-bold">B2B Sales Invoices</div>
-              <div className="text-base font-mono font-black text-emerald-600 mt-1">₹47,618</div>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className="font-bold">B2C Retail Sales</div>
-              <div className="text-base font-mono font-black text-teal-600 mt-1">₹8,556</div>
-            </div>
-            <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div className="font-bold">HSN Code Summary</div>
-              <div className="text-base font-mono font-black text-purple-600 mt-1">6 Codes</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TOOLS - BarCode Generator */}
-      {activeSubTab === 'barcode-gen' && (
-        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 max-w-lg">
-          <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Barcode className="h-5 w-5 text-emerald-500" />
-            Barcode Sticker Generator Tool
-          </h3>
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="block font-bold mb-1">Select Item to Print Barcode</label>
-              <select className="w-full p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold">
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} (Barcode: {p.barcode})</option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block font-bold mb-1">Sticker Width (mm)</label>
-                <input type="number" defaultValue={50} className="w-full p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono" />
-              </div>
-              <div>
-                <label className="block font-bold mb-1">Copies</label>
-                <input type="number" defaultValue={100} className="w-full p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono" />
-              </div>
-            </div>
-            <button className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow">
-              Generate & Print Barcode Roll
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

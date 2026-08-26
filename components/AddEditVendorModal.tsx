@@ -230,7 +230,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-3 overflow-y-auto">
-      <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden my-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden my-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header Bar matching OS-BOOKS Party Master Screenshot */}
         <div className="bg-[#00a8b5] px-5 py-3 flex items-center justify-between text-white shadow-sm">
@@ -369,13 +369,18 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           <div className="space-y-1">
             <label className="font-bold text-slate-900 dark:text-slate-100 block">Party Tags</label>
             <div className="relative">
-              <input
-                type="text"
-                placeholder="Enter Tags"
+              <select
                 value={partyTags}
                 onChange={(e) => setPartyTags(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
-              />
+                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer font-bold"
+              >
+                <option value="">-- Select Party Tag --</option>
+                <option value="COMMERCIAL">COMMERCIAL (Hotel / Restaurant / Factory)</option>
+                <option value="VIP">VIP Priority Client</option>
+                <option value="REGULAR">REGULAR B2B Customer</option>
+                <option value="DISTRIBUTOR">DISTRIBUTOR / Sub-Dealer</option>
+                <option value="CREDIT_HOLD">CREDIT HOLD / Payment Pending</option>
+              </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
             </div>
           </div>
@@ -699,8 +704,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                               onChange={(e) => handleRateRowChange(idx, 'productId', e.target.value)}
                               className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
                             >
-                              <option value="">select</option>
-                              {products.map((p) => (
+                              <option value="">Select Product...</option>
+                              {(products.length > 0 ? products : [
+                                { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder' },
+                                { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder' },
+                                { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder' },
+                              ] as any).map((p: any) => (
                                 <option key={p.id} value={p.id}>{p.name}</option>
                               ))}
                             </select>
@@ -744,15 +753,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           {/* Footer Action Buttons matching OS-BOOKS Party Master Screenshot */}
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2 bg-slate-50 dark:bg-slate-800/60 -mx-6 -mb-6 p-4">
             
-            {/* Image Icon Button */}
-            <button
-              type="button"
-              className="p-2.5 rounded bg-slate-600 hover:bg-slate-700 text-white transition-colors cursor-pointer"
-              title="Party Attachments / Image"
-            >
-              <ImageIcon className="h-4 w-4" />
-            </button>
-
             {/* Submit Button (Green) */}
             <button
               type="submit"

@@ -13,8 +13,8 @@ import {
   CalendarCheck, 
   Plus, 
   Search, 
-  ArrowUpRight, 
-  ArrowDownRight,
+  CheckCircle2,
+  X,
   PackageCheck,
   Truck
 } from 'lucide-react';
@@ -25,6 +25,7 @@ import {
   Customer, 
   CompanyMaster 
 } from '../lib/types';
+import { CustomerLedgerModule } from './CustomerLedgerModule';
 
 interface AccountHubModuleProps {
   customerLedger: LedgerEntry[];
@@ -41,8 +42,6 @@ interface AccountHubModuleProps {
   initialSubTab?: string;
 }
 
-import { CustomerLedgerModule } from './CustomerLedgerModule';
-
 export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
   customerLedger,
   companyLedger,
@@ -50,7 +49,7 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
   employeeLedger,
   expensesLedger,
   incomesLedger,
-  paymentLedger,
+  paymentLedger: initialPaymentLedger,
   attendance,
   branchTransfers,
   customers,
@@ -59,12 +58,20 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<string>(initialSubTab);
   const [searchTerm, setSearchTerm] = useState('');
+  const [paymentsList, setPaymentsList] = useState<LedgerEntry[]>(initialPaymentLedger);
+  const [isNewPaymentModalOpen, setIsNewPaymentModalOpen] = useState(false);
+
+  // New Payment Modal State
+  const [payPartyName, setPayPartyName] = useState('Hotel Rajdhani');
+  const [payAmount, setPayAmount] = useState('18500');
+  const [payMode, setPayMode] = useState('Online UPI / Banking');
+  const [payVoucher, setPayVoucher] = useState(`PAY-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [payRemarks, setPayRemarks] = useState('Payment Received for Cylinder Dispatch');
 
   React.useEffect(() => {
     setActiveSubTab(initialSubTab);
   }, [initialSubTab]);
 
-  // Sub-items matching OS-BOOKS screenshot 3 (Branch Management + Account)
   const accountSubTabs = [
     { id: 'stock-in', label: 'Stock In (Branch)', category: 'Branch', icon: PackageCheck },
     { id: 'stock-out', label: 'Stock Out (Branch)', category: 'Branch', icon: Truck },
@@ -77,6 +84,24 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
     { id: 'payment-ledger', label: 'Payment Ledger', category: 'Account', icon: Receipt },
     { id: 'employee-attendance', label: 'Employee Attendance', category: 'Account', icon: CalendarCheck },
   ];
+
+  const handleCreatePaymentEntry = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newPay: LedgerEntry = {
+      id: `pay_${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      accountName: payPartyName,
+      particulars: `${payRemarks} (${payMode})`,
+      voucherNumber: payVoucher,
+      debit: Number(payAmount) || 0,
+      credit: 0,
+      balance: Number(payAmount) || 0,
+    };
+
+    setPaymentsList([newPay, ...paymentsList]);
+    alert('🎉 NEW PAYMENT ENTRY RECORDED IN PAYMENT LEDGER!');
+    setIsNewPaymentModalOpen(false);
+  };
 
   if (activeSubTab === 'customer-ledger') {
     return (
@@ -95,16 +120,19 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
         <div>
           <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-emerald-500" />
-            OS-BOOKS Financial Account & Branch Management
+            Financial Account & Branch Management
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Real-time Debit/Credit Statements, Bank Books, Attendance & Inter-Branch Stock Transfers
+            Real-time Debit/Credit Statements, Bank Books, Payment Verification & Day Closing Locks
           </p>
         </div>
 
-        <button className="flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md active:scale-95 transition-all">
+        <button 
+          onClick={() => setIsNewPaymentModalOpen(true)}
+          className="flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-md active:scale-95 transition-all cursor-pointer"
+        >
           <Plus className="h-4 w-4" />
-          <span>New Entry in {activeSubTab.toUpperCase()}</span>
+          <span>New Entry in {activeSubTab.toUpperCase().replace('-', ' ')}</span>
         </button>
       </div>
 
@@ -120,7 +148,7 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
                 setActiveSubTab(tab.id);
                 setSearchTerm('');
               }}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 isActive
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
@@ -145,254 +173,39 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder={`Search ${activeSubTab.toUpperCase()} records...`}
-          className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
+          placeholder={`Search ${activeSubTab.toUpperCase().replace('-', ' ')} records...`}
+          className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 font-medium"
         />
       </div>
-
-      {/* RENDER VIEWS FOR EACH SUB TAB */}
-
-      {/* 1. STOCK IN */}
-      {activeSubTab === 'stock-in' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Stock Inward #</th>
-                <th className="px-3 py-2.5">Source Branch</th>
-                <th className="px-3 py-2.5">Destination Branch</th>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Received Qty</th>
-                <th className="px-3 py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {branchTransfers.filter((st) => st.type === 'Stock In').map((st) => (
-                <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">{st.transferNumber}</td>
-                  <td className="px-3 py-3 font-bold">{st.fromBranch}</td>
-                  <td className="px-3 py-3 font-bold">{st.toBranch}</td>
-                  <td className="px-3 py-3">{st.date}</td>
-                  <td className="px-3 py-3 font-mono font-extrabold">{st.totalQty} Units</td>
-                  <td className="px-3 py-3">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                      {st.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 2. STOCK OUT */}
-      {activeSubTab === 'stock-out' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Stock Outward #</th>
-                <th className="px-3 py-2.5">Originating Branch</th>
-                <th className="px-3 py-2.5">Target Branch</th>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Dispatched Qty</th>
-                <th className="px-3 py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {branchTransfers.filter((st) => st.type === 'Stock Out').map((st) => (
-                <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3 font-mono font-bold text-amber-600 dark:text-amber-400">{st.transferNumber}</td>
-                  <td className="px-3 py-3 font-bold">{st.fromBranch}</td>
-                  <td className="px-3 py-3 font-bold">{st.toBranch}</td>
-                  <td className="px-3 py-3">{st.date}</td>
-                  <td className="px-3 py-3 font-mono font-extrabold">{st.totalQty} Units</td>
-                  <td className="px-3 py-3">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
-                      {st.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 4. COMPANY LEDGER */}
-      {activeSubTab === 'company-ledger' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Voucher #</th>
-                <th className="px-3 py-2.5">Company Account</th>
-                <th className="px-3 py-2.5">Particulars</th>
-                <th className="px-3 py-2.5">Debit (Dr)</th>
-                <th className="px-3 py-2.5">Credit (Cr)</th>
-                <th className="px-3 py-2.5">Net Reserve</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
-              {companyLedger.map((led) => (
-                <tr key={led.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3">{led.date}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-600 dark:text-emerald-400">{led.voucherNumber}</td>
-                  <td className="px-3 py-3 font-sans font-extrabold text-slate-900 dark:text-slate-100">{led.accountName}</td>
-                  <td className="px-3 py-3 font-sans">{led.particulars}</td>
-                  <td className="px-3 py-3 font-bold text-rose-600">{led.debit > 0 ? `₹${led.debit.toLocaleString('en-IN')}` : '-'}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-600">{led.credit > 0 ? `₹${led.credit.toLocaleString('en-IN')}` : '-'}</td>
-                  <td className="px-3 py-3 font-black text-slate-900 dark:text-slate-100">₹{led.balance.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 5. BANK BOOK */}
-      {activeSubTab === 'bank-book' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Voucher #</th>
-                <th className="px-3 py-2.5">Bank Account</th>
-                <th className="px-3 py-2.5">Particulars</th>
-                <th className="px-3 py-2.5">Deposit (Dr)</th>
-                <th className="px-3 py-2.5">Withdrawal (Cr)</th>
-                <th className="px-3 py-2.5">Bank Balance</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
-              {bankBook.map((bb) => (
-                <tr key={bb.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3">{bb.date}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-600 dark:text-emerald-400">{bb.voucherNumber}</td>
-                  <td className="px-3 py-3 font-sans font-extrabold text-slate-900 dark:text-slate-100">{bb.accountName}</td>
-                  <td className="px-3 py-3 font-sans">{bb.particulars}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-600">{bb.debit > 0 ? `₹${bb.debit.toLocaleString('en-IN')}` : '-'}</td>
-                  <td className="px-3 py-3 font-bold text-rose-600">{bb.credit > 0 ? `₹${bb.credit.toLocaleString('en-IN')}` : '-'}</td>
-                  <td className="px-3 py-3 font-black text-slate-900 dark:text-slate-100">₹{bb.balance.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 6. EMPLOYEE LEDGER */}
-      {activeSubTab === 'employee-ledger' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Voucher #</th>
-                <th className="px-3 py-2.5">Employee Name</th>
-                <th className="px-3 py-2.5">Particulars</th>
-                <th className="px-3 py-2.5">Payout (Dr)</th>
-                <th className="px-3 py-2.5">Credit (Cr)</th>
-                <th className="px-3 py-2.5">Due Balance</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
-              {employeeLedger.map((emp) => (
-                <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3">{emp.date}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-600 dark:text-emerald-400">{emp.voucherNumber}</td>
-                  <td className="px-3 py-3 font-sans font-extrabold text-slate-900 dark:text-slate-100">{emp.accountName}</td>
-                  <td className="px-3 py-3 font-sans">{emp.particulars}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-600">{emp.debit > 0 ? `₹${emp.debit.toLocaleString('en-IN')}` : '-'}</td>
-                  <td className="px-3 py-3 font-bold text-rose-600">{emp.credit > 0 ? `₹${emp.credit.toLocaleString('en-IN')}` : '-'}</td>
-                  <td className="px-3 py-3 font-black text-slate-900 dark:text-slate-100">₹{emp.balance.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 7. EXPENSES LEDGER */}
-      {activeSubTab === 'expenses-ledger' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Voucher #</th>
-                <th className="px-3 py-2.5">Expense Head</th>
-                <th className="px-3 py-2.5">Particulars</th>
-                <th className="px-3 py-2.5">Amount Spent (Dr)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
-              {expensesLedger.map((exp) => (
-                <tr key={exp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3">{exp.date}</td>
-                  <td className="px-3 py-3 font-bold text-rose-500">{exp.voucherNumber}</td>
-                  <td className="px-3 py-3 font-sans font-extrabold text-slate-900 dark:text-slate-100">{exp.accountName}</td>
-                  <td className="px-3 py-3 font-sans">{exp.particulars}</td>
-                  <td className="px-3 py-3 font-black text-rose-600 dark:text-rose-400">₹{exp.debit.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 8. INCOMES LEDGER */}
-      {activeSubTab === 'incomes-ledger' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Voucher #</th>
-                <th className="px-3 py-2.5">Income Head</th>
-                <th className="px-3 py-2.5">Particulars</th>
-                <th className="px-3 py-2.5">Amount Earned (Cr)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
-              {incomesLedger.map((inc) => (
-                <tr key={inc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3">{inc.date}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-500">{inc.voucherNumber}</td>
-                  <td className="px-3 py-3 font-sans font-extrabold text-slate-900 dark:text-slate-100">{inc.accountName}</td>
-                  <td className="px-3 py-3 font-sans">{inc.particulars}</td>
-                  <td className="px-3 py-3 font-black text-emerald-600 dark:text-emerald-400">₹{inc.credit.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {/* 9. PAYMENT LEDGER */}
       {activeSubTab === 'payment-ledger' && (
         <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
+            <thead className="bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-700 dark:text-slate-300 uppercase">
               <tr>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Payment Voucher</th>
-                <th className="px-3 py-2.5">Payment Channel</th>
-                <th className="px-3 py-2.5">Particulars</th>
-                <th className="px-3 py-2.5">Amount Processed</th>
+                <th className="px-3.5 py-3">Date</th>
+                <th className="px-3.5 py-3">Voucher #</th>
+                <th className="px-3.5 py-3">Party Account Name</th>
+                <th className="px-3.5 py-3">Payment Channel / Particulars</th>
+                <th className="px-3.5 py-3">Amount Processed</th>
+                <th className="px-3.5 py-3">Verification Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono">
-              {paymentLedger.map((pay) => (
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {paymentsList.map((pay) => (
                 <tr key={pay.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3">{pay.date}</td>
-                  <td className="px-3 py-3 font-bold text-emerald-500">{pay.voucherNumber}</td>
-                  <td className="px-3 py-3 font-sans font-extrabold text-slate-900 dark:text-slate-100">{pay.accountName}</td>
-                  <td className="px-3 py-3 font-sans">{pay.particulars}</td>
-                  <td className="px-3 py-3 font-black text-slate-900 dark:text-slate-100">₹{pay.debit.toLocaleString('en-IN')}</td>
+                  <td className="px-3.5 py-3 font-mono font-bold">{pay.date}</td>
+                  <td className="px-3.5 py-3 font-mono font-bold text-emerald-500">{pay.voucherNumber}</td>
+                  <td className="px-3.5 py-3 font-extrabold text-slate-900 dark:text-slate-100 text-sm">{pay.accountName}</td>
+                  <td className="px-3.5 py-3 font-medium">{pay.particulars}</td>
+                  <td className="px-3.5 py-3 font-black text-slate-900 dark:text-white font-mono text-sm">₹{pay.debit.toLocaleString('en-IN')}</td>
+                  <td className="px-3.5 py-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      Payment Cleared & Posted
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -400,37 +213,95 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
         </div>
       )}
 
-      {/* 10. EMPLOYEE ATTENDANCE */}
-      {activeSubTab === 'employee-attendance' && (
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-100 dark:bg-slate-800 font-semibold uppercase">
-              <tr>
-                <th className="px-3 py-2.5">Employee Name</th>
-                <th className="px-3 py-2.5">Date</th>
-                <th className="px-3 py-2.5">Check In</th>
-                <th className="px-3 py-2.5">Check Out</th>
-                <th className="px-3 py-2.5">Overtime (Hrs)</th>
-                <th className="px-3 py-2.5">Attendance Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {attendance.map((att) => (
-                <tr key={att.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-3 py-3 font-extrabold text-slate-900 dark:text-slate-100">{att.employeeName}</td>
-                  <td className="px-3 py-3 font-mono">{att.date}</td>
-                  <td className="px-3 py-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">{att.checkIn}</td>
-                  <td className="px-3 py-3 font-mono font-bold text-slate-700 dark:text-slate-300">{att.checkOut}</td>
-                  <td className="px-3 py-3 font-mono font-bold">{att.overtimeHours} hrs</td>
-                  <td className="px-3 py-3">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                      {att.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* NEW PAYMENT ENTRY MODAL */}
+      {isNewPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-emerald-500" />
+                Add New Payment Ledger Entry
+              </h3>
+              <button onClick={() => setIsNewPaymentModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePaymentEntry} className="space-y-3 text-xs font-semibold">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Customer / Party Name</label>
+                <input
+                  type="text"
+                  required
+                  value={payPartyName}
+                  onChange={(e) => setPayPartyName(e.target.value)}
+                  className="w-full py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Payment Amount (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className="w-full py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 font-black text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Voucher Number</label>
+                  <input
+                    type="text"
+                    required
+                    value={payVoucher}
+                    onChange={(e) => setPayVoucher(e.target.value)}
+                    className="w-full py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Payment Channel / Mode</label>
+                <select
+                  value={payMode}
+                  onChange={(e) => setPayMode(e.target.value)}
+                  className="w-full py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold cursor-pointer"
+                >
+                  <option value="Online UPI / Banking">Online UPI / Net Banking</option>
+                  <option value="Cash Deposit">Cash Deposit at Counter</option>
+                  <option value="Cheque Deposit">Bank Cheque Deposit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Remarks / Particulars</label>
+                <input
+                  type="text"
+                  value={payRemarks}
+                  onChange={(e) => setPayRemarks(e.target.value)}
+                  className="w-full py-2 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewPaymentModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold shadow cursor-pointer"
+                >
+                  Post Payment to Ledger
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

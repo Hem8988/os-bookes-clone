@@ -24,9 +24,16 @@ import {
   MapPin,
   X,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 
 export default function DeliveryBoyModule() {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    window.location.href = '/login';
+  };
   // Day Operations State
   const [dayStatus, setDayStatus] = useState<'NOT_STARTED' | 'DAY_STARTED' | 'DAY_CLOSED'>('NOT_STARTED');
   const [isStartDayModalOpen, setIsStartDayModalOpen] = useState(false);
@@ -518,6 +525,14 @@ export default function DeliveryBoyModule() {
                 <Lock className="w-4 h-4 text-rose-400" /> Shift Locked
               </span>
             )}
+
+            <button
+              onClick={handleLogout}
+              className="px-3.5 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-200 font-extrabold text-xs md:text-sm rounded-2xl border border-rose-800/80 shadow transition flex items-center gap-1.5"
+              title="Sign Out of Fleet App"
+            >
+              <LogOut className="w-4 h-4 text-rose-400" /> Logout
+            </button>
           </div>
         </div>
 

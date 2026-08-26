@@ -229,11 +229,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4">
-      <div className="relative w-full max-w-3xl h-[85vh] sm:h-[88vh] flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
-        
-        {/* Header Bar matching OS-BOOKS Party Master Screenshot */}
-        <div className="bg-[#00a8b5] px-5 py-3 flex items-center justify-between text-white shadow-sm shrink-0">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-slate-900 w-screen h-screen overflow-hidden text-xs font-semibold text-slate-800 dark:text-slate-200 animate-in fade-in duration-150">
+      
+      {/* Top Header Bar (Fixed Full-Width) */}
+      <div className="bg-[#00a8b5] px-6 py-3.5 flex items-center justify-between text-white shadow-md shrink-0">
           <h2 className="text-lg font-extrabold tracking-wide flex items-center gap-2">
             <span>Party Master</span>
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-white/20 uppercase">
@@ -263,8 +262,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         {/* Modal Form Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-semibold text-slate-800 dark:text-slate-200">
           
-          {/* Scrollable Form Body Container */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* Scrollable Form Body Container (Centered & Spacious) */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-5xl mx-auto w-full">
           
           {/* Party Category: locked to the master this modal was opened from */}
           <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -778,8 +777,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
         </form>
-
-      </div>
     </div>
   );
 };

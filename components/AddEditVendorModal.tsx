@@ -229,11 +229,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-3 overflow-y-auto">
-      <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden my-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4">
+      <div className="relative w-full max-w-3xl h-[85vh] sm:h-[88vh] flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header Bar matching OS-BOOKS Party Master Screenshot */}
-        <div className="bg-[#00a8b5] px-5 py-3 flex items-center justify-between text-white shadow-sm">
+        <div className="bg-[#00a8b5] px-5 py-3 flex items-center justify-between text-white shadow-sm shrink-0">
           <h2 className="text-lg font-extrabold tracking-wide flex items-center gap-2">
             <span>Party Master</span>
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-white/20 uppercase">

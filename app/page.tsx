@@ -731,7 +731,14 @@ export default function Home() {
           {activeTab === 'approval-queue' && <ApprovalQueueModule />}
           {activeTab === 'delivery-app' && <DeliveryBoyModule />}
           {activeTab === 'whatsapp-sender' && <WhatsAppInvoiceSenderModule />}
-          {activeTab === 'customer-360' && <CustomersModule customers={customers} onAddCustomer={handleAddCustomer} />}
+          {activeTab === 'customer-360' && (
+            <CustomersModule 
+              customers={customers} 
+              onAddCustomer={handleAddCustomer} 
+              onUpdateCustomer={handleUpdateCustomer}
+              onDeleteCustomer={handleDeleteCustomer}
+            />
+          )}
       {activeTab === 'dashboard' && (
             <Dashboard
               invoices={invoices}
@@ -889,7 +896,12 @@ export default function Home() {
           )}
 
           {activeTab === 'customers' && (
-            <CustomersModule customers={customers} onAddCustomer={handleAddCustomer} />
+            <CustomersModule 
+              customers={customers} 
+              onAddCustomer={handleAddCustomer} 
+              onUpdateCustomer={handleUpdateCustomer}
+              onDeleteCustomer={handleDeleteCustomer}
+            />
           )}
 
           {activeTab === 'gst-reports' && <GstReportsModule invoices={invoices} />}

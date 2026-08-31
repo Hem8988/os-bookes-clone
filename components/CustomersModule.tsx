@@ -16,10 +16,12 @@ import {
   CheckCircle2, 
   XCircle,
   LayoutList,
-  LayoutGrid
+  LayoutGrid,
+  Eye
 } from 'lucide-react';
 import { Customer } from '../lib/types';
 import { AddEditVendorModal } from './AddEditVendorModal';
+import { CustomerLedgerModal } from './CustomerLedgerModal';
 
 interface CustomersModuleProps {
   customers: Customer[];
@@ -41,6 +43,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
 
   const safeCustomers = useMemo(() => (Array.isArray(customers) ? customers : []), [customers]);
 
@@ -298,9 +301,13 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                         <td className="py-3 px-4">
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">
+                              <button
+                                onClick={() => setViewingCustomer(c)}
+                                className="font-extrabold text-slate-900 dark:text-slate-100 text-sm hover:text-teal-600 dark:hover:text-teal-400 hover:underline text-left cursor-pointer transition-colors"
+                                title="Click to view full Account Ledger"
+                              >
                                 {c.name}
-                              </span>
+                              </button>
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
                                   c.type === 'Customer'
@@ -421,9 +428,19 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                           )}
                         </td>
 
-                        {/* Actions: Edit & Delete */}
+                        {/* Actions: View Ledger, Edit & Delete */}
                         <td className="py-3 px-4 text-center">
                           <div className="flex items-center justify-center gap-1.5">
+                            {/* View Statement Ledger Button */}
+                            <button
+                              onClick={() => setViewingCustomer(c)}
+                              className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900 text-teal-600 dark:text-teal-400 transition cursor-pointer flex items-center gap-1 font-bold text-[11px]"
+                              title="View Customer 360 & Account Ledger"
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span className="hidden xl:inline">Ledger</span>
+                            </button>
+
                             {/* Edit Button */}
                             <button
                               onClick={() => handleOpenEditModal(c)}
@@ -468,7 +485,10 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                 <div>
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">
+                      <h3 
+                        onClick={() => setViewingCustomer(c)}
+                        className="font-extrabold text-base text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 hover:underline cursor-pointer transition"
+                      >
                         {c.name}
                       </h3>
                       <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
@@ -519,6 +539,14 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
                   <div className="flex items-center gap-1.5">
                     <button
+                      onClick={() => setViewingCustomer(c)}
+                      className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      title="View Customer 360 & Account Ledger"
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span>Ledger</span>
+                    </button>
+                    <button
                       onClick={() => handleOpenEditModal(c)}
                       className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-xs"
                       title="Edit"
@@ -552,6 +580,13 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
           setEditingCustomer(null);
         }}
         onSave={handleSaveCustomer}
+      />
+
+      {/* Customer 360 & Full Account Ledger View Drawer */}
+      <CustomerLedgerModal
+        isOpen={!!viewingCustomer}
+        customer={viewingCustomer}
+        onClose={() => setViewingCustomer(null)}
       />
 
     </div>

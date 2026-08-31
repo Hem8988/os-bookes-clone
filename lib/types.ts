@@ -252,6 +252,8 @@ export interface Customer {
   route?: string;
   defaultDeliveryBoyId?: string;
   openingEmptyCylinderQty?: number;
+  password?: string;
+  portalAccessEnabled?: boolean;
   partyRates?: PartyRate[];
   deliveryAddresses?: CustomerAddress[];
 }

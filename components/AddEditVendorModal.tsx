@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2, Lock, Eye, EyeOff, Shield, Mail } from 'lucide-react';
 import { Customer, Product, PartyRate } from '../lib/types';
 
 interface AddEditVendorModalProps {
@@ -28,6 +28,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [partyName, setPartyName] = useState('');
   const [active, setActive] = useState(true);
   const [dueDays, setDueDays] = useState<number | ''>(7);
+
+  // ERP Login Credentials State
+  const [loginPassword, setLoginPassword] = useState('cust123');
+  const [portalAccessEnabled, setPortalAccessEnabled] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('');
   const [city, setCity] = useState('');
   const [partyTags, setPartyTags] = useState('');
@@ -106,6 +111,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setGstApplicable(customerToEdit.gstApplicable || 'GST');
       setStateName(customerToEdit.state || 'Madhya Pradesh');
       setEmailAddress(customerToEdit.email || '');
+      setLoginPassword(customerToEdit.password || 'cust123');
+      setPortalAccessEnabled(customerToEdit.portalAccessEnabled !== false);
       setPartyType(customerToEdit.partyType || (customerToEdit.type === 'Vendor' ? 'vendor' : 'customer'));
       setOtherMobileNo(customerToEdit.otherMobile || '');
       setPartyLimit(customerToEdit.creditLimit !== undefined ? customerToEdit.creditLimit : 0);
@@ -142,6 +149,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setGstApplicable('GST');
       setStateName('Madhya Pradesh');
       setEmailAddress('');
+      setLoginPassword('cust123');
+      setPortalAccessEnabled(true);
       setPartyType(defaultType === 'Vendor' ? 'vendor' : 'customer');
       setOtherMobileNo('');
       setPartyLimit(0);
@@ -191,6 +200,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       phone: mobileNumber.trim() || '+91 98260 00000',
       whatsappNumber: whatsappNumber.trim() || mobileNumber.trim() || '+91 98260 00000',
       email: emailAddress.trim() || 'party@domain.com',
+      password: loginPassword.trim() || 'cust123',
+      portalAccessEnabled,
       gstin: gstin.trim().toUpperCase() || undefined,
       address: address.trim() || 'Main Commercial Area',
       city: city.trim() || 'Indore',
@@ -489,6 +500,67 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   <option value="individual">individual</option>
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* ERP CUSTOMER PORTAL LOGIN CREDENTIALS & SECURITY */}
+          <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3 shadow-lg my-2">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-emerald-400" />
+                <h4 className="font-extrabold text-sm text-slate-100">
+                  Customer ERP Login Credentials & Portal Access
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-bold text-slate-400 cursor-pointer">Enable Portal Login:</label>
+                <input
+                  type="checkbox"
+                  checked={portalAccessEnabled}
+                  onChange={(e) => setPortalAccessEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                  <Mail className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Customer Login Email Address</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. customer@deskshark.com"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                  <Lock className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Portal Login Password</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Set Login Password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full px-3 py-2 pr-10 rounded-xl bg-slate-800 border border-slate-700 text-emerald-400 font-mono font-black focus:outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    title={showPassword ? 'Hide Password' : 'Show Password'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

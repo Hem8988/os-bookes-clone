@@ -318,6 +318,15 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({
                     {customer.accountGroup || (customer.type === 'Vendor' ? 'Sundry Creditors' : 'Sundry Debtors')}
                   </span>
                 </div>
+                <div className="flex justify-between items-center pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 font-semibold flex items-center gap-1">
+                    <Shield className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Portal Access:</span>
+                  </span>
+                  <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded text-[11px]">
+                    {customer.email || 'customer@deskshark.com'} • {customer.password || 'cust123'}
+                  </span>
+                </div>
               </div>
             </div>
 

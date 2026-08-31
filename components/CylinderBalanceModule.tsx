@@ -774,92 +774,117 @@ export default function CylinderBalanceModule() {
 
       </div>
 
-      {/* CUSTOMER CYLINDER MOVEMENT LEDGER DETAIL MODAL */}
+      {/* CUSTOMER CYLINDER MOVEMENT LEDGER FULL-PAGE LEFT SLIDE-OVER DRAWER */}
       {isLedgerModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-800 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-indigo-500" /> Customer Cylinder Movement History
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{ledgerData?.customerName || 'Account Movement Ledger'}</p>
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
+            {/* Header Bar */}
+            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                    Customer Cylinder Movement Statement
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">{ledgerData?.customerName || 'Account Statement Ledger'}</p>
+                </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5" /> Print
+                  <Printer className="w-4 h-4 text-emerald-400" /> Print Statement
                 </button>
 
-                <button onClick={() => setIsLedgerModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
-                  <X className="w-5 h-5" />
+                <button 
+                  onClick={() => setIsLedgerModalOpen(false)} 
+                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
 
-            {ledgerLoading ? (
-              <div className="p-8 text-center text-slate-400 italic">Loading Customer Cylinder Movement Ledger...</div>
-            ) : ledgerData ? (
-              <div className="space-y-4">
-                {/* Summary KPI Bar */}
-                <div className="grid grid-cols-5 gap-2 text-center text-xs bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">Opening</div>
-                    <div className="font-extrabold text-slate-700 dark:text-slate-200">{ledgerData.kpis.openingBalance} Pcs</div>
+            {/* Content Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {ledgerLoading ? (
+                <div className="p-12 text-center text-slate-400 italic">Loading Customer Cylinder Movement Ledger...</div>
+              ) : ledgerData ? (
+                <div className="space-y-6">
+                  {/* Summary KPI Bar */}
+                  <div className="grid grid-cols-5 gap-3 text-center text-xs bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Opening</div>
+                      <div className="font-black text-slate-700 dark:text-slate-200 text-sm mt-1">{ledgerData.kpis.openingBalance} Pcs</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Delivered Full</div>
+                      <div className="font-black text-emerald-600 dark:text-emerald-400 text-sm mt-1">+{ledgerData.kpis.deliveredFull} Pcs</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Empty Recd</div>
+                      <div className="font-black text-amber-600 dark:text-amber-400 text-sm mt-1">-{ledgerData.kpis.emptyReceived} Pcs</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Adjustments</div>
+                      <div className="font-black text-purple-600 dark:text-purple-400 text-sm mt-1">{ledgerData.kpis.adjustments} Pcs</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Current Balance</div>
+                      <div className="font-black text-indigo-600 dark:text-indigo-400 text-base mt-1">{ledgerData.kpis.currentBalance} Pcs</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">Delivered Full</div>
-                    <div className="font-extrabold text-emerald-600">+{ledgerData.kpis.deliveredFull} Pcs</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">Empty Recd</div>
-                    <div className="font-extrabold text-amber-600">-{ledgerData.kpis.emptyReceived} Pcs</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">Adjustments</div>
-                    <div className="font-extrabold text-purple-600">{ledgerData.kpis.adjustments} Pcs</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">Current Balance</div>
-                    <div className="font-black text-indigo-600 dark:text-indigo-400">{ledgerData.kpis.currentBalance} Pcs</div>
-                  </div>
-                </div>
 
-                {/* Chronological Transaction Table */}
-                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 dark:bg-slate-800 font-extrabold uppercase text-slate-500 border-b border-slate-200 dark:border-slate-700">
-                      <tr>
-                        <th className="px-3 py-2.5">Date</th>
-                        <th className="px-3 py-2.5">Reference #</th>
-                        <th className="px-3 py-2.5">Type</th>
-                        <th className="px-3 py-2.5 text-center">Full Qty</th>
-                        <th className="px-3 py-2.5 text-center">Empty Qty</th>
-                        <th className="px-3 py-2.5 text-center">Running Balance</th>
-                        <th className="px-3 py-2.5">Performed By</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                      {ledgerData.transactions.map((t: any) => (
-                        <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                          <td className="px-3 py-2.5 font-semibold text-slate-900 dark:text-slate-100">{t.date}</td>
-                          <td className="px-3 py-2.5 font-mono text-indigo-600 dark:text-indigo-400 font-bold">{t.reference}</td>
-                          <td className="px-3 py-2.5 font-bold uppercase text-[10px]">{t.transactionType}</td>
-                          <td className="px-3 py-2.5 text-center font-mono font-bold text-emerald-600">+{t.fullQty}</td>
-                          <td className="px-3 py-2.5 text-center font-mono font-bold text-amber-600">-{t.emptyQty}</td>
-                          <td className="px-3 py-2.5 text-center font-mono font-black text-indigo-600 dark:text-indigo-400">{t.runningBalance} Pcs</td>
-                          <td className="px-3 py-2.5 text-slate-400">{t.performedBy}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {/* Chronological Transaction Table */}
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 overflow-hidden shadow-sm">
+                    <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                      <h4 className="font-black text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">
+                        Chronological Stock Movement Ledger ({ledgerData.transactions.length} Records)
+                      </h4>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-100 dark:bg-slate-900/60 font-extrabold uppercase text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <th className="px-4 py-3">Date</th>
+                            <th className="px-4 py-3">Reference #</th>
+                            <th className="px-4 py-3">Type</th>
+                            <th className="px-4 py-3 text-center">Full Qty</th>
+                            <th className="px-4 py-3 text-center">Empty Qty</th>
+                            <th className="px-4 py-3 text-center">Running Balance</th>
+                            <th className="px-4 py-3">Performed By</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                          {ledgerData.transactions.map((t: any) => (
+                            <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                              <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-slate-100">{t.date}</td>
+                              <td className="px-4 py-3.5 font-mono text-indigo-600 dark:text-indigo-400 font-bold">{t.reference}</td>
+                              <td className="px-4 py-3.5 font-extrabold uppercase text-[10px]">
+                                <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                  {t.transactionType}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-center font-mono font-black text-emerald-600">+{t.fullQty}</td>
+                              <td className="px-4 py-3.5 text-center font-mono font-black text-amber-600">-{t.emptyQty}</td>
+                              <td className="px-4 py-3.5 text-center font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">{t.runningBalance} Pcs</td>
+                              <td className="px-4 py-3.5 text-slate-500 font-medium">{t.performedBy}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
       )}

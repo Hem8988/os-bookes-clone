@@ -889,68 +889,85 @@ export default function CylinderBalanceModule() {
         </div>
       )}
 
-      {/* MANUAL ADJUSTMENT MODAL */}
+      {/* MANUAL ADJUSTMENT FULL-PAGE LEFT SLIDE-OVER DRAWER */}
       {isAdjustmentModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-amber-600" /> Request Manual Stock Adjustment
-              </h3>
-              <button onClick={() => setIsAdjustmentModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
+          <div className="w-full max-w-xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
+            {/* Header */}
+            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                    Request Manual Stock Adjustment
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Submit audit corrections for Manager approval</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setIsAdjustmentModalOpen(false)} 
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={handleAdjustmentSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Customer Account</label>
-                <input type="text" value={adjCustomerName} disabled className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-slate-800 font-bold" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleAdjustmentSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs flex flex-col justify-between">
+              <div className="space-y-4">
                 <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Adjusted Full Stock</label>
-                  <input
-                    type="number"
-                    value={adjFullQty}
-                    onChange={(e) => setAdjFullQty(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg font-bold text-emerald-600"
+                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Customer Account</label>
+                  <input type="text" value={adjCustomerName} disabled className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-sm text-slate-800 dark:text-slate-200" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Adjusted Full Stock</label>
+                    <input
+                      type="number"
+                      value={adjFullQty}
+                      onChange={(e) => setAdjFullQty(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-emerald-600 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Adjusted Empty Stock</label>
+                    <input
+                      type="number"
+                      value={adjEmptyQty}
+                      onChange={(e) => setAdjEmptyQty(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-amber-600 text-sm"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Mandatory Reason / Audit Note *</label>
+                  <textarea
+                    value={adjReason}
+                    onChange={(e) => setAdjReason(e.target.value)}
+                    placeholder="e.g. Physical stock count audit correction after seal inspection..."
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
+                    rows={4}
                     required
                   />
                 </div>
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Adjusted Empty Stock</label>
-                  <input
-                    type="number"
-                    value={adjEmptyQty}
-                    onChange={(e) => setAdjEmptyQty(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg font-bold text-amber-600"
-                    required
-                  />
-                </div>
               </div>
 
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Mandatory Reason / Audit Note *</label>
-                <textarea
-                  value={adjReason}
-                  onChange={(e) => setAdjReason(e.target.value)}
-                  placeholder="e.g. Physical stock count audit correction after seal inspection..."
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setIsAdjustmentModalOpen(false)} className="px-3 py-2 border rounded-lg">
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
+                <button type="button" onClick={() => setIsAdjustmentModalOpen(false)} className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl font-bold cursor-pointer">
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={adjSubmitting}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow cursor-pointer"
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black rounded-xl shadow-lg shadow-amber-600/20 cursor-pointer text-sm"
                 >
                   {adjSubmitting ? 'Submitting...' : 'Submit to Manager Approval'}
                 </button>
@@ -960,98 +977,115 @@ export default function CylinderBalanceModule() {
         </div>
       )}
 
-      {/* STOCK TRANSFER MODAL */}
+      {/* STOCK TRANSFER FULL-PAGE LEFT SLIDE-OVER DRAWER */}
       {isTransferModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <ArrowRightLeft className="w-5 h-5 text-sky-600" /> Stock Transfer Request
-              </h3>
-              <button onClick={() => setIsTransferModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
+          <div className="w-full max-w-xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
+            {/* Header */}
+            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                  <ArrowRightLeft className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                    Stock Transfer Request
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Transfer cylinders between Godowns & Fleet Trucks</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setIsTransferModalOpen(false)} 
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={handleTransferSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Transfer Route Type</label>
-                <select
-                  value={transferType}
-                  onChange={(e) => setTransferType(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-bold"
-                >
-                  <option value="WAREHOUSE_TO_DRIVER">Warehouse → Delivery Fleet</option>
-                  <option value="DRIVER_TO_DRIVER">Fleet Boy → Fleet Boy</option>
-                  <option value="DRIVER_TO_WAREHOUSE">Delivery Fleet → Warehouse</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleTransferSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs flex flex-col justify-between">
+              <div className="space-y-4">
                 <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">From Location</label>
-                  <input
-                    type="text"
-                    value={fromLocation}
-                    onChange={(e) => setFromLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-semibold"
-                    required
+                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Transfer Route Type</label>
+                  <select
+                    value={transferType}
+                    onChange={(e) => setTransferType(e.target.value as any)}
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100 text-sm"
+                  >
+                    <option value="WAREHOUSE_TO_DRIVER">Warehouse → Delivery Fleet</option>
+                    <option value="DRIVER_TO_DRIVER">Fleet Boy → Fleet Boy</option>
+                    <option value="DRIVER_TO_WAREHOUSE">Delivery Fleet → Warehouse</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">From Location</label>
+                    <input
+                      type="text"
+                      value={fromLocation}
+                      onChange={(e) => setFromLocation(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">To Location</label>
+                    <input
+                      type="text"
+                      value={toLocation}
+                      onChange={(e) => setToLocation(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Full Cylinders Qty</label>
+                    <input
+                      type="number"
+                      value={transferFullQty}
+                      onChange={(e) => setTransferFullQty(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-emerald-600 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Empty Cylinders Qty</label>
+                    <input
+                      type="number"
+                      value={transferEmptyQty}
+                      onChange={(e) => setTransferEmptyQty(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-amber-600 text-sm"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Transfer Notes</label>
+                  <textarea
+                    value={transferNotes}
+                    onChange={(e) => setTransferNotes(e.target.value)}
+                    placeholder="Notes for Manager approval..."
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
+                    rows={3}
                   />
                 </div>
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">To Location</label>
-                  <input
-                    type="text"
-                    value={toLocation}
-                    onChange={(e) => setToLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-semibold"
-                    required
-                  />
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Full Cylinders Qty</label>
-                  <input
-                    type="number"
-                    value={transferFullQty}
-                    onChange={(e) => setTransferFullQty(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-bold text-emerald-600"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Empty Cylinders Qty</label>
-                  <input
-                    type="number"
-                    value={transferEmptyQty}
-                    onChange={(e) => setTransferEmptyQty(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 font-bold text-amber-600"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Transfer Notes</label>
-                <textarea
-                  value={transferNotes}
-                  onChange={(e) => setTransferNotes(e.target.value)}
-                  placeholder="Notes for Manager approval..."
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  rows={2}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setIsTransferModalOpen(false)} className="px-3 py-2 border rounded-lg">
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
+                <button type="button" onClick={() => setIsTransferModalOpen(false)} className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl font-bold cursor-pointer">
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={transferSubmitting}
-                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg shadow cursor-pointer"
+                  className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl shadow-lg shadow-sky-600/20 cursor-pointer text-sm"
                 >
                   {transferSubmitting ? 'Submitting...' : 'Submit to Manager Approval'}
                 </button>
@@ -1061,119 +1095,135 @@ export default function CylinderBalanceModule() {
         </div>
       )}
 
-      {/* ADD / EDIT CYLINDER STOCK ENTRY MODAL */}
+      {/* ADD / EDIT CYLINDER STOCK ENTRY FULL-PAGE LEFT SLIDE-OVER DRAWER */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Package className="w-5 h-5 text-emerald-500" />
-                {editingItem ? 'Edit Cylinder Stock Entry' : 'Add New Cylinder Stock Entry'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
+          <div className="w-full max-w-xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
+            {/* Header */}
+            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Package className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                    {editingItem ? 'Edit Cylinder Stock Entry' : 'Add New Cylinder Stock Entry'}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Configure Party & Product Cylinder Stock Balances</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveStock} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Customer / Site Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Hotel Rajdhani / Central Warehouse"
-                  value={formCustomerName}
-                  onChange={(e) => setFormCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSaveStock} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs flex flex-col justify-between">
+              <div className="space-y-4">
                 <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Cylinder Product</label>
-                  <select
-                    value={formProductName}
-                    onChange={(e) => setFormProductName(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100"
-                  >
-                    <option value="19 KG Commercial LPG Cylinder">19 KG Commercial LPG</option>
-                    <option value="47.5 KG Industrial LPG Cylinder">47.5 KG Industrial LPG</option>
-                    <option value="14.2 KG Domestic LPG Cylinder">14.2 KG Domestic LPG</option>
-                    <option value="Medical Oxygen Cylinder">Medical Oxygen Cylinder</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Category Type</label>
-                  <select
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100"
-                  >
-                    <option value="Commercial 19KG">Commercial 19KG</option>
-                    <option value="Industrial 47.5KG">Industrial 47.5KG</option>
-                    <option value="Domestic 14.2KG">Domestic 14.2KG</option>
-                    <option value="Other">Other Category</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Storage / Godown Location</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Indore Central Warehouse"
-                  value={formLocation}
-                  onChange={(e) => setFormLocation(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Opening</label>
+                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Customer / Site Name *</label>
                   <input
-                    type="number"
-                    value={formOpeningQty}
-                    onChange={(e) => setFormOpeningQty(e.target.value)}
-                    className="w-full px-2 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-center"
+                    type="text"
+                    placeholder="e.g. Hotel Rajdhani / Central Warehouse"
+                    value={formCustomerName}
+                    onChange={(e) => setFormCustomerName(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 text-sm"
                     required
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Cylinder Product</label>
+                    <select
+                      value={formProductName}
+                      onChange={(e) => setFormProductName(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100"
+                    >
+                      <option value="19 KG Commercial LPG Cylinder">19 KG Commercial LPG</option>
+                      <option value="47.5 KG Industrial LPG Cylinder">47.5 KG Industrial LPG</option>
+                      <option value="14.2 KG Domestic LPG Cylinder">14.2 KG Domestic LPG</option>
+                      <option value="Medical Oxygen Cylinder">Medical Oxygen Cylinder</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Category Type</label>
+                    <select
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value as any)}
+                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100"
+                    >
+                      <option value="Commercial 19KG">Commercial 19KG</option>
+                      <option value="Industrial 47.5KG">Industrial 47.5KG</option>
+                      <option value="Domestic 14.2KG">Domestic 14.2KG</option>
+                      <option value="Other">Other Category</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block font-bold uppercase text-emerald-600 mb-1">Full Stock 🟢</label>
+                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Storage / Godown Location</label>
                   <input
-                    type="number"
-                    value={formFullQty}
-                    onChange={(e) => setFormFullQty(e.target.value)}
-                    className="w-full px-2 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-extrabold text-emerald-600 text-center"
-                    required
+                    type="text"
+                    placeholder="e.g. Indore Central Warehouse"
+                    value={formLocation}
+                    onChange={(e) => setFormLocation(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
                   />
                 </div>
-                <div>
-                  <label className="block font-bold uppercase text-amber-600 mb-1">Empty Stock 🟡</label>
-                  <input
-                    type="number"
-                    value={formEmptyQty}
-                    onChange={(e) => setFormEmptyQty(e.target.value)}
-                    className="w-full px-2 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-extrabold text-amber-600 text-center"
-                    required
-                  />
+
+                <div className="grid grid-cols-3 gap-3 text-center pt-2">
+                  <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <label className="block font-bold uppercase text-[10px] text-slate-500 mb-1">Opening Stock</label>
+                    <input
+                      type="number"
+                      value={formOpeningQty}
+                      onChange={(e) => setFormOpeningQty(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900 font-black text-center text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40">
+                    <label className="block font-bold uppercase text-[10px] text-emerald-600 mb-1">Full Stock 🟢</label>
+                    <input
+                      type="number"
+                      value={formFullQty}
+                      onChange={(e) => setFormFullQty(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 font-black text-emerald-600 text-center text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
+                    <label className="block font-bold uppercase text-[10px] text-amber-600 mb-1">Empty Stock 🟡</label>
+                    <input
+                      type="number"
+                      value={formEmptyQty}
+                      onChange={(e) => setFormEmptyQty(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-slate-900 font-black text-amber-600 text-center text-sm"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-50 font-bold cursor-pointer"
+                  className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer active:scale-95 text-sm"
                 >
                   <Check className="w-4 h-4" /> {saving ? 'Saving...' : editingItem ? 'Update Record' : 'Save New Entry'}
                 </button>

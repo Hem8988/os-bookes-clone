@@ -42,27 +42,41 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
+  const safeCustomers = useMemo(() => (Array.isArray(customers) ? customers : []), [customers]);
+
   // Filtered Customers Calculation
   const filteredCustomers = useMemo(() => {
-    return customers.filter((c) => {
+    return safeCustomers.filter((c) => {
+      if (!c) return false;
+      const name = String(c.name || '');
+      const tradeName = String(c.tradeName || '');
+      const phone = String(c.phone || '');
+      const gstin = String(c.gstin || '');
+      const city = String(c.city || '');
+      const area = String(c.area || '');
+      const route = String(c.route || '');
+      const balance = Number(c.balance || 0);
+
+      const searchLower = (searchTerm || '').toLowerCase();
       const matchesSearch = 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.tradeName && c.tradeName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (c.phone && c.phone.includes(searchTerm)) ||
-        (c.gstin && c.gstin.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (c.city && c.city.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (c.area && c.area.toLowerCase().includes(searchTerm.toLowerCase()));
+        name.toLowerCase().includes(searchLower) ||
+        tradeName.toLowerCase().includes(searchLower) ||
+        phone.includes(searchTerm || '') ||
+        gstin.toLowerCase().includes(searchLower) ||
+        city.toLowerCase().includes(searchLower) ||
+        area.toLowerCase().includes(searchLower) ||
+        route.toLowerCase().includes(searchLower);
 
       if (!matchesSearch) return false;
 
       if (filterType === 'Customer') return c.type === 'Customer';
       if (filterType === 'Vendor') return c.type === 'Vendor';
-      if (filterType === 'RECEIVABLE') return c.balance > 0;
-      if (filterType === 'PAYABLE') return c.balance < 0;
+      if (filterType === 'RECEIVABLE') return balance > 0;
+      if (filterType === 'PAYABLE') return balance < 0;
 
       return true;
     });
-  }, [customers, searchTerm, filterType]);
+  }, [safeCustomers, searchTerm, filterType]);
 
   // Handle Add Click
   const handleOpenAddModal = () => {
@@ -99,10 +113,10 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
     }
   };
 
-  const customerCount = customers.filter(c => c.type === 'Customer').length;
-  const vendorCount = customers.filter(c => c.type === 'Vendor').length;
-  const receivableCount = customers.filter(c => c.balance > 0).length;
-  const payableCount = customers.filter(c => c.balance < 0).length;
+  const customerCount = safeCustomers.filter(c => c && c.type === 'Customer').length;
+  const vendorCount = safeCustomers.filter(c => c && c.type === 'Vendor').length;
+  const receivableCount = safeCustomers.filter(c => c && (Number(c.balance || 0) > 0)).length;
+  const payableCount = safeCustomers.filter(c => c && (Number(c.balance || 0) < 0)).length;
 
   return (
     <div className="space-y-6">
@@ -112,7 +126,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
         <div>
           <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Users className="h-6 w-6 text-emerald-500" />
-            Party Master & Ledger Directory ({customers.length} Accounts)
+            Party Master & Ledger Directory ({safeCustomers.length} Accounts)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Manage B2B LPG Customers, Vendors, GSTIN Registrations, Credit Limits & Balances in List View
@@ -186,7 +200,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
               }`}
             >
-              All ({customers.length})
+              All ({safeCustomers.length})
             </button>
             <button
               onClick={() => setFilterType('Customer')}

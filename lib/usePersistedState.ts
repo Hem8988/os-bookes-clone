@@ -4,16 +4,22 @@ export function usePersistedState<T>(
   key: string,
   initialValue: T
 ): [T, Dispatch<SetStateAction<T>>] {
-  // Start from initialValue on both server and first client render to avoid
-  // a hydration mismatch; the persisted value (if any) is applied right
-  // after mount, once we're guaranteed to be client-side only.
+  // Start from initialValue on both server and first client render
   const [state, setState] = useState<T>(initialValue);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(key);
-      if (stored !== null) setState(JSON.parse(stored) as T);
+      if (stored !== null) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(initialValue) && !Array.isArray(parsed)) {
+          // Revert to default initialValue if corrupted non-array stored
+          setState(initialValue);
+        } else if (parsed !== null && parsed !== undefined) {
+          setState(parsed as T);
+        }
+      }
     } catch {
       // storage unavailable or corrupt; keep initialValue
     }

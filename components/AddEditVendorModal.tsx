@@ -269,36 +269,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           {/* Scrollable Form Body Container (Centered & Spacious) */}
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-5xl mx-auto w-full">
           
-          {/* Party Category Selector: Switch between Customer Master and Vendor Master */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-            <span className="text-xs font-black text-slate-700 dark:text-slate-300 px-2 uppercase shrink-0">
-              Ledger Master Type:
-            </span>
-            <div className="flex-1 grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPartyCategory('Customer')}
-                className={`py-2 px-3 text-center text-xs font-black rounded-lg transition-all cursor-pointer ${
-                  partyCategory === 'Customer'
-                    ? 'bg-[#00a8b5] text-white shadow-md ring-2 ring-[#00a8b5]/30'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
-                }`}
-              >
-                👤 Customer Master (Buyer)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPartyCategory('Vendor')}
-                className={`py-2 px-3 text-center text-xs font-black rounded-lg transition-all cursor-pointer ${
-                  partyCategory === 'Vendor'
-                    ? 'bg-[#00a8b5] text-white shadow-md ring-2 ring-[#00a8b5]/30'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
-                }`}
-              >
-                🏭 Vendor Master (Supplier)
-              </button>
-            </div>
-          </div>
+
 
           {/* Row 1: Party Name, Active Toggle, Due Days */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">

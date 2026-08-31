@@ -56,12 +56,20 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
 
+  const isVendorOnly = defaultType === 'Vendor';
+  const isCustomerOnly = defaultType === 'Customer';
+
   const safeCustomers = useMemo(() => (Array.isArray(customers) ? customers : []), [customers]);
 
   // Filtered Customers Calculation
   const filteredCustomers = useMemo(() => {
     return safeCustomers.filter((c) => {
       if (!c) return false;
+
+      // Enforce strict type isolation when defaultType is set to Vendor or Customer
+      if (isVendorOnly && c.type !== 'Vendor') return false;
+      if (isCustomerOnly && c.type !== 'Customer') return false;
+
       const name = String(c.name || '');
       const tradeName = String(c.tradeName || '');
       const phone = String(c.phone || '');
@@ -90,7 +98,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
       return true;
     });
-  }, [safeCustomers, searchTerm, filterType]);
+  }, [safeCustomers, searchTerm, filterType, isVendorOnly, isCustomerOnly]);
 
   // Handle Add Click
   const handleOpenAddModal = () => {
@@ -131,9 +139,6 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   const vendorCount = safeCustomers.filter(c => c && c.type === 'Vendor').length;
   const receivableCount = safeCustomers.filter(c => c && (Number(c.balance || 0) > 0)).length;
   const payableCount = safeCustomers.filter(c => c && (Number(c.balance || 0) < 0)).length;
-
-  const isVendorOnly = defaultType === 'Vendor';
-  const isCustomerOnly = defaultType === 'Customer';
 
   return (
     <div className="space-y-6">
@@ -226,56 +231,106 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
           {/* Quick Filter Badges */}
           <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto">
-            <button
-              onClick={() => setFilterType('ALL')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                filterType === 'ALL'
-                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-              }`}
-            >
-              All ({safeCustomers.length})
-            </button>
-            <button
-              onClick={() => setFilterType('Customer')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                filterType === 'Customer'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'
-              }`}
-            >
-              Customers ({customerCount})
-            </button>
-            <button
-              onClick={() => setFilterType('Vendor')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                filterType === 'Vendor'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100'
-              }`}
-            >
-              Vendors ({vendorCount})
-            </button>
-            <button
-              onClick={() => setFilterType('RECEIVABLE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                filterType === 'RECEIVABLE'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 hover:bg-blue-100'
-              }`}
-            >
-              Receivables ({receivableCount})
-            </button>
-            <button
-              onClick={() => setFilterType('PAYABLE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                filterType === 'PAYABLE'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 hover:bg-rose-100'
-              }`}
-            >
-              Payables ({payableCount})
-            </button>
+            {isVendorOnly ? (
+              <>
+                <button
+                  onClick={() => setFilterType('Vendor')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'Vendor'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100'
+                  }`}
+                >
+                  All Vendors ({vendorCount})
+                </button>
+                <button
+                  onClick={() => setFilterType('PAYABLE')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'PAYABLE'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 hover:bg-rose-100'
+                  }`}
+                >
+                  Payables ({payableCount})
+                </button>
+              </>
+            ) : isCustomerOnly ? (
+              <>
+                <button
+                  onClick={() => setFilterType('Customer')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'Customer'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'
+                  }`}
+                >
+                  All Customers ({customerCount})
+                </button>
+                <button
+                  onClick={() => setFilterType('RECEIVABLE')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'RECEIVABLE'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 hover:bg-sky-100'
+                  }`}
+                >
+                  Receivables ({receivableCount})
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setFilterType('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'ALL'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                  }`}
+                >
+                  All ({safeCustomers.length})
+                </button>
+                <button
+                  onClick={() => setFilterType('Customer')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'Customer'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'
+                  }`}
+                >
+                  Customers ({customerCount})
+                </button>
+                <button
+                  onClick={() => setFilterType('Vendor')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'Vendor'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100'
+                  }`}
+                >
+                  Vendors ({vendorCount})
+                </button>
+                <button
+                  onClick={() => setFilterType('RECEIVABLE')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'RECEIVABLE'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 hover:bg-sky-100'
+                  }`}
+                >
+                  Receivables ({receivableCount})
+                </button>
+                <button
+                  onClick={() => setFilterType('PAYABLE')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                    filterType === 'PAYABLE'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 hover:bg-rose-100'
+                  }`}
+                >
+                  Payables ({payableCount})
+                </button>
+              </>
+            )}
           </div>
 
         </div>

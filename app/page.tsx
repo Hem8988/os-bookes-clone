@@ -901,6 +901,17 @@ export default function Home() {
               onAddCustomer={handleAddCustomer} 
               onUpdateCustomer={handleUpdateCustomer}
               onDeleteCustomer={handleDeleteCustomer}
+              defaultType="Customer"
+            />
+          )}
+
+          {activeTab === 'vendors' && (
+            <CustomersModule 
+              customers={customers} 
+              onAddCustomer={handleAddCustomer} 
+              onUpdateCustomer={handleUpdateCustomer}
+              onDeleteCustomer={handleDeleteCustomer}
+              defaultType="Vendor"
             />
           )}
 

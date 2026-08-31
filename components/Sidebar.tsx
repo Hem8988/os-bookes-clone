@@ -95,7 +95,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           {openSection === 'customers' && (
             <div className="bg-slate-950/80 px-2 py-1 space-y-0.5 border-t border-slate-800/60 text-xs">
-              <button onClick={() => setActiveTab('customers')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'customers' || activeTab === 'customer-360' ? 'bg-emerald-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Customers & Vendors</button>
+              <button onClick={() => setActiveTab('customers')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'customers' ? 'bg-emerald-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Customers</button>
+              <button onClick={() => setActiveTab('vendors')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'vendors' ? 'bg-emerald-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Vendors (Suppliers)</button>
               <button onClick={() => setActiveTab('cylinder-inventory')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'cylinder-inventory' ? 'bg-emerald-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Cylinder Ledger</button>
             </div>
           )}

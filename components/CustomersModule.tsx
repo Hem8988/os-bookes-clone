@@ -28,16 +28,27 @@ interface CustomersModuleProps {
   onAddCustomer: (customer: Customer) => void;
   onUpdateCustomer?: (customer: Customer) => void;
   onDeleteCustomer?: (id: string) => void;
+  defaultType?: 'Customer' | 'Vendor' | 'ALL';
 }
 
 export const CustomersModule: React.FC<CustomersModuleProps> = ({ 
   customers, 
   onAddCustomer,
   onUpdateCustomer,
-  onDeleteCustomer 
+  onDeleteCustomer,
+  defaultType = 'ALL'
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'ALL' | 'Customer' | 'Vendor' | 'RECEIVABLE' | 'PAYABLE'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'Customer' | 'Vendor' | 'RECEIVABLE' | 'PAYABLE'>(
+    defaultType === 'Vendor' ? 'Vendor' : defaultType === 'Customer' ? 'Customer' : 'ALL'
+  );
+
+  React.useEffect(() => {
+    if (defaultType === 'Vendor') setFilterType('Vendor');
+    else if (defaultType === 'Customer') setFilterType('Customer');
+    else setFilterType('ALL');
+  }, [defaultType]);
+
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   // Modal State
@@ -121,6 +132,9 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   const receivableCount = safeCustomers.filter(c => c && (Number(c.balance || 0) > 0)).length;
   const payableCount = safeCustomers.filter(c => c && (Number(c.balance || 0) < 0)).length;
 
+  const isVendorOnly = defaultType === 'Vendor';
+  const isCustomerOnly = defaultType === 'Customer';
+
   return (
     <div className="space-y-6">
       
@@ -128,11 +142,22 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
           <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Users className="h-6 w-6 text-emerald-500" />
-            Party Master & Ledger Directory ({safeCustomers.length} Accounts)
+            <Users className={`h-6 w-6 ${isVendorOnly ? 'text-amber-500' : 'text-emerald-500'}`} />
+            {isVendorOnly ? (
+              <span>Vendor Master & Supplier Directory ({vendorCount} Accounts)</span>
+            ) : isCustomerOnly ? (
+              <span>Customer Master Directory ({customerCount} Accounts)</span>
+            ) : (
+              <span>Party Master & Ledger Directory ({safeCustomers.length} Accounts)</span>
+            )}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Manage B2B LPG Customers, Vendors, GSTIN Registrations, Credit Limits & Balances in List View
+            {isVendorOnly
+              ? 'Manage B2B LPG Gas Suppliers, Transport Vendors & Credit Payables in List View'
+              : isCustomerOnly
+              ? 'Manage B2B LPG Commercial Buyers, Credit Limits & Outstanding Balances in List View'
+              : 'Manage B2B LPG Customers, Vendors, GSTIN Registrations, Credit Limits & Balances in List View'
+            }
           </p>
         </div>
 
@@ -168,10 +193,16 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
           {/* Add New Party Button */}
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+            className={`flex items-center gap-2 py-2.5 px-4 rounded-xl text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer ${
+              isVendorOnly 
+                ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' 
+                : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'
+            }`}
           >
             <Plus className="h-4 w-4" />
-            <span>+ Add Customer / Vendor</span>
+            <span>
+              {isVendorOnly ? '+ Add New Vendor' : isCustomerOnly ? '+ Add New Customer' : '+ Add Customer / Vendor'}
+            </span>
           </button>
         </div>
       </div>

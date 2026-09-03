@@ -37,11 +37,13 @@ interface SidebarProps {
   activeInventorySubTab?: string;
   activeAccountSubTab?: string;
   reportsSubTab?: string;
+  pendingRequestsCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
+  pendingRequestsCount = 0,
 }) => {
   const [openSection, setOpenSection] = useState<string>('orders');
 
@@ -163,6 +165,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'delivery-app' ? 'bg-amber-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Delivery Management</button>
               <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery Boy App</button>
               <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery History</button>
+              <button
+                onClick={() => setActiveTab('delivery-requests')}
+                className={`w-full text-left px-3 py-1.5 rounded cursor-pointer flex items-center justify-between ${activeTab === 'delivery-requests' ? 'bg-rose-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}
+              >
+                <span>📥 Delivery Requests</span>
+                {pendingRequestsCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black min-w-[18px] text-center">
+                    {pendingRequestsCount}
+                  </span>
+                )}
+              </button>
             </div>
           )}
         </div>

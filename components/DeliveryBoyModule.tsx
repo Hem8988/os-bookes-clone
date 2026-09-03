@@ -25,9 +25,23 @@ import {
   X,
   Sparkles,
   LogOut,
+  Send,
+  Wrench,
+  HelpCircle,
+  XCircle,
 } from 'lucide-react';
+import { DeliveryRequest } from '../lib/types';
+import { usePersistedState } from '../lib/usePersistedState';
 
-export default function DeliveryBoyModule() {
+interface DeliveryBoyModuleProps {
+  deliveryRequests?: DeliveryRequest[];
+  onAddDeliveryRequest?: (req: DeliveryRequest) => void;
+}
+
+export default function DeliveryBoyModule({
+  deliveryRequests: propRequests,
+  onAddDeliveryRequest,
+}: DeliveryBoyModuleProps = {}) {
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -116,6 +130,45 @@ export default function DeliveryBoyModule() {
     const prod = CYLINDER_PRODUCTS.find(p => p.id === line.productId);
     return sum + (prod?.price || 0) * (Number(line.qty) || 0);
   }, 0);
+
+  // Delivery Requests to Admin State
+  const [localRequests, setLocalRequests] = usePersistedState<DeliveryRequest[]>('osbooks.deliveryRequests', []);
+  const allRequests = propRequests && propRequests.length > 0 ? propRequests : localRequests;
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestType, setRequestType] = useState<DeliveryRequest['requestType']>('EXTRA_CYLINDERS');
+  const [requestQty, setRequestQty] = useState('10');
+  const [requestAmount, setRequestAmount] = useState('2000');
+  const [requestNote, setRequestNote] = useState('');
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+  const myRequests = allRequests.filter(r => r.deliveryBoyName === 'Ramesh Kumar' || !r.deliveryBoyName);
+  const pendingMyRequestsCount = myRequests.filter(r => r.status === 'PENDING').length;
+
+  const handleCreateAdminRequest = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingRequest(true);
+
+    const newReq: DeliveryRequest = {
+      id: `REQ-${Date.now().toString().slice(-6)}`,
+      requestedAt: new Date().toISOString(),
+      deliveryBoyName: 'Ramesh Kumar',
+      requestType,
+      requestNote: requestNote || (requestType === 'EXTRA_CYLINDERS' ? `Need ${requestQty} extra cylinders` : requestType === 'CASH_ADVANCE' ? `Need cash advance of ₹${requestAmount}` : 'Delivery support request'),
+      qty: requestType === 'EXTRA_CYLINDERS' ? Number(requestQty) : undefined,
+      amount: requestType === 'CASH_ADVANCE' ? Number(requestAmount) : undefined,
+      status: 'PENDING',
+    };
+
+    if (onAddDeliveryRequest) {
+      onAddDeliveryRequest(newReq);
+    }
+    setLocalRequests(prev => [newReq, ...prev.filter(r => r.id !== newReq.id)]);
+
+    alert(`✅ Request Submitted to Admin!\nID: ${newReq.id}\nStatus: PENDING ADMIN APPROVAL\nAdmin will review and approve it from the Admin Panel.`);
+    setIsRequestModalOpen(false);
+    setRequestNote('');
+    setIsSubmittingRequest(false);
+  };
 
   // Offline Mode & Sync State
   const [isOnline, setIsOnline] = useState(true);
@@ -548,10 +601,23 @@ export default function DeliveryBoyModule() {
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => setIsCreateOrderModalOpen(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs md:text-sm rounded-2xl shadow-lg hover:shadow-indigo-500/30 transition flex items-center gap-2 border border-indigo-400/30"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs md:text-sm rounded-2xl shadow-lg hover:shadow-indigo-500/30 transition flex items-center gap-2 border border-indigo-400/30 cursor-pointer"
               title="Create Spot Cylinder Order"
             >
               <Package className="w-4 h-4" /> + Spot Order
+            </button>
+
+            <button
+              onClick={() => setIsRequestModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white font-extrabold text-xs md:text-sm rounded-2xl shadow-lg hover:shadow-amber-500/30 transition flex items-center gap-2 border border-amber-400/30 cursor-pointer"
+              title="Send Request to Admin for Extra Stock, Cash Advance, or Support"
+            >
+              <Send className="w-4 h-4" /> 📤 Request Admin
+              {pendingMyRequestsCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-white text-rose-600 text-[10px] font-black animate-pulse">
+                  {pendingMyRequestsCount}
+                </span>
+              )}
             </button>
 
             {dayStatus === 'NOT_STARTED' && (
@@ -708,6 +774,105 @@ export default function DeliveryBoyModule() {
         {cashDepositNotice && (
           <div className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 p-3 rounded-2xl border border-emerald-200">
             {cashDepositNotice}
+          </div>
+        )}
+      </div>
+
+      {/* My Requests to Admin Section */}
+      <div className="bg-white dark:bg-slate-800 p-4 md:p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-md space-y-3">
+        <div className="flex items-center justify-between border-b pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <Send className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black uppercase text-slate-900 dark:text-white flex items-center gap-2">
+                My Requests to Admin
+                {pendingMyRequestsCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black">
+                    {pendingMyRequestsCount} PENDING
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">Live approval status for stock, cash advance, or vehicle requests</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsRequestModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" /> + New Request
+          </button>
+        </div>
+
+        {myRequests.length === 0 ? (
+          <div className="p-4 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-dashed text-slate-500 text-xs">
+            No active requests. Need extra stock, cash, or reporting an issue? Click <strong className="text-indigo-600 cursor-pointer underline" onClick={() => setIsRequestModalOpen(true)}>"+ New Request"</strong> to send a request to Admin.
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {myRequests.map((req) => {
+              const isPending = req.status === 'PENDING';
+              const isApproved = req.status === 'APPROVED';
+              return (
+                <div
+                  key={req.id}
+                  className={`p-3 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs transition ${
+                    isPending
+                      ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
+                      : isApproved
+                      ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm shrink-0">
+                      {req.requestType === 'EXTRA_CYLINDERS' && <Package className="w-4 h-4 text-sky-500" />}
+                      {req.requestType === 'CASH_ADVANCE' && <DollarSign className="w-4 h-4 text-emerald-500" />}
+                      {req.requestType === 'VEHICLE_ISSUE' && <Wrench className="w-4 h-4 text-amber-500" />}
+                      {req.requestType === 'OTHER' && <HelpCircle className="w-4 h-4 text-purple-500" />}
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <span>
+                          {req.requestType === 'EXTRA_CYLINDERS' && `Extra Cylinders (${req.qty} Pcs)`}
+                          {req.requestType === 'CASH_ADVANCE' && `Cash Advance (₹${req.amount?.toLocaleString('en-IN')})`}
+                          {req.requestType === 'VEHICLE_ISSUE' && 'Vehicle Issue Reported'}
+                          {req.requestType === 'OTHER' && 'General Request'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">({new Date(req.requestedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})</span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                        {req.requestNote}
+                      </div>
+                      {req.adminNote && (
+                        <div className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                          Admin Remark: {req.adminNote}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center justify-end">
+                    {isPending && (
+                      <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 border border-amber-300 dark:border-amber-700">
+                        <Clock className="w-3 h-3 animate-spin" /> Pending Approval
+                      </span>
+                    )}
+                    {isApproved && (
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 border border-emerald-300 dark:border-emerald-700">
+                        <CheckCircle className="w-3 h-3" /> Approved
+                      </span>
+                    )}
+                    {!isPending && !isApproved && (
+                      <span className="px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 border border-rose-300 dark:border-rose-700">
+                        <XCircle className="w-3 h-3" /> Rejected
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1116,6 +1281,161 @@ export default function DeliveryBoyModule() {
                 <button type="button" onClick={() => setIsCreateOrderModalOpen(false)} className="px-3 py-2 border rounded-xl">Cancel</button>
                 <button type="submit" disabled={newOrderSubmitting} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow">
                   {newOrderSubmitting ? 'Creating Order...' : 'Submit & Assign Order'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SEND REQUEST TO ADMIN MODAL */}
+      {isRequestModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-700">
+            <div className="border-b pb-2 flex justify-between items-start">
+              <div>
+                <h3 className="text-base font-black text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                  <Send className="w-5 h-5" /> Send Request to Admin
+                </h3>
+                <p className="text-xs text-slate-500">Request extra stock, cash advance, or report route issues</p>
+              </div>
+              <button onClick={() => setIsRequestModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+            </div>
+
+            <form onSubmit={handleCreateAdminRequest} className="space-y-4 text-xs font-semibold">
+              {/* Request Type Selection */}
+              <div>
+                <label className="block font-bold uppercase text-slate-400 mb-1">Select Request Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRequestType('EXTRA_CYLINDERS')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition ${
+                      requestType === 'EXTRA_CYLINDERS'
+                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 font-bold ring-2 ring-sky-300'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Package className="w-4 h-4 text-sky-500" />
+                    <span>Extra Cylinders</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRequestType('CASH_ADVANCE')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition ${
+                      requestType === 'CASH_ADVANCE'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-bold ring-2 ring-emerald-300'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    <span>Cash Advance</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRequestType('VEHICLE_ISSUE')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition ${
+                      requestType === 'VEHICLE_ISSUE'
+                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 font-bold ring-2 ring-amber-300'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4 text-amber-500" />
+                    <span>Vehicle Issue</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRequestType('OTHER')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition ${
+                      requestType === 'OTHER'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-bold ring-2 ring-purple-300'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <HelpCircle className="w-4 h-4 text-purple-500" />
+                    <span>Other Request</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Dynamic input based on type */}
+              {requestType === 'EXTRA_CYLINDERS' && (
+                <div>
+                  <label className="block font-bold uppercase text-slate-400 mb-1">Cylinders Quantity Needed *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={requestQty}
+                    onChange={(e) => setRequestQty(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl font-black text-sky-600 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-sky-500"
+                    required
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">Full cylinders needed from main godown / buffer stock.</span>
+                </div>
+              )}
+
+              {requestType === 'CASH_ADVANCE' && (
+                <div>
+                  <label className="block font-bold uppercase text-slate-400 mb-1">Cash Advance Amount (₹) *</label>
+                  <input
+                    type="number"
+                    min="100"
+                    step="50"
+                    value={requestAmount}
+                    onChange={(e) => setRequestAmount(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl font-black text-emerald-600 dark:bg-slate-900 text-sm focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">Emergency route expenses, fuel, or toll advance.</span>
+                </div>
+              )}
+
+              {/* Reason / Remarks */}
+              <div>
+                <label className="block font-bold uppercase text-slate-400 mb-1">Reason / Note for Admin *</label>
+                <textarea
+                  rows={3}
+                  value={requestNote}
+                  onChange={(e) => setRequestNote(e.target.value)}
+                  placeholder={
+                    requestType === 'EXTRA_CYLINDERS'
+                      ? 'e.g. Hotel Rajdhani needs 5 extra cylinders urgently on current route...'
+                      : requestType === 'CASH_ADVANCE'
+                      ? 'e.g. Vehicle CNG fuel refill required near Connaught Place...'
+                      : requestType === 'VEHICLE_ISSUE'
+                      ? 'e.g. Vehicle tyre puncture near South Extension, need roadside mechanic...'
+                      : 'Provide details for the admin...'
+                  }
+                  className="w-full px-3 py-2 border rounded-xl font-medium dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-rose-500"
+                  required
+                />
+              </div>
+
+              {/* Status Notice */}
+              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
+                ⚡ <strong>Note:</strong> Once submitted, this request will appear in the Admin Portal under <strong>"📥 Delivery Requests"</strong> with status <strong>PENDING</strong> until Admin approves or rejects it.
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRequest}
+                  className="px-5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white font-extrabold rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  {isSubmittingRequest ? 'Sending...' : 'Submit Request to Admin'}
                 </button>
               </div>
             </form>

@@ -1,3 +1,16 @@
+export interface DeliveryRequest {
+  id: string;
+  requestedAt: string;
+  deliveryBoyName: string;
+  requestType: 'EXTRA_CYLINDERS' | 'CASH_ADVANCE' | 'VEHICLE_ISSUE' | 'OTHER';
+  requestNote: string;
+  qty?: number;
+  amount?: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  adminNote?: string;
+  resolvedAt?: string;
+}
+
 export interface NarrationMaster {
   id: string;
   text: string;

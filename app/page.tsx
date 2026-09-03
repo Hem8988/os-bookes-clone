@@ -6,6 +6,7 @@ import DeliveryGpsTrackingModule from '../components/DeliveryGpsTrackingModule';
 import SaasTenantModule from '../components/SaasTenantModule';
 import WhatsAppInvoiceSenderModule from '../components/WhatsAppInvoiceSenderModule';
 import { StaffManagementModule } from '../components/StaffManagementModule';
+import DeliveryRequestsPanel from '../components/DeliveryRequestsPanel';
 
 
 import React, { useState, useEffect } from 'react';
@@ -86,7 +87,8 @@ import {
   ReturnDocument,
   DeliveryChallan,
   AuditLogEntry,
-  FollowUp
+  FollowUp,
+  DeliveryRequest
 } from '../lib/types';
 import { usePersistedState } from '../lib/usePersistedState';
 
@@ -216,6 +218,9 @@ export default function Home() {
 
   // Admin: Audit Log State
   const [auditLog, setAuditLog] = usePersistedState<AuditLogEntry[]>('osbooks.auditLog', INITIAL_AUDIT_LOG);
+
+  // Delivery Boy → Admin Request & Approval State
+  const [deliveryRequests, setDeliveryRequests] = usePersistedState<DeliveryRequest[]>('osbooks.deliveryRequests', []);
 
   // Selected Invoice Modal State
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -724,13 +729,26 @@ export default function Home() {
           activeInventorySubTab={activeInventorySubTab}
           activeAccountSubTab={activeAccountSubTab}
           reportsSubTab={reportsSubTab}
+          pendingRequestsCount={deliveryRequests.filter(r => r.status === 'PENDING').length}
         />
 
         {/* Dynamic Content View Area */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-100 text-slate-900">
           {activeTab === 'cylinder-inventory' && <CylinderBalanceModule />}
           {activeTab === 'approval-queue' && <ApprovalQueueModule />}
-          {activeTab === 'delivery-app' && <DeliveryBoyModule />}
+          {activeTab === 'delivery-app' && (
+            <DeliveryBoyModule
+              deliveryRequests={deliveryRequests}
+              onAddDeliveryRequest={(req) => setDeliveryRequests(prev => [req, ...prev])}
+            />
+          )}
+          {activeTab === 'delivery-requests' && (
+            <DeliveryRequestsPanel
+              requests={deliveryRequests}
+              onApprove={(id, note) => setDeliveryRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'APPROVED', adminNote: note, resolvedAt: new Date().toISOString() } : r))}
+              onReject={(id, note) => setDeliveryRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED', adminNote: note, resolvedAt: new Date().toISOString() } : r))}
+            />
+          )}
           {activeTab === 'whatsapp-sender' && <WhatsAppInvoiceSenderModule />}
           {activeTab === 'customer-360' && (
             <CustomersModule 

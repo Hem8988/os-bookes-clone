@@ -423,6 +423,12 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                                 ))}
                               </div>
                             )}
+
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                ₹ Security Deposit: ₹{(c.totalDepositAmount || c.depositFeePerCylinder || 2000).toLocaleString('en-IN')} ({c.depositStatus || 'Paid'})
+                              </span>
+                            </div>
                           </div>
                         </td>
 

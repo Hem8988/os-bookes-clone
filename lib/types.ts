@@ -256,6 +256,10 @@ export interface Customer {
   portalAccessEnabled?: boolean;
   partyRates?: PartyRate[];
   deliveryAddresses?: CustomerAddress[];
+  depositFeePerCylinder?: number;
+  totalDepositAmount?: number;
+  depositStatus?: 'Paid' | 'Refunded' | 'Adjusted';
+  svVoucherNo?: string;
 }
 
 export interface PartyRate {

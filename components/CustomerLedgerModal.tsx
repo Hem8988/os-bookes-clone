@@ -371,6 +371,41 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({
 
           </div>
 
+          {/* Card 4: Cylinder Security Deposit & Subscription Voucher (SV) Summary */}
+          <div className="p-3.5 rounded-2xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900/60 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-teal-500/20 text-teal-700 dark:text-teal-400 font-black text-xs border border-teal-500/30">
+                ₹ Security Deposit
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-extrabold text-xs text-slate-900 dark:text-slate-100">
+                    Cylinder Security Fee: ₹{(customer.depositFeePerCylinder || 2000).toLocaleString('en-IN')} / Cylinder
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-teal-100 dark:bg-teal-900/80 text-teal-800 dark:text-teal-300 font-mono border border-teal-300 dark:border-teal-700">
+                    SV Voucher: {customer.svVoucherNo || 'SV-2026-0089'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Total Refundable Security Paid: <strong className="text-teal-700 dark:text-teal-300 font-black">₹{(customer.totalDepositAmount || customer.depositFeePerCylinder || 2000).toLocaleString('en-IN')}</strong> (Refundable upon Cylinder return)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500">Status:</span>
+              <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider ${
+                customer.depositStatus === 'Refunded'
+                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                  : customer.depositStatus === 'Adjusted'
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                  : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+              }`}>
+                🟢 {customer.depositStatus || 'Paid'} (Active Security)
+              </span>
+            </div>
+          </div>
+
           {/* Module Navigation Tabs */}
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2 flex-wrap gap-2">
             

@@ -72,6 +72,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [openingEmptyQty, setOpeningEmptyQty] = useState<number | ''>(0);
   const [internalNotes, setInternalNotes] = useState('');
 
+  // Cylinder Security Deposit & SV Voucher State
+  const [depositFeePerCylinder, setDepositFeePerCylinder] = useState<number | ''>(2000);
+  const [totalDepositAmount, setTotalDepositAmount] = useState<number | ''>(2000);
+  const [depositStatus, setDepositStatus] = useState<'Paid' | 'Refunded' | 'Adjusted'>('Paid');
+  const [svVoucherNo, setSvVoucherNo] = useState('');
+
   // Limits & Numbers
   const [otherMobileNo, setOtherMobileNo] = useState('');
   const [partyLimit, setPartyLimit] = useState<number | ''>(0);
@@ -119,6 +125,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setInterestRate(customerToEdit.interestRate !== undefined ? customerToEdit.interestRate : 0);
       setLoyaltyPoints(customerToEdit.loyaltyPoints !== undefined ? customerToEdit.loyaltyPoints : 0);
       setJoiningDate(customerToEdit.joiningDate || today);
+      setDepositFeePerCylinder(customerToEdit.depositFeePerCylinder !== undefined ? customerToEdit.depositFeePerCylinder : 2000);
+      setTotalDepositAmount(customerToEdit.totalDepositAmount !== undefined ? customerToEdit.totalDepositAmount : 2000);
+      setDepositStatus(customerToEdit.depositStatus || 'Paid');
+      setSvVoucherNo(customerToEdit.svVoucherNo || `SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
     } else {
       setPartyCategory(defaultType);
       setPartyName('');
@@ -157,6 +167,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setInterestRate(0);
       setLoyaltyPoints(0);
       setJoiningDate(today);
+      setDepositFeePerCylinder(2000);
+      setTotalDepositAmount(2000);
+      setDepositStatus('Paid');
+      setSvVoucherNo(`SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
     }
   }, [customerToEdit, defaultType, isOpen]);
 
@@ -234,6 +248,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       interestRate: Number(interestRate) || 0,
       loyaltyPoints: Number(loyaltyPoints) || 0,
       joiningDate,
+      depositFeePerCylinder: Number(depositFeePerCylinder) || 0,
+      totalDepositAmount: Number(totalDepositAmount) || 0,
+      depositStatus,
+      svVoucherNo: svVoucherNo.trim() || undefined,
     };
 
     onSave(savedCustomer);
@@ -500,6 +518,82 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   <option value="individual">individual</option>
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* CYLINDER SECURITY DEPOSIT & SUBSCRIPTION VOUCHER (SV/TV) CARD */}
+          <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-slate-800/90 border border-teal-200 dark:border-teal-900/60 space-y-3 shadow-sm my-2">
+            <div className="flex items-center justify-between border-b border-teal-100 dark:border-slate-700 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-teal-500/20 text-teal-700 dark:text-teal-400 font-extrabold text-sm">
+                  ₹
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                    Cylinder Security Deposit & Subscription Voucher (SV/TV)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                    Manage Refundable Cylinder Body Security Fees & SV Voucher Reference
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-300 dark:border-teal-800">
+                Refundable Security
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Security Fee / Cylinder (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 2000"
+                  value={depositFeePerCylinder}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? '' : Number(e.target.value);
+                    setDepositFeePerCylinder(val);
+                    if (typeof val === 'number') {
+                      setTotalDepositAmount(val * (Number(openingEmptyQty) || 1));
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 font-black focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Total Deposit Amount (₹)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 2000"
+                  value={totalDepositAmount}
+                  onChange={(e) => setTotalDepositAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-black focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Deposit Status</label>
+                <select
+                  value={depositStatus}
+                  onChange={(e) => setDepositStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-extrabold focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                >
+                  <option value="Paid">🟢 Paid (Active Deposit)</option>
+                  <option value="Adjusted">🟡 Adjusted in Bill</option>
+                  <option value="Refunded">🔴 Refunded to Customer</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">SV Voucher # (Subscription)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. SV-2026-0089"
+                  value={svVoucherNo}
+                  onChange={(e) => setSvVoucherNo(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 uppercase"
+                />
               </div>
             </div>
           </div>

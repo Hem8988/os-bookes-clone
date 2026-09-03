@@ -319,17 +319,11 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
               {/* DASHBOARD TAB */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-1">
                       <div className="text-[10px] font-extrabold uppercase text-slate-400">Current Outstanding</div>
                       <div className="text-2xl font-black text-rose-400">₹{(customer.balance || 0).toLocaleString('en-IN')}</div>
                       <div className="text-[11px] text-slate-500">Credit Limit: ₹{(customer.creditLimit || 50000).toLocaleString('en-IN')}</div>
-                    </div>
-
-                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-1">
-                      <div className="text-[10px] font-extrabold uppercase text-slate-400">Full Cylinders at Site</div>
-                      <div className="text-2xl font-black text-emerald-400">{cylinderInv.currentFullBalance} Pcs</div>
-                      <div className="text-[11px] text-slate-500">Empty Return Cylinders: {cylinderInv.currentEmptyBalance} Pcs</div>
                     </div>
 
                     <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-1">
@@ -662,7 +656,7 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                     return (
                       <div className="space-y-6">
                         {/* Analytical KPI Cards */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                           <div className="bg-slate-950 border border-slate-800/80 p-4 rounded-2xl space-y-1">
                             <div className="text-[10px] font-extrabold uppercase text-slate-400">Total Cylinders Delivered</div>
                             <div className="text-2xl font-black text-emerald-400">{totalDelivered} Pcs</div>
@@ -679,12 +673,6 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                             <div className="text-[10px] font-extrabold uppercase text-slate-400">Return Efficiency Ratio</div>
                             <div className="text-2xl font-black text-purple-400">{returnRate}%</div>
                             <div className="text-[10px] text-slate-500">Empty vs Delivered Return Rate</div>
-                          </div>
-
-                          <div className="bg-slate-950 border border-slate-800/80 p-4 rounded-2xl space-y-1">
-                            <div className="text-[10px] font-extrabold uppercase text-slate-400">Net Site Holding Balance</div>
-                            <div className="text-2xl font-black text-sky-400">{cylinderInv.currentFullBalance + cylinderInv.currentEmptyBalance} Pcs</div>
-                            <div className="text-[10px] text-slate-500">Current Issued Equipment</div>
                           </div>
                         </div>
 

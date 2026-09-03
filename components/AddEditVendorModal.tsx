@@ -650,13 +650,28 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 {(() => {
-                  const masterList = (Array.isArray(products) && products.length > 0)
-                    ? products
-                    : [
-                        { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder', salePrice: 1850 },
-                        { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder', salePrice: 4500 },
-                        { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder', salePrice: 853 },
-                      ];
+                  const cylinderProductsOnly = (Array.isArray(products) ? products : []).filter(p => {
+                    const nameLower = (p.name || '').toLowerCase();
+                    const catLower = (p.category || '').toLowerCase();
+                    return (
+                      nameLower.includes('cylinder') ||
+                      nameLower.includes('kg') ||
+                      nameLower.includes('lpg') ||
+                      catLower.includes('cylinder') ||
+                      catLower.includes('lpg') ||
+                      catLower.includes('gas')
+                    );
+                  });
+
+                  const defaultCylinders = [
+                    { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder', salePrice: 1850 },
+                    { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder', salePrice: 4500 },
+                    { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder', salePrice: 853 },
+                    { id: 'prod_5kg', name: '5 KG Commercial LPG Cylinder', salePrice: 490 },
+                    { id: 'prod_19vot', name: '19 KG VOT Commercial Cylinder', salePrice: 1950 },
+                  ];
+
+                  const masterList = cylinderProductsOnly.length > 0 ? cylinderProductsOnly : defaultCylinders;
 
                   return masterList.map((prod) => {
                     const isChecked = assignedCylinderTypes.includes(prod.id) || assignedCylinderTypes.includes(prod.name);

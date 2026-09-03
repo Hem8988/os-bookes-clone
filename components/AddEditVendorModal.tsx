@@ -305,11 +305,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       <div className="w-full max-w-4xl h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 border-l border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200">
         
         {/* Drawer Top Header Bar */}
-        <div className="bg-[#00a8b5] px-6 py-4 flex items-center justify-between text-white shadow-md shrink-0">
+        <div className={`${partyCategory === 'Vendor' ? 'bg-gradient-to-r from-amber-600 to-amber-700' : 'bg-[#00a8b5]'} px-6 py-4 flex items-center justify-between text-white shadow-md shrink-0`}>
           <h2 className="text-lg font-extrabold tracking-wide flex items-center gap-2">
-            <span>Party Master</span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-white/20 uppercase">
-              {partyCategory === 'Vendor' ? 'Vendor / Supplier' : 'Customer / Buyer'}
+            <span>{partyCategory === 'Vendor' ? 'Vendor Master' : 'Party Master'}</span>
+            <span className="text-xs font-black px-2.5 py-0.5 rounded bg-white/20 uppercase tracking-wider">
+              {partyCategory === 'Vendor' ? 'VENDOR / SUPPLIER' : 'CUSTOMER / BUYER'}
             </span>
           </h2>
 
@@ -347,7 +347,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             <div className="md:col-span-9 space-y-1">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-900 dark:text-slate-100">
-                  {partyCategory === 'Vendor' ? 'Vendor / Party Name' : 'Customer Name'}
+                  {partyCategory === 'Vendor' ? 'Vendor / Supplier Name *' : 'Customer Name *'}
                 </label>
                 
                 {/* Active Toggle */}
@@ -372,10 +372,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               <input
                 type="text"
                 required
-                placeholder="Enter Name"
+                placeholder={partyCategory === 'Vendor' ? 'e.g. Indian Oil Corporation / Bottling Plant Ltd' : 'e.g. Hotel Rajdhani / Sharma Store'}
                 value={partyName}
                 onChange={(e) => setPartyName(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold"
+                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
               />
             </div>
 
@@ -828,7 +828,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
           {/* ERP CUSTOMER PORTAL LOGIN CREDENTIALS & SECURITY */}
-          <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3 shadow-lg my-2">
+          {partyCategory === 'Customer' && (
+            <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3 shadow-lg my-2">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-emerald-400" />
@@ -887,6 +888,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </div>
             </div>
           </div>
+        )}
 
           {/* Row 8: Other Mobile No, Party Limit, Interest Rate/Month, Loyalty Points */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

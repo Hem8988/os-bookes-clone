@@ -677,7 +677,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
       <AddEditVendorModal
         isOpen={isModalOpen}
         customerToEdit={editingCustomer}
-        defaultType="Customer"
+        defaultType={filterType === 'Vendor' || isVendorOnly ? 'Vendor' : 'Customer'}
         products={products}
         onClose={() => {
           setIsModalOpen(false);

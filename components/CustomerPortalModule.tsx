@@ -363,40 +363,52 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
               )}
 
               {/* PLACE ORDER TAB */}
-              {activeTab === 'place_order' && (
-                <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl space-y-5 text-slate-900">
-                  <div className="border-b border-slate-200 pb-3">
-                    <h3 className="font-black text-lg text-emerald-600 flex items-center gap-2">
-                      <ShoppingCart className="w-5 h-5" /> Place Commercial LPG Cylinder Order
-                    </h3>
-                    <p className="text-xs text-slate-500">Order will be submitted directly to Pramukh Indane Gas Agency</p>
-                  </div>
+              {activeTab === 'place_order' && (() => {
+                const ALL_CYLINDERS = [
+                  { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder', price: 1850, optionText: '19 KG Commercial LPG Cylinder (₹1,850/pc)' },
+                  { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder', price: 4500, optionText: '47.5 KG Industrial LPG Cylinder (₹4,500/pc)' },
+                  { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder', price: 853, optionText: '14.2 KG Domestic LPG Cylinder (₹853/pc)' },
+                ];
+                const assigned = customer?.assignedCylinderTypes;
+                const allowedCylinders = ALL_CYLINDERS.filter(p => 
+                  !assigned || assigned.length === 0 || assigned.includes(p.id) || assigned.includes(p.name)
+                );
 
-                  <form onSubmit={handlePlaceOrderSubmit} className="space-y-4 text-xs">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Select Cylinder Product</label>
-                      <select
-                        value={productId}
-                        onChange={e => {
-                          setProductId(e.target.value);
-                          if (e.target.value === 'prod_19kg') {
-                            setProductName('19 KG Commercial LPG Cylinder');
-                            setUnitPrice(1850);
-                          } else if (e.target.value === 'prod_47kg') {
-                            setProductName('47.5 KG Industrial LPG Cylinder');
-                            setUnitPrice(4500);
-                          } else {
-                            setProductName('14.2 KG Domestic LPG Cylinder');
-                            setUnitPrice(853);
-                          }
-                        }}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold"
-                      >
-                        <option value="prod_19kg">19 KG Commercial LPG Cylinder (₹1,850/pc)</option>
-                        <option value="prod_47kg">47.5 KG Industrial LPG Cylinder (₹4,500/pc)</option>
-                        <option value="prod_14kg">14.2 KG Domestic LPG Cylinder (₹853/pc)</option>
-                      </select>
+                return (
+                  <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl space-y-5 text-slate-900">
+                    <div className="border-b border-slate-200 pb-3">
+                      <h3 className="font-black text-lg text-emerald-600 flex items-center gap-2">
+                        <ShoppingCart className="w-5 h-5" /> Place Commercial LPG Cylinder Order
+                      </h3>
+                      <p className="text-xs text-slate-500">Order will be submitted directly to Pramukh Indane Gas Agency</p>
                     </div>
+
+                    <form onSubmit={handlePlaceOrderSubmit} className="space-y-4 text-xs">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-slate-700">Select Cylinder Product</label>
+                          <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                            {allowedCylinders.length} Product(s) Assigned
+                          </span>
+                        </div>
+                        <select
+                          value={productId}
+                          onChange={e => {
+                            const val = e.target.value;
+                            const selected = allowedCylinders.find(c => c.id === val);
+                            if (selected) {
+                              setProductId(selected.id);
+                              setProductName(selected.name);
+                              setUnitPrice(selected.price);
+                            }
+                          }}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold cursor-pointer"
+                        >
+                          {allowedCylinders.map(cyl => (
+                            <option key={cyl.id} value={cyl.id}>{cyl.optionText}</option>
+                          ))}
+                        </select>
+                      </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -436,7 +448,8 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                     </button>
                   </form>
                 </div>
-              )}
+              );
+            })()}
 
               {/* ORDERS TAB */}
               {activeTab === 'orders' && (

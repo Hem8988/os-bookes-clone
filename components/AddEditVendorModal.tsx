@@ -94,9 +94,17 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [loyaltyPoints, setLoyaltyPoints] = useState<number | ''>(0);
   const [joiningDate, setJoiningDate] = useState(getTodayDateString());
 
+  // Customer Authorized / Assigned LPG Cylinder Products
+  const [assignedCylinderTypes, setAssignedCylinderTypes] = useState<string[]>(['prod_19kg', 'prod_47kg', 'prod_14kg']);
+
   useEffect(() => {
     const today = getTodayDateString();
     if (customerToEdit) {
+      setAssignedCylinderTypes(
+        Array.isArray(customerToEdit.assignedCylinderTypes) && customerToEdit.assignedCylinderTypes.length > 0
+          ? customerToEdit.assignedCylinderTypes
+          : ['prod_19kg', 'prod_47kg', 'prod_14kg']
+      );
       setPartyCategory(customerToEdit.type || defaultType);
       setPartyName(customerToEdit.name || '');
       setTradeName(customerToEdit.tradeName || '');
@@ -283,6 +291,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       totalDepositAmount: Number(totalDepositAmount) || 0,
       depositStatus,
       svVoucherNo: svVoucherNo.trim() || undefined,
+      assignedCylinderTypes,
     };
 
     onSave(savedCustomer);
@@ -616,6 +625,57 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* AUTHORIZED / ASSIGNED LPG CYLINDER PRODUCTS CARD */}
+          {partyCategory === 'Customer' && (
+            <div className="p-4 rounded-2xl bg-emerald-50/80 dark:bg-slate-800/90 border border-emerald-200 dark:border-emerald-900/60 space-y-3 shadow-sm my-2">
+              <div className="flex items-center justify-between border-b border-emerald-100 dark:border-slate-700 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-extrabold text-sm">
+                    📦
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                      Authorized / Assigned LPG Cylinder Products
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                      Select which cylinder sizes this customer is authorized to order in Customer Portal
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  Portal Products
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                {[
+                  { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder (₹1,850)' },
+                  { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder (₹4,500)' },
+                  { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder (₹853)' },
+                ].map((prod) => {
+                  const isChecked = assignedCylinderTypes.includes(prod.id);
+                  return (
+                    <label key={prod.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${isChecked ? 'bg-white border-emerald-500 shadow-sm text-emerald-950 font-extrabold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAssignedCylinderTypes([...assignedCylinderTypes, prod.id]);
+                          } else {
+                            setAssignedCylinderTypes(assignedCylinderTypes.filter(id => id !== prod.id));
+                          }
+                        }}
+                        className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-xs">{prod.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* CYLINDER SECURITY DEPOSIT & SUBSCRIPTION VOUCHER (SV/TV) CARD */}
           <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-slate-800/90 border border-teal-200 dark:border-teal-900/60 space-y-3 shadow-sm my-2">

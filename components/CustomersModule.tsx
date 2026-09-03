@@ -434,6 +434,9 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                                 👔 RM: {c.relationshipManagerName || 'Vikram Sharma'}
                               </span>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                📦 Cylinders: {c.assignedCylinderTypes && c.assignedCylinderTypes.length > 0 ? c.assignedCylinderTypes.map(t => t.replace('prod_', '').toUpperCase()).join(', ') : '19KG, 47.5KG, 14.2KG'}
+                              </span>
                             </div>
                           </div>
                         </td>

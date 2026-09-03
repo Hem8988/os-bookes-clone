@@ -265,6 +265,7 @@ export interface Customer {
   svVoucherNo?: string;
   openingBalance?: number;
   openingBalanceType?: 'Dr' | 'Cr';
+  assignedCylinderTypes?: string[];
 }
 
 export interface SubscriptionVoucher {

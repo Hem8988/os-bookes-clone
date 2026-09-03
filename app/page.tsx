@@ -735,6 +735,7 @@ export default function Home() {
           {activeTab === 'customer-360' && (
             <CustomersModule 
               customers={customers} 
+              products={products}
               onAddCustomer={handleAddCustomer} 
               onUpdateCustomer={handleUpdateCustomer}
               onDeleteCustomer={handleDeleteCustomer}
@@ -899,6 +900,7 @@ export default function Home() {
           {activeTab === 'customers' && (
             <CustomersModule 
               customers={customers} 
+              products={products}
               onAddCustomer={handleAddCustomer} 
               onUpdateCustomer={handleUpdateCustomer}
               onDeleteCustomer={handleDeleteCustomer}
@@ -909,6 +911,7 @@ export default function Home() {
           {activeTab === 'vendors' && (
             <CustomersModule 
               customers={customers} 
+              products={products}
               onAddCustomer={handleAddCustomer} 
               onUpdateCustomer={handleUpdateCustomer}
               onDeleteCustomer={handleDeleteCustomer}

@@ -649,30 +649,38 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                {[
-                  { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder (₹1,850)' },
-                  { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder (₹4,500)' },
-                  { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder (₹853)' },
-                ].map((prod) => {
-                  const isChecked = assignedCylinderTypes.includes(prod.id);
-                  return (
-                    <label key={prod.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${isChecked ? 'bg-white border-emerald-500 shadow-sm text-emerald-950 font-extrabold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setAssignedCylinderTypes([...assignedCylinderTypes, prod.id]);
-                          } else {
-                            setAssignedCylinderTypes(assignedCylinderTypes.filter(id => id !== prod.id));
-                          }
-                        }}
-                        className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-xs">{prod.name}</span>
-                    </label>
-                  );
-                })}
+                {(() => {
+                  const masterList = (Array.isArray(products) && products.length > 0)
+                    ? products
+                    : [
+                        { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder', salePrice: 1850 },
+                        { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder', salePrice: 4500 },
+                        { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder', salePrice: 853 },
+                      ];
+
+                  return masterList.map((prod) => {
+                    const isChecked = assignedCylinderTypes.includes(prod.id) || assignedCylinderTypes.includes(prod.name);
+                    const displayName = `${prod.name} (₹${(prod.salePrice || 0).toLocaleString('en-IN')})`;
+
+                    return (
+                      <label key={prod.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${isChecked ? 'bg-white border-emerald-500 shadow-sm text-emerald-950 font-extrabold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setAssignedCylinderTypes([...assignedCylinderTypes, prod.id]);
+                            } else {
+                              setAssignedCylinderTypes(assignedCylinderTypes.filter(id => id !== prod.id && id !== prod.name));
+                            }
+                          }}
+                          className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span className="text-xs">{displayName}</span>
+                      </label>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}

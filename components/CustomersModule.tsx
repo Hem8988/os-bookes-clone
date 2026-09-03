@@ -19,12 +19,13 @@ import {
   LayoutGrid,
   Eye
 } from 'lucide-react';
-import { Customer } from '../lib/types';
+import { Customer, Product } from '../lib/types';
 import { AddEditVendorModal } from './AddEditVendorModal';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
 
 interface CustomersModuleProps {
   customers: Customer[];
+  products?: Product[];
   onAddCustomer: (customer: Customer) => void;
   onUpdateCustomer?: (customer: Customer) => void;
   onDeleteCustomer?: (id: string) => void;
@@ -33,6 +34,7 @@ interface CustomersModuleProps {
 
 export const CustomersModule: React.FC<CustomersModuleProps> = ({ 
   customers, 
+  products = [],
   onAddCustomer,
   onUpdateCustomer,
   onDeleteCustomer,
@@ -676,6 +678,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
         isOpen={isModalOpen}
         customerToEdit={editingCustomer}
         defaultType="Customer"
+        products={products}
         onClose={() => {
           setIsModalOpen(false);
           setEditingCustomer(null);

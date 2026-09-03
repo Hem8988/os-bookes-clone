@@ -52,7 +52,7 @@ export default function AccountantPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans">
       {/* Top Header Bar */}
       <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-40 text-white">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -111,7 +111,7 @@ export default function AccountantPage() {
         </aside>
 
         {/* Dynamic View */}
-        <main className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-6 overflow-hidden">
+        <main className="flex-1 bg-white border border-slate-200 rounded-3xl p-4 md:p-6 overflow-hidden">
           {activeTab === 'queue' && <ApprovalQueueModule />}
           {activeTab === 'ledger' && <AccountHubModule customerLedger={[]} companyLedger={[]} bankBook={[]} employeeLedger={[]} expensesLedger={[]} incomesLedger={[]} paymentLedger={[]} attendance={[]} branchTransfers={[]} customers={INITIAL_CUSTOMERS as any} companies={[]} initialSubTab="customer-ledger" />}
           {activeTab === 'billing' && (

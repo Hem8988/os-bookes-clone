@@ -237,36 +237,36 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
   const cylinderInv = customerData?.cylinderInventory || { currentFullBalance: 15, currentEmptyBalance: 4, totalIssued: 19 };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans">
       
       {/* Top Header Bar */}
-      <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-40">
+      <header className="bg-white border-b border-slate-200 p-4 sticky top-0 z-40 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-purple-600 flex items-center justify-center font-black text-white text-lg shadow-lg">
               B2B
             </div>
             <div>
-              <h1 className="font-extrabold text-base text-white flex items-center gap-1.5">
+              <h1 className="font-extrabold text-base text-slate-900 flex items-center gap-1.5">
                 {customer.tradeName || customer.name}
               </h1>
-              <p className="text-[11px] text-purple-300 font-semibold">Pramukh Indane B2B Customer Portal</p>
+              <p className="text-[11px] text-purple-700 font-bold">Pramukh Indane B2B Customer Portal</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveTab('place_order')}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" /> Place New Order
             </button>
             <button
               onClick={handleLogoutClick}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition flex items-center gap-1.5 text-xs font-bold"
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer"
               title="Sign Out"
             >
-              <LogOut className="w-4 h-4 text-rose-400" />
+              <LogOut className="w-4 h-4 text-rose-600" />
               <span>Logout</span>
             </button>
           </div>
@@ -277,32 +277,32 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
       <div className="max-w-6xl w-full mx-auto p-4 md:p-6 flex-1 flex flex-col md:flex-row gap-6">
         
         {/* Customer Sidebar Navigation */}
-        <aside className="w-full md:w-60 flex-shrink-0 bg-slate-900 border border-slate-800 rounded-3xl p-3 space-y-1 self-start">
-          <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'dashboard' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+        <aside className="w-full md:w-60 flex-shrink-0 bg-white border border-slate-200 shadow-sm rounded-3xl p-3 space-y-1 self-start">
+          <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'dashboard' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <Building2 className="w-4 h-4" /> Dashboard
           </button>
-          <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'orders' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'orders' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <ShoppingCart className="w-4 h-4" /> My Orders ({orders.length})
           </button>
-          <button onClick={() => setActiveTab('place_order')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'place_order' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
-            <PlusCircle className="w-4 h-4 text-emerald-400" /> Place Order
+          <button onClick={() => setActiveTab('place_order')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'place_order' ? 'bg-emerald-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
+            <PlusCircle className="w-4 h-4 text-emerald-600" /> Place Order
           </button>
-          <button onClick={() => setActiveTab('deliveries')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'deliveries' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('deliveries')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'deliveries' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <Truck className="w-4 h-4" /> My Deliveries ({deliveries.length})
           </button>
-          <button onClick={() => setActiveTab('cylinders')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'cylinders' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('cylinders')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'cylinders' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <Package className="w-4 h-4" /> Cylinder Site Stock
           </button>
-          <button onClick={() => setActiveTab('ledger')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'ledger' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('ledger')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'ledger' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <DollarSign className="w-4 h-4" /> My Financial Ledger
           </button>
-          <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'invoices' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'invoices' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <Receipt className="w-4 h-4" /> Invoices ({invoices.length})
           </button>
-          <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'profile' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'profile' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <User className="w-4 h-4" /> Account Profile
           </button>
-          <button onClick={() => setActiveTab('support')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition ${activeTab === 'support' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+          <button onClick={() => setActiveTab('support')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${activeTab === 'support' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}>
             <HelpCircle className="w-4 h-4" /> Customer Support
           </button>
         </aside>
@@ -320,34 +320,34 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
               {activeTab === 'dashboard' && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-1">
-                      <div className="text-[10px] font-extrabold uppercase text-slate-400">Current Outstanding</div>
-                      <div className="text-2xl font-black text-rose-400">₹{(customer.balance || 0).toLocaleString('en-IN')}</div>
+                    <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl space-y-1">
+                      <div className="text-[10px] font-extrabold uppercase text-slate-500">Current Outstanding</div>
+                      <div className="text-2xl font-black text-rose-600">₹{(customer.balance || 0).toLocaleString('en-IN')}</div>
                       <div className="text-[11px] text-slate-500">Credit Limit: ₹{(customer.creditLimit || 50000).toLocaleString('en-IN')}</div>
                     </div>
 
-                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-1">
-                      <div className="text-[10px] font-extrabold uppercase text-slate-400">Active Orders</div>
-                      <div className="text-2xl font-black text-sky-400">{orders.filter((o: any) => o.status !== 'DELIVERED').length}</div>
+                    <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl space-y-1">
+                      <div className="text-[10px] font-extrabold uppercase text-slate-500">Active Orders</div>
+                      <div className="text-2xl font-black text-sky-600">{orders.filter((o: any) => o.status !== 'DELIVERED').length}</div>
                       <div className="text-[11px] text-slate-500">Total Completed: {deliveries.length}</div>
                     </div>
                   </div>
 
                   {/* Customer Stock Analysis Widget on Dashboard */}
-                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
                       <div>
-                        <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                          <BarChart3 className="w-4 h-4 text-emerald-400" /> Stock Analysis & Intake Trends ({analysisMode === 'MONTHLY' ? `${selectedMonth} ${selectedYear}` : `Year ${selectedYear}`})
+                        <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-emerald-600" /> Stock Analysis & Intake Trends ({analysisMode === 'MONTHLY' ? `${selectedMonth} ${selectedYear}` : `Year ${selectedYear}`})
                         </h3>
-                        <p className="text-[11px] text-slate-400">Filter stock analysis by month & year (Detailed site tables removed)</p>
+                        <p className="text-[11px] text-slate-500">Filter stock analysis by month & year (Detailed site tables removed)</p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <select
                           value={selectedMonth}
                           onChange={e => setSelectedMonth(e.target.value)}
-                          className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-xs font-bold text-emerald-400"
+                          className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-emerald-700"
                         >
                           {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(m => (
                             <option key={m} value={m}>{m}</option>
@@ -356,7 +356,7 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                         <select
                           value={selectedYear}
                           onChange={e => setSelectedYear(e.target.value)}
-                          className="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-xs font-bold text-purple-400"
+                          className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-purple-700"
                         >
                           {['2024', '2025', '2026'].map(y => (
                             <option key={y} value={y}>{y}</option>
@@ -364,7 +364,7 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                         </select>
                         <button
                           onClick={() => setActiveTab('cylinders')}
-                          className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg shadow transition"
+                          className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg shadow transition cursor-pointer"
                         >
                           Full Graph 📊
                         </button>
@@ -379,25 +379,25 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                         { label: `${selectedMonth.slice(0, 3)} 15-21`, full: 19, empty: 15 },
                         { label: `${selectedMonth.slice(0, 3)} 22-30`, full: 38, empty: 35 },
                       ].map((item, idx) => (
-                        <div key={idx} className="bg-slate-950 p-3 rounded-2xl border border-slate-800/80 space-y-1">
-                          <div className="text-[10px] text-slate-400 font-bold">{item.label}</div>
+                        <div key={idx} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1">
+                          <div className="text-[10px] text-slate-500 font-bold">{item.label}</div>
                           <div className="flex justify-center items-end gap-1.5 h-16 pt-2">
                             <div style={{ height: `${(item.full / 40) * 100}%` }} className="w-3 bg-emerald-500 rounded-t-sm" title={`Full Delivered: ${item.full}`}></div>
                             <div style={{ height: `${(item.empty / 40) * 100}%` }} className="w-3 bg-amber-500 rounded-t-sm" title={`Empty Returned: ${item.empty}`}></div>
                           </div>
-                          <div className="text-[9px] text-emerald-400 font-extrabold flex justify-around border-t border-slate-800/60 pt-1">
+                          <div className="text-[9px] text-emerald-700 font-extrabold flex justify-around border-t border-slate-200 pt-1">
                             <span>+{item.full}</span>
-                            <span className="text-amber-400">-{item.empty}</span>
+                            <span className="text-amber-700">-{item.empty}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-800 p-5 rounded-3xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <h3 className="font-extrabold text-sm text-white">Recent Orders</h3>
-                      <button onClick={() => setActiveTab('place_order')} className="text-xs font-bold text-emerald-400 hover:underline">+ New Order</button>
+                  <div className="bg-white border border-slate-200 shadow-sm p-5 rounded-3xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                      <h3 className="font-extrabold text-sm text-slate-900">Recent Orders</h3>
+                      <button onClick={() => setActiveTab('place_order')} className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer">+ New Order</button>
                     </div>
 
                     {orders.length === 0 ? (
@@ -405,16 +405,16 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                     ) : (
                       <div className="space-y-2">
                         {orders.slice(0, 5).map((ord: any) => (
-                          <div key={ord.id} className="p-3 bg-slate-950 border border-slate-800/80 rounded-2xl flex items-center justify-between text-xs">
+                          <div key={ord.id} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
                             <div>
-                              <div className="font-bold text-white flex items-center gap-2">
+                              <div className="font-bold text-slate-900 flex items-center gap-2">
                                 <span>Order #{ord.orderNumber}</span>
-                                <span className="text-[10px] text-purple-400 font-mono">({ord.source || 'PORTAL'})</span>
+                                <span className="text-[10px] text-purple-600 font-mono">({ord.source || 'PORTAL'})</span>
                               </div>
-                              <div className="text-[11px] text-slate-400">Delivery Date: {ord.requestedDeliveryDate}</div>
+                              <div className="text-[11px] text-slate-500">Delivery Date: {ord.requestedDeliveryDate}</div>
                             </div>
                             <div className="text-right">
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-purple-950 text-purple-300 border border-purple-800">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-300">
                                 {ord.status}
                               </span>
                             </div>
@@ -567,30 +567,30 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
 
               {/* CYLINDER SITE STOCK ANALYSIS TAB */}
               {activeTab === 'cylinders' && (
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div className="bg-white border border-slate-200 shadow-sm p-6 rounded-3xl space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
                     <div>
-                      <h3 className="font-black text-lg text-white flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-emerald-400" /> Customer Cylinder Stock Analysis & Consumption Trends
+                      <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-emerald-600" /> Customer Cylinder Stock Analysis & Consumption Trends
                       </h3>
-                      <p className="text-xs text-slate-400">Visual stock movement trend filtered by month and year (Detailed site tables removed)</p>
+                      <p className="text-xs text-slate-500">Visual stock movement trend filtered by month and year (Detailed site tables removed)</p>
                     </div>
 
                     {/* Filter Controls: Month, Year & Mode Switcher */}
                     <div className="flex flex-wrap items-center gap-2">
                       {/* Analysis Mode Toggle */}
-                      <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex text-xs font-bold">
+                      <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex text-xs font-bold">
                         <button
                           type="button"
                           onClick={() => setAnalysisMode('MONTHLY')}
-                          className={`px-3 py-1 rounded-lg transition ${analysisMode === 'MONTHLY' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                          className={`px-3 py-1 rounded-lg transition cursor-pointer ${analysisMode === 'MONTHLY' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
                         >
                           📅 Monthly
                         </button>
                         <button
                           type="button"
                           onClick={() => setAnalysisMode('YEARLY')}
-                          className={`px-3 py-1 rounded-lg transition ${analysisMode === 'YEARLY' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                          className={`px-3 py-1 rounded-lg transition cursor-pointer ${analysisMode === 'YEARLY' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
                         >
                           📆 Yearly
                         </button>
@@ -601,7 +601,7 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                         <select
                           value={selectedMonth}
                           onChange={e => setSelectedMonth(e.target.value)}
-                          className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-bold text-emerald-400"
+                          className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-emerald-700"
                         >
                           {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(m => (
                             <option key={m} value={m}>{m}</option>
@@ -613,7 +613,7 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                       <select
                         value={selectedYear}
                         onChange={e => setSelectedYear(e.target.value)}
-                        className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-bold text-purple-400"
+                        className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-purple-700"
                       >
                         {['2024', '2025', '2026'].map(y => (
                           <option key={y} value={y}>{y}</option>
@@ -657,39 +657,39 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
                       <div className="space-y-6">
                         {/* Analytical KPI Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                          <div className="bg-slate-950 border border-slate-800/80 p-4 rounded-2xl space-y-1">
-                            <div className="text-[10px] font-extrabold uppercase text-slate-400">Total Cylinders Delivered</div>
-                            <div className="text-2xl font-black text-emerald-400">{totalDelivered} Pcs</div>
+                          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1">
+                            <div className="text-[10px] font-extrabold uppercase text-slate-500">Total Cylinders Delivered</div>
+                            <div className="text-2xl font-black text-emerald-600">{totalDelivered} Pcs</div>
                             <div className="text-[10px] text-slate-500">{analysisMode === 'MONTHLY' ? selectedMonth : 'Full Year'} {selectedYear}</div>
                           </div>
 
-                          <div className="bg-slate-950 border border-slate-800/80 p-4 rounded-2xl space-y-1">
-                            <div className="text-[10px] font-extrabold uppercase text-slate-400">Empty Cylinders Returned</div>
-                            <div className="text-2xl font-black text-amber-400">{totalReturned} Pcs</div>
+                          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1">
+                            <div className="text-[10px] font-extrabold uppercase text-slate-500">Empty Cylinders Returned</div>
+                            <div className="text-2xl font-black text-amber-600">{totalReturned} Pcs</div>
                             <div className="text-[10px] text-slate-500">Pickups Verified</div>
                           </div>
 
-                          <div className="bg-slate-950 border border-slate-800/80 p-4 rounded-2xl space-y-1">
-                            <div className="text-[10px] font-extrabold uppercase text-slate-400">Return Efficiency Ratio</div>
-                            <div className="text-2xl font-black text-purple-400">{returnRate}%</div>
+                          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1">
+                            <div className="text-[10px] font-extrabold uppercase text-slate-500">Return Efficiency Ratio</div>
+                            <div className="text-2xl font-black text-purple-600">{returnRate}%</div>
                             <div className="text-[10px] text-slate-500">Empty vs Delivered Return Rate</div>
                           </div>
                         </div>
 
                         {/* Interactive Stock Analysis Graph */}
-                        <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl space-y-4">
+                        <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4">
                           <div className="flex items-center justify-between text-xs">
-                            <div className="font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                            <div className="font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                               <span>📊 Stock Movement & Refill Frequency ({analysisMode === 'MONTHLY' ? `${selectedMonth} ${selectedYear}` : `Year ${selectedYear}`})</span>
                             </div>
                             <div className="flex items-center gap-4 text-[11px] font-bold">
-                              <span className="flex items-center gap-1.5 text-emerald-400">
+                              <span className="flex items-center gap-1.5 text-emerald-700">
                                 <span className="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Delivered Full
                               </span>
-                              <span className="flex items-center gap-1.5 text-amber-400">
+                              <span className="flex items-center gap-1.5 text-amber-700">
                                 <span className="w-3 h-3 rounded bg-amber-500 inline-block"></span> Empty Returned
                               </span>
-                              <span className="flex items-center gap-1.5 text-purple-400">
+                              <span className="flex items-center gap-1.5 text-purple-700">
                                 <span className="w-3 h-3 rounded-full bg-purple-500 inline-block"></span> Net Holding Trend
                               </span>
                             </div>

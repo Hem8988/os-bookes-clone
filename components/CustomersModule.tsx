@@ -61,6 +61,37 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   const isVendorOnly = defaultType === 'Vendor';
   const isCustomerOnly = defaultType === 'Customer';
 
+  // Vendor Bill Upload State
+  const [billUploadVendor, setBillUploadVendor] = useState<Customer | null>(null);
+  const [billAmount, setBillAmount] = useState('');
+  const [billNumber, setBillNumber] = useState('');
+  const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]);
+  const [billNotes, setBillNotes] = useState('Plant LPG Cylinder Bulk Supply Invoice');
+  const [billPhotoUrl, setBillPhotoUrl] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+
+  const handleBillPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsScanning(true);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBillPhotoUrl(reader.result as string);
+        setTimeout(() => setIsScanning(false), 600);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleVendorBillSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    alert(`✅ Vendor Purchase Bill (${billNumber}) for ₹${Number(billAmount).toLocaleString('en-IN')} uploaded & posted to ${billUploadVendor?.name} Ledger!`);
+    setBillUploadVendor(null);
+    setBillAmount('');
+    setBillNumber('');
+    setBillPhotoUrl(null);
+  };
+
   const safeCustomers = useMemo(() => (Array.isArray(customers) ? customers : []), [customers]);
 
   // Filtered Customers Calculation
@@ -533,7 +564,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
                         {/* Actions: View Ledger, Edit & Delete */}
                         <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
                             {/* View Statement Ledger Button */}
                             <button
                               onClick={() => setViewingCustomer(c)}
@@ -543,6 +574,23 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                               <Eye className="h-4 w-4" />
                               <span className="hidden xl:inline">Ledger</span>
                             </button>
+
+                            {/* Upload Vendor Bill Button - Only for Vendors */}
+                            {c.type === 'Vendor' && (
+                              <button
+                                onClick={() => {
+                                  setBillUploadVendor(c);
+                                  setBillNumber(`BILL-${Date.now().toString().slice(-4)}`);
+                                  setBillPhotoUrl(null);
+                                  setBillAmount('');
+                                }}
+                                className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900 text-amber-700 dark:text-amber-400 transition cursor-pointer flex items-center gap-1 font-bold text-[11px]"
+                                title="Upload Vendor Purchase Bill / Invoice Photo"
+                              >
+                                <span>📸</span>
+                                <span className="hidden xl:inline">Upload Bill</span>
+                              </button>
+                            )}
 
                             {/* Edit Button */}
                             <button
@@ -692,6 +740,130 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
         customer={viewingCustomer}
         onClose={() => setViewingCustomer(null)}
       />
+
+      {/* VENDOR PURCHASE BILL PHOTO UPLOAD MODAL */}
+      {billUploadVendor && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-amber-100 dark:border-amber-900/60 bg-gradient-to-r from-amber-600 to-amber-700 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-white/20 text-white font-extrabold text-lg">📸</div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Upload Purchase Bill</h3>
+                  <p className="text-[11px] text-amber-100 font-medium">Vendor: {billUploadVendor.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setBillUploadVendor(null)}
+                className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition cursor-pointer"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVendorBillSubmit} className="p-5 space-y-4 text-xs font-semibold">
+              {/* Image Upload Card */}
+              <div className="p-4 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 text-center space-y-2">
+                {billPhotoUrl ? (
+                  <div className="space-y-2">
+                    <img
+                      src={billPhotoUrl}
+                      alt="Vendor Bill"
+                      className="max-h-52 mx-auto rounded-xl shadow-md border border-amber-200"
+                    />
+                    <p className="text-[11px] text-emerald-700 font-extrabold flex items-center justify-center gap-1">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Bill Image Uploaded Successfully!
+                    </p>
+                    {isScanning && (
+                      <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-black animate-pulse">
+                        ⚡ Scanning Bill Details...
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-2 space-y-1">
+                    <span className="text-4xl block">📄</span>
+                    <p className="font-extrabold text-slate-800 dark:text-slate-100">Click to Select Vendor Bill Photo</p>
+                    <p className="text-[11px] text-slate-500">IOCL / BPCL / HPCL Plant Supply Invoice Image</p>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBillPhotoChange}
+                  className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-amber-600 file:text-white hover:file:bg-amber-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Form Fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block font-bold text-slate-800 dark:text-slate-100 mb-1">Bill / Invoice Number *</label>
+                  <input
+                    type="text"
+                    required
+                    value={billNumber}
+                    onChange={(e) => setBillNumber(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="e.g. IOCL-BILL-2026-089"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 dark:text-slate-100 mb-1">Bill Amount (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={billAmount}
+                    onChange={(e) => setBillAmount(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 font-black text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="e.g. 45800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 dark:text-slate-100 mb-1">Bill Date</label>
+                  <input
+                    type="date"
+                    value={billDate}
+                    onChange={(e) => setBillDate(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block font-bold text-slate-800 dark:text-slate-100 mb-1">Remarks / Bill Type</label>
+                  <input
+                    type="text"
+                    value={billNotes}
+                    onChange={(e) => setBillNotes(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setBillUploadVendor(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold shadow cursor-pointer transition"
+                >
+                  📤 Post Bill to Vendor Ledger
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

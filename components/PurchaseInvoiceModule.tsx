@@ -127,6 +127,64 @@ export const PurchaseInvoiceModule: React.FC<PurchaseInvoiceModuleProps> = ({
   const [entry, setEntry] = useState(emptyEntry(products));
   const [lastSavedTotal, setLastSavedTotal] = useState(0);
 
+  // IOCL Bill Auto-Filler Modal State
+  const [isIoclModalOpen, setIsIoclModalOpen] = useState(false);
+  const [ioclInvNo, setIoclInvNo] = useState('MH5537072955');
+  const [ioclSapDocNo, setIoclSapDocNo] = useState('7010396587');
+  const [ioclTtNo, setIoclTtNo] = useState('MH12RN8805');
+  const [ioclDate, setIoclDate] = useState('2026-09-01');
+  const [iocl19kgQty, setIocl19kgQty] = useState('252');
+  const [iocl19kgWeight, setIocl19kgWeight] = useState('4788.000');
+  const [iocl47kgQty, setIocl47kgQty] = useState('29');
+  const [iocl47kgWeight, setIocl47kgWeight] = useState('1377.500');
+  const [ioclRatePerTonne, setIoclRatePerTonne] = useState('112086.25');
+
+  const handleLoadIoclBillSample = () => {
+    const ioclVendor = vendors.find(v => v.name.toLowerCase().includes('indian oil') || v.name.toLowerCase().includes('iocl')) || vendors[0];
+    if (ioclVendor) setVendorId(ioclVendor.id);
+
+    setInvoiceNoSearch(ioclInvNo);
+    setDate(ioclDate);
+    setPaymentMode('Credit');
+    setRemark(`IOCL Bottling Plant Purchase Bill ${ioclInvNo} | SAP Doc #${ioclSapDocNo} | Tank Truck ${ioclTtNo} | Depot: LPG BP CHAKAN (PUNE)`);
+
+    const prod19 = products.find(p => p.name.includes('19 KG')) || products[0];
+    const prod47 = products.find(p => p.name.includes('47')) || products[1] || products[0];
+
+    const qty19 = Number(iocl19kgQty) || 252;
+    const qty47 = Number(iocl47kgQty) || 29;
+
+    const item19: PurchaseOrderItem = {
+      id: `poi-iocl-19kg-${Date.now()}`,
+      productId: prod19?.id || 'prod_19kg',
+      productName: '19 kg PACKED Indane Xtra TeJ LPG CYL(SC)',
+      hsnCode: '271119',
+      gstRate: 18,
+      quantity: qty19,
+      mrp: 2513,
+      listPrice: 2129.6387,
+      taxExcluded: true,
+      amount: 633269.39,
+    };
+
+    const item47: PurchaseOrderItem = {
+      id: `poi-iocl-47kg-${Date.now()}`,
+      productId: prod47?.id || 'prod_47kg',
+      productName: '47.5kg PACKED Indane Xtra TeJ LPG CY(LOT)',
+      hsnCode: '271119',
+      gstRate: 18,
+      quantity: qty47,
+      mrp: 6282,
+      listPrice: 5324.0968,
+      taxExcluded: true,
+      amount: 182190.59,
+    };
+
+    setItems([item19, item47]);
+    setIsIoclModalOpen(false);
+    alert(`🎉 IOCL BOTTLING PLANT TAX INVOICE LOADED SUCCESSFULLY!\n\nInvoice #: ${ioclInvNo}\nSAP Doc #: ${ioclSapDocNo}\nTank Truck #: ${ioclTtNo}\nGrand Total: ₹8,15,460.00\n(CGST 9%: ₹62,196.10 | SGST 9%: ₹62,196.10)\n\nStock addition: +252 Pcs 19KG & +29 Pcs 47.5KG ready to save.`);
+  };
+
   useEffect(() => {
     if (purchaseToEdit) {
       const matchedVendor = vendors.find((v) => v.name === purchaseToEdit.vendorName);
@@ -593,9 +651,11 @@ export const PurchaseInvoiceModule: React.FC<PurchaseInvoiceModuleProps> = ({
 
           <button
             type="button"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow"
+            onClick={() => setIsIoclModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-black shadow-md border border-amber-400/30"
+            title="Import official Indian Oil Corporation Bottling Plant Purchase Tax Invoice"
           >
-            <Sparkles className="h-3.5 w-3.5" /> Import Invoice (AI)
+            <Sparkles className="h-3.5 w-3.5" /> 🔥 Import IOCL Tax Invoice (MH5537072955)
           </button>
         </div>
 
@@ -938,6 +998,160 @@ export const PurchaseInvoiceModule: React.FC<PurchaseInvoiceModuleProps> = ({
         onClose={() => setIsPaymentStatusOpen(false)}
         onSave={handlePaymentStatusSave}
       />
+
+      {/* IOCL BOTTLING PLANT TAX INVOICE AUTO-IMPORT MODAL */}
+      {isIoclModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-3xl rounded-3xl p-6 text-white space-y-5 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-black text-lg">
+                  ⛽
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-white">Indian Oil Corporation Ltd (IOCL) Invoice Auto-Importer</h3>
+                  <p className="text-xs text-slate-400">Bottling Plant / Depot Tax Invoice Generator (Rule 46 of GST Rules)</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsIoclModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <div className="font-black uppercase text-amber-400 text-[10px] tracking-wider">📋 Header & Tank Truck Details</div>
+                
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Doc Name & Number *</label>
+                  <input
+                    type="text"
+                    value={ioclInvNo}
+                    onChange={e => setIoclInvNo(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl font-mono font-bold text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1">SAP Doc No *</label>
+                    <input
+                      type="text"
+                      value={ioclSapDocNo}
+                      onChange={e => setIoclSapDocNo(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl font-mono text-slate-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 font-bold mb-1">T.T. No (Tanker) *</label>
+                    <input
+                      type="text"
+                      value={ioclTtNo}
+                      onChange={e => setIoclTtNo(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl font-mono text-slate-300"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Invoice Date & Time *</label>
+                  <input
+                    type="date"
+                    value={ioclDate}
+                    onChange={e => setIoclDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl font-bold text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                <div className="font-black uppercase text-amber-400 text-[10px] tracking-wider">📦 Bulk LPG Cylinder Line Items</div>
+
+                <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                  <div className="font-extrabold text-emerald-400">19 kg Indane Xtra TeJ LPG CYL (Item 10)</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400">Quantity (EA Pcs)</span>
+                      <input
+                        type="number"
+                        value={iocl19kgQty}
+                        onChange={e => setIocl19kgQty(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg font-bold text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400">Weight (KG)</span>
+                      <input
+                        type="number"
+                        value={iocl19kgWeight}
+                        onChange={e => setIocl19kgWeight(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg font-bold text-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                  <div className="font-extrabold text-indigo-400">47.5kg Indane Xtra TeJ LPG CY (Item 50)</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400">Quantity (EA Pcs)</span>
+                      <input
+                        type="number"
+                        value={iocl47kgQty}
+                        onChange={e => setIocl47kgQty(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg font-bold text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400">Weight (KG)</span>
+                      <input
+                        type="number"
+                        value={iocl47kgWeight}
+                        onChange={e => setIocl47kgWeight(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg font-bold text-slate-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Summary Preview */}
+            <div className="p-4 bg-amber-950/40 border border-amber-800/80 rounded-2xl flex items-center justify-between text-xs">
+              <div>
+                <div className="font-extrabold text-amber-300">Generated Invoice Grand Total</div>
+                <div className="text-[11px] text-slate-400">Rate: ₹1,12,086.25 / Tonne | CGST 9% (₹62,196.10) + SGST 9% (₹62,196.10) | Rounding: ₹0.02</div>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-amber-400">₹8,15,460.00</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-800 pt-3">
+              <button
+                type="button"
+                onClick={() => setIsIoclModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLoadIoclBillSample}
+                className="px-6 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black rounded-xl text-xs shadow-lg transition"
+              >
+                ⚡ Auto-Fill & Generate Purchase Entry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

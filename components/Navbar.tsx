@@ -158,14 +158,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 md:px-6 shadow-sm">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur px-4 md:px-6 shadow-sm">
       {/* Left section: Firm/Branch dropdown */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-          <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800">
+          <Building2 className="h-4 w-4 text-emerald-600" />
           <span className="hidden sm:inline">Active Firm:</span>
           <span className="font-bold">PRAMUKH INDANE GAS AGENCY</span>
-          <span className="ml-1 rounded bg-emerald-200 dark:bg-emerald-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 dark:text-emerald-100 font-extrabold">
+          <span className="ml-1 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 font-extrabold">
             GSTIN Active
           </span>
         </div>
@@ -173,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Quick New Invoice Action */}
         <button
           onClick={() => setActiveTab('billing')}
-          className="hidden lg:flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-all transform active:scale-95"
+          className="hidden lg:flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-all transform active:scale-95 cursor-pointer"
         >
           <PlusCircle className="h-4 w-4" />
           <span>New Invoice (F2)</span>
@@ -193,13 +193,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           }}
           onFocus={() => setIsSearchOpen(true)}
           placeholder="Search Invoices, Customers, HSN, Stock (Ctrl + K)..."
-          className="w-full pl-9 pr-4 py-1.5 text-xs md:text-sm rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+          className="w-full pl-9 pr-4 py-1.5 text-xs md:text-sm rounded-full bg-slate-100 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium"
         />
 
         {isSearchOpen && searchQuery.trim() && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setIsSearchOpen(false)} />
-            <div className="absolute z-50 top-full mt-2 left-0 w-full max-h-[420px] overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl rounded-xl">
+            <div className="absolute z-50 top-full mt-2 left-0 w-full max-h-[420px] overflow-y-auto bg-white border border-slate-200 shadow-2xl rounded-xl">
               {!hasResults ? (
                 <div className="p-4 text-sm text-slate-500 text-center">No results for &quot;{searchQuery}&quot;.</div>
               ) : (
@@ -211,11 +211,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <button
                           key={c.id}
                           onClick={() => goTo('masters', 'customer')}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
-                          <Users className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <Users className="h-4 w-4 text-emerald-600 shrink-0" />
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{highlightMatch(c.name, searchQuery)}</div>
+                            <div className="text-xs font-bold text-slate-900 truncate">{highlightMatch(c.name, searchQuery)}</div>
                             <div className="text-[11px] text-slate-500">{c.phone || c.gstin || 'Customer'}</div>
                           </div>
                         </button>
@@ -224,17 +224,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
 
                   {searchResults.vendorMatches.length > 0 && (
-                    <div className="py-1.5 border-t border-slate-100 dark:border-slate-700">
+                    <div className="py-1.5 border-t border-slate-100">
                       <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">Vendors</div>
                       {searchResults.vendorMatches.map((v) => (
                         <button
                           key={v.id}
                           onClick={() => goTo('masters', 'vendor')}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
-                          <Truck className="h-4 w-4 text-teal-500 shrink-0" />
+                          <Truck className="h-4 w-4 text-teal-600 shrink-0" />
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{highlightMatch(v.name, searchQuery)}</div>
+                            <div className="text-xs font-bold text-slate-900 truncate">{highlightMatch(v.name, searchQuery)}</div>
                             <div className="text-[11px] text-slate-500">{v.phone || v.gstin || 'Vendor'}</div>
                           </div>
                         </button>
@@ -243,17 +243,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
 
                   {searchResults.productMatches.length > 0 && (
-                    <div className="py-1.5 border-t border-slate-100 dark:border-slate-700">
+                    <div className="py-1.5 border-t border-slate-100">
                       <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">Products / Stock</div>
                       {searchResults.productMatches.map((p) => (
                         <button
                           key={p.id}
                           onClick={() => goTo('inventory-hub', 'stock')}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
-                          <Package className="h-4 w-4 text-sky-500 shrink-0" />
+                          <Package className="h-4 w-4 text-sky-600 shrink-0" />
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{highlightMatch(p.name, searchQuery)}</div>
+                            <div className="text-xs font-bold text-slate-900 truncate">{highlightMatch(p.name, searchQuery)}</div>
                             <div className="text-[11px] text-slate-500">SKU: {p.sku || '-'} · Stock: {p.stock}</div>
                           </div>
                         </button>
@@ -262,17 +262,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
 
                   {searchResults.invoiceMatches.length > 0 && (
-                    <div className="py-1.5 border-t border-slate-100 dark:border-slate-700">
+                    <div className="py-1.5 border-t border-slate-100">
                       <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">Invoices</div>
                       {searchResults.invoiceMatches.map((inv) => (
                         <button
                           key={inv.id}
                           onClick={() => goTo('inventory-hub', 'sales')}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
-                          <FileText className="h-4 w-4 text-amber-500 shrink-0" />
+                          <FileText className="h-4 w-4 text-amber-600 shrink-0" />
                           <div className="min-w-0">
-                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{highlightMatch(inv.invoiceNumber, searchQuery)}</div>
+                            <div className="text-xs font-bold text-slate-900 truncate">{highlightMatch(inv.invoiceNumber, searchQuery)}</div>
                             <div className="text-[11px] text-slate-500">{highlightMatch(inv.customerName, searchQuery)}</div>
                           </div>
                         </button>
@@ -291,14 +291,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* App link indicator */}
         <button 
           title="Mobile POS App Synced"
-          className="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700"
+          className="hidden sm:flex items-center gap-1 text-xs text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 font-bold"
         >
-          <Smartphone className="h-3.5 w-3.5 text-emerald-500" />
+          <Smartphone className="h-3.5 w-3.5 text-emerald-600" />
           <span className="text-[11px]">App Synced</span>
         </button>
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <button className="relative p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer">
           <Bell className="h-4 w-4" />
           <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
         </button>
@@ -308,22 +308,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           const displayName = typeof authName === 'string' && authName.trim() ? authName.trim() : 'Dhananjay (Admin)';
           const avatarInitials = displayName.substring(0, 2).toUpperCase();
           return (
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
               <div className="h-8 w-8 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-inner">
                 {avatarInitials}
               </div>
               <div className="hidden lg:flex flex-col text-left">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight flex items-center gap-1">
+                <span className="text-xs font-bold text-slate-900 leading-tight flex items-center gap-1">
                   {displayName}
-                  <UserCheck className="h-3 w-3 text-emerald-500" />
+                  <UserCheck className="h-3 w-3 text-emerald-600" />
                 </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400">Authenticated Session</span>
+                <span className="text-[10px] text-slate-500 font-medium">Authenticated Session</span>
               </div>
               
               <button
                 onClick={onLogout}
                 title="Logout"
-                className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors ml-1"
+                className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors ml-1 cursor-pointer"
               >
                 <LogOut className="h-4 w-4" />
               </button>

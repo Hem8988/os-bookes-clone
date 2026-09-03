@@ -260,6 +260,8 @@ export interface Customer {
   totalDepositAmount?: number;
   depositStatus?: 'Paid' | 'Refunded' | 'Adjusted';
   svVoucherNo?: string;
+  openingBalance?: number;
+  openingBalanceType?: 'Dr' | 'Cr';
 }
 
 export interface PartyRate {

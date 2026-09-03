@@ -78,6 +78,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [depositStatus, setDepositStatus] = useState<'Paid' | 'Refunded' | 'Adjusted'>('Paid');
   const [svVoucherNo, setSvVoucherNo] = useState('');
 
+  // Opening Balance State
+  const [openingBalance, setOpeningBalance] = useState<number | ''>(0);
+  const [openingBalanceType, setOpeningBalanceType] = useState<'Dr' | 'Cr'>('Dr');
+
   // Limits & Numbers
   const [otherMobileNo, setOtherMobileNo] = useState('');
   const [partyLimit, setPartyLimit] = useState<number | ''>(0);
@@ -129,6 +133,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setTotalDepositAmount(customerToEdit.totalDepositAmount !== undefined ? customerToEdit.totalDepositAmount : 2000);
       setDepositStatus(customerToEdit.depositStatus || 'Paid');
       setSvVoucherNo(customerToEdit.svVoucherNo || `SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+      
+      const initOpBal = customerToEdit.openingBalance !== undefined ? customerToEdit.openingBalance : Math.abs(customerToEdit.balance || 0);
+      const initOpType = customerToEdit.openingBalanceType || ((customerToEdit.balance || 0) < 0 ? 'Cr' : 'Dr');
+      setOpeningBalance(initOpBal);
+      setOpeningBalanceType(initOpType);
     } else {
       setPartyCategory(defaultType);
       setPartyName('');
@@ -171,6 +180,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setTotalDepositAmount(2000);
       setDepositStatus('Paid');
       setSvVoucherNo(`SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+      setOpeningBalance(0);
+      setOpeningBalanceType(defaultType === 'Vendor' ? 'Cr' : 'Dr');
     }
   }, [customerToEdit, defaultType, isOpen]);
 
@@ -205,6 +216,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       return;
     }
 
+    const numericOpBal = Number(openingBalance) || 0;
+    const finalBalance = openingBalanceType === 'Cr' ? -Math.abs(numericOpBal) : Math.abs(numericOpBal);
+
     const savedCustomer: Customer = {
       id: customerToEdit?.id || `party-${Date.now()}`,
       name: partyName.trim(),
@@ -226,7 +240,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       internalNotes: internalNotes.trim() || undefined,
       state: stateName.trim() || 'Madhya Pradesh',
       stateCode: '23',
-      balance: 0,
+      balance: finalBalance,
+      openingBalance: numericOpBal,
+      openingBalanceType,
       creditLimit: Number(partyLimit) || 0,
       creditDays: Number(dueDays) || 7,
       type: partyCategory,
@@ -594,6 +610,57 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   onChange={(e) => setSvVoucherNo(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 uppercase"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* ACCOUNT OPENING BALANCE SETUP CARD */}
+          <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 space-y-3 shadow-sm my-2">
+            <div className="flex items-center justify-between border-b border-indigo-100 dark:border-slate-700 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-extrabold text-sm">
+                  ₹
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                    Account Opening Balance Setup
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                    Initial Outstanding / Advance Balance (Dr = Receivable / Purana Udhaar, Cr = Advance / Payable)
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                Opening Ledger Balance
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
+                  Opening Balance Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 15000"
+                  value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-black text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
+                  Balance Type (Debit / Credit)
+                </label>
+                <select
+                  value={openingBalanceType}
+                  onChange={(e) => setOpeningBalanceType(e.target.value as 'Dr' | 'Cr')}
+                  className="w-full px-3 py-2.5 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-extrabold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="Dr">Debit (Dr) - Customer Receivable / Purana Udhaar 🟢</option>
+                  <option value="Cr">Credit (Cr) - Advance Received / Vendor Payable 🔴</option>
+                </select>
               </div>
             </div>
           </div>

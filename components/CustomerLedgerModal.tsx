@@ -60,17 +60,21 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({
     const today = new Date();
     const currentYear = today.getFullYear();
 
-    const baseBalance = Number(customer.balance || 0);
+    const opBal = customer.openingBalance !== undefined ? customer.openingBalance : Math.abs(customer.balance || 0);
+    const opType = customer.openingBalanceType || (customer.balance < 0 ? 'Cr' : 'Dr');
+    const isDr = opType === 'Dr';
 
     return [
       {
         id: 'entry-1',
-        date: `${currentYear}-07-01`,
+        date: customer.joiningDate || `${currentYear}-07-01`,
         voucherType: 'Opening Balance',
         voucherNo: 'OPB-001',
-        particulars: 'Opening Balance B/F',
-        debit: baseBalance > 0 ? 15000 : 0,
-        credit: baseBalance < 0 ? Math.abs(baseBalance) : 0,
+        particulars: isDr 
+          ? 'Opening Balance B/F (Dr - Purana Udhaar / Customer Receivable)' 
+          : 'Opening Balance B/F (Cr - Advance Received / Payable)',
+        debit: isDr ? opBal : 0,
+        credit: !isDr ? opBal : 0,
       },
       {
         id: 'entry-2',
@@ -118,7 +122,7 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({
         voucherType: 'Sales Invoice',
         voucherNo: `INV-${customer.id.toUpperCase()}-119`,
         particulars: '19kg Commercial LPG Refill (15 Qty @ ₹1,720 + CGST/SGST)',
-        debit: (baseBalance > 0 ? baseBalance : 25000) + 8998,
+        debit: (customer.balance > 0 ? customer.balance : 25000) + 8998,
         credit: 0,
       },
       {

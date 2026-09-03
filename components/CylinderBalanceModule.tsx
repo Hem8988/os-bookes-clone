@@ -121,9 +121,57 @@ export default function CylinderBalanceModule() {
   
   const [balances, setBalances] = useState<CylinderInventoryItem[]>(DEFAULT_INVENTORY_ITEMS);
   const [vouchers, setVouchers] = useState<any[]>([
-    { id: 'v_1', voucherNumber: 'SV-2026-0089', voucherType: 'SV', customerName: 'Hotel Rajdhani (Connaught Place)', cylinderQty: 10, regulatorQty: 2, depositAmount: 25000, issueDate: '2026-06-15', status: 'ACTIVE' },
-    { id: 'v_2', voucherNumber: 'SV-2026-0104', voucherType: 'SV', customerName: 'Apex Industrial Fabrics (Okhla)', cylinderQty: 20, regulatorQty: 4, depositAmount: 50000, issueDate: '2026-07-01', status: 'ACTIVE' },
-    { id: 'v_3', voucherNumber: 'TV-2026-0012', voucherType: 'TV', customerName: 'Standard Bakers (Karol Bagh)', cylinderQty: 5, regulatorQty: 1, depositAmount: 12500, issueDate: '2026-08-10', status: 'ACTIVE' },
+    { 
+      id: 'v_1', 
+      voucherNumber: 'SV-2026-0089', 
+      voucherType: 'SV', 
+      customerId: 'cust_demo_1',
+      customerName: 'Hotel Rajdhani (Connaught Place)', 
+      relationshipManagerId: 'emp_2',
+      relationshipManagerName: 'Vikram Sharma',
+      defaultDeliveryBoyId: 'emp_1',
+      defaultDeliveryBoyName: 'Ramesh Kumar',
+      voucherReference: 'REF-SV-8921',
+      cylinderQty: 10, 
+      regulatorQty: 2, 
+      depositAmount: 25000, 
+      issueDate: '2026-06-15', 
+      status: 'ACTIVE' 
+    },
+    { 
+      id: 'v_2', 
+      voucherNumber: 'SV-2026-0104', 
+      voucherType: 'SV', 
+      customerId: 'cust_demo_2',
+      customerName: 'Apex Industrial Fabrics (Okhla)', 
+      relationshipManagerId: 'emp_4',
+      relationshipManagerName: 'Priya Verma',
+      defaultDeliveryBoyId: 'emp_3',
+      defaultDeliveryBoyName: 'Suresh Patel',
+      voucherReference: 'REF-SV-9912',
+      cylinderQty: 20, 
+      regulatorQty: 4, 
+      depositAmount: 50000, 
+      issueDate: '2026-07-01', 
+      status: 'ACTIVE' 
+    },
+    { 
+      id: 'v_3', 
+      voucherNumber: 'TV-2026-0012', 
+      voucherType: 'TV', 
+      customerId: 'cust_demo_3',
+      customerName: 'Standard Bakers (Karol Bagh)', 
+      relationshipManagerId: 'emp_2',
+      relationshipManagerName: 'Vikram Sharma',
+      defaultDeliveryBoyId: 'emp_1',
+      defaultDeliveryBoyName: 'Ramesh Kumar',
+      voucherReference: 'REF-TV-0012',
+      cylinderQty: 5, 
+      regulatorQty: 1, 
+      depositAmount: 12500, 
+      issueDate: '2026-08-10', 
+      status: 'ACTIVE' 
+    },
   ]);
   
   const [loading, setLoading] = useState(false);
@@ -623,7 +671,8 @@ export default function CylinderBalanceModule() {
                 <tr>
                   <th className="px-4 py-3">Voucher #</th>
                   <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Customer Name</th>
+                  <th className="px-4 py-3">Customer Details</th>
+                  <th className="px-4 py-3">Assigned Staff (RM & Fleet)</th>
                   <th className="px-4 py-3 text-center">Cylinders (SV/TV)</th>
                   <th className="px-4 py-3 text-center">Regulators</th>
                   <th className="px-4 py-3 text-right">Security Deposit</th>
@@ -634,20 +683,38 @@ export default function CylinderBalanceModule() {
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
                 {vouchers.map((v) => (
                   <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">{v.voucherNumber}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                      <div>{v.voucherNumber}</div>
+                      <div className="text-[10px] text-slate-400 font-normal">{v.voucherReference || 'REF-SV-8921'}</div>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded ${v.voucherType === 'SV' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'}`}>
                         {v.voucherType}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-bold text-slate-900 dark:text-slate-100">{v.customerName}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-extrabold text-slate-900 dark:text-slate-100">{v.customerName}</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">ID: {v.customerId || 'cust_demo_1'}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-0.5 text-[11px]">
+                        <div className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
+                          <span>👔 RM:</span>
+                          <span>{v.relationshipManagerName || 'Vikram Sharma'}</span>
+                        </div>
+                        <div className="text-amber-700 dark:text-amber-300 flex items-center gap-1 font-semibold">
+                          <span>🚚 Fleet:</span>
+                          <span>{v.defaultDeliveryBoyName || 'Ramesh Kumar'}</span>
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-center font-bold text-slate-800 dark:text-slate-200">{v.cylinderQty} Pcs</td>
                     <td className="px-4 py-3 text-center font-bold text-slate-800 dark:text-slate-200">{v.regulatorQty} Pcs</td>
                     <td className="px-4 py-3 text-right font-extrabold text-emerald-600 dark:text-emerald-400">₹{v.depositAmount.toLocaleString('en-IN')}</td>
                     <td className="px-4 py-3 text-slate-500">{v.issueDate}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        {v.status}
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                        🟢 {v.status}
                       </span>
                     </td>
                   </tr>

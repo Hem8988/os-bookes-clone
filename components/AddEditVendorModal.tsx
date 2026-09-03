@@ -82,6 +82,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [openingBalance, setOpeningBalance] = useState<number | ''>(0);
   const [openingBalanceType, setOpeningBalanceType] = useState<'Dr' | 'Cr'>('Dr');
 
+  // Staff Assignments (Delivery Boy & Relationship Manager)
+  const [defaultDeliveryBoyName, setDefaultDeliveryBoyName] = useState('Ramesh Kumar');
+  const [relationshipManagerId, setRelationshipManagerId] = useState('emp_2');
+  const [relationshipManagerName, setRelationshipManagerName] = useState('Vikram Sharma');
+
   // Limits & Numbers
   const [otherMobileNo, setOtherMobileNo] = useState('');
   const [partyLimit, setPartyLimit] = useState<number | ''>(0);
@@ -104,7 +109,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setCity(customerToEdit.city || '');
       setAreaName(customerToEdit.area || '');
       setRouteName(customerToEdit.route || '');
-      setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || '');
+      setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || 'emp_1');
+      setDefaultDeliveryBoyName(customerToEdit.defaultDeliveryBoyName || 'Ramesh Kumar');
+      setRelationshipManagerId(customerToEdit.relationshipManagerId || 'emp_2');
+      setRelationshipManagerName(customerToEdit.relationshipManagerName || 'Vikram Sharma');
       setOpeningEmptyQty(customerToEdit.openingEmptyCylinderQty || 0);
       setInternalNotes(customerToEdit.internalNotes || '');
       setPartyTags(Array.isArray(customerToEdit.tags) ? customerToEdit.tags.join(', ') : String(customerToEdit.tags || ''));
@@ -182,6 +190,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setSvVoucherNo(`SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       setOpeningBalance(0);
       setOpeningBalanceType(defaultType === 'Vendor' ? 'Cr' : 'Dr');
+      setDefaultDeliveryBoyId('emp_1');
+      setDefaultDeliveryBoyName('Ramesh Kumar');
+      setRelationshipManagerId('emp_2');
+      setRelationshipManagerName('Vikram Sharma');
     }
   }, [customerToEdit, defaultType, isOpen]);
 
@@ -235,7 +247,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       city: city.trim() || 'Indore',
       area: areaName.trim() || undefined,
       route: routeName.trim() || undefined,
-      defaultDeliveryBoyId: defaultDeliveryBoyId || undefined,
+      defaultDeliveryBoyId: defaultDeliveryBoyId || 'emp_1',
+      defaultDeliveryBoyName: defaultDeliveryBoyName || 'Ramesh Kumar',
+      relationshipManagerId: relationshipManagerId || 'emp_2',
+      relationshipManagerName: relationshipManagerName || 'Vikram Sharma',
       openingEmptyCylinderQty: Number(openingEmptyQty) || 0,
       internalNotes: internalNotes.trim() || undefined,
       state: stateName.trim() || 'Madhya Pradesh',
@@ -534,6 +549,70 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   <option value="individual">individual</option>
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* STAFF & FLEET ASSIGNMENTS CARD */}
+          <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-slate-800/80 border border-amber-200 dark:border-amber-900/60 space-y-3 shadow-sm my-2">
+            <div className="flex items-center justify-between border-b border-amber-100 dark:border-slate-700 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 font-extrabold text-sm">
+                  🚚
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
+                    Staff & Fleet Assignments (Delivery Boy & Relationship Manager)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                    Assign dedicated Delivery Boy for automatic dispatch and Relationship Manager for B2B key account handling
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                Staff Mapping
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
+                  Default Delivery Boy (Fleet Executive) *
+                </label>
+                <select
+                  value={defaultDeliveryBoyId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setDefaultDeliveryBoyId(id);
+                    if (id === 'emp_1') setDefaultDeliveryBoyName('Ramesh Kumar');
+                    else if (id === 'emp_3') setDefaultDeliveryBoyName('Suresh Patel');
+                    else setDefaultDeliveryBoyName('Ramesh Kumar');
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-extrabold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                >
+                  <option value="emp_1">🚚 Ramesh Kumar (+91 98260 11223) - Indore North</option>
+                  <option value="emp_3">🚚 Suresh Patel (+91 98260 77889) - Indore South / Bhopal</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
+                  Relationship Manager (RM) *
+                </label>
+                <select
+                  value={relationshipManagerId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setRelationshipManagerId(id);
+                    if (id === 'emp_2') setRelationshipManagerName('Vikram Sharma');
+                    else if (id === 'emp_4') setRelationshipManagerName('Priya Verma');
+                    else setRelationshipManagerName('Vikram Sharma');
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-extrabold text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="emp_2">👔 Vikram Sharma (+91 98260 44556) - Commercial Accounts Lead</option>
+                  <option value="emp_4">👔 Priya Verma (+91 98260 99000) - Key Accounts Executive</option>
+                </select>
               </div>
             </div>
           </div>

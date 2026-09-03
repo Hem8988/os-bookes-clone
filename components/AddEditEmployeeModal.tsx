@@ -21,6 +21,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
 
   const [name, setName] = useState('');
   const [active, setActive] = useState(true);
+  const [role, setRole] = useState<'Delivery Boy' | 'Relationship Manager' | 'Salesman' | 'Accountant' | 'Billing Executive' | 'Store Manager' | 'Admin'>('Delivery Boy');
   const [mobileNumber, setMobileNumber] = useState('');
   const [city, setCity] = useState('');
   const [joiningDate, setJoiningDate] = useState(getTodayDateString());
@@ -38,6 +39,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
     if (employeeToEdit) {
       setName(employeeToEdit.name || '');
       setActive(employeeToEdit.active !== undefined ? employeeToEdit.active : true);
+      setRole((employeeToEdit.role as any) || 'Delivery Boy');
       setMobileNumber(employeeToEdit.phone || '');
       setCity(employeeToEdit.city || '');
       setJoiningDate(employeeToEdit.joiningDate || today);
@@ -52,6 +54,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
     } else {
       setName('');
       setActive(true);
+      setRole('Delivery Boy');
       setMobileNumber('');
       setCity('');
       setJoiningDate(today);
@@ -78,7 +81,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
     const savedEmployee: EmployeeMaster = {
       id: employeeToEdit?.id || `emp-${Date.now()}`,
       name: name.trim(),
-      role: employeeToEdit?.role || 'Salesman',
+      role,
       phone: mobileNumber.trim(),
       email: employeeToEdit?.email || '',
       salary: Number(salary) || 0,
@@ -86,7 +89,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
       active,
       city: city.trim(),
       joiningDate,
-      designation: designation.trim(),
+      designation: designation.trim() || role,
       salaryType,
       paidHoliday: Number(paidHoliday) || 0,
       specialCommission: Number(specialCommission) || 0,
@@ -149,8 +152,8 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
             />
           </div>
 
-          {/* Row 2: Mobile Number & City */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Row 2: Mobile Number, City, Staff Role */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Mobile Number</label>
               <input
@@ -170,6 +173,22 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
                 onChange={(e) => setCity(e.target.value)}
                 className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
               />
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Staff Role / Assignment</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as any)}
+                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-extrabold focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+              >
+                <option value="Delivery Boy">🚚 Delivery Boy (Fleet Driver)</option>
+                <option value="Relationship Manager">👔 Relationship Manager (RM)</option>
+                <option value="Salesman">💼 Sales Executive</option>
+                <option value="Accountant">🧑‍💼 Accountant</option>
+                <option value="Billing Executive">📝 Billing Executive</option>
+                <option value="Store Manager">🏬 Store / Godown Manager</option>
+                <option value="Admin">👑 Administrator</option>
+              </select>
             </div>
           </div>
 

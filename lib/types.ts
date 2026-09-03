@@ -55,7 +55,7 @@ export interface BankMaster {
 export interface EmployeeMaster {
   id: string;
   name: string;
-  role: 'Admin' | 'Salesman' | 'Accountant' | 'Billing Executive' | 'Store Manager';
+  role: 'Admin' | 'Salesman' | 'Accountant' | 'Billing Executive' | 'Store Manager' | 'Delivery Boy' | 'Relationship Manager';
   phone: string;
   email: string;
   salary: number;
@@ -251,6 +251,9 @@ export interface Customer {
   area?: string;
   route?: string;
   defaultDeliveryBoyId?: string;
+  defaultDeliveryBoyName?: string;
+  relationshipManagerId?: string;
+  relationshipManagerName?: string;
   openingEmptyCylinderQty?: number;
   password?: string;
   portalAccessEnabled?: boolean;
@@ -262,6 +265,25 @@ export interface Customer {
   svVoucherNo?: string;
   openingBalance?: number;
   openingBalanceType?: 'Dr' | 'Cr';
+}
+
+export interface SubscriptionVoucher {
+  id: string;
+  svNumber: string;
+  customerId: string;
+  customerName: string;
+  relationshipManagerId?: string;
+  relationshipManagerName?: string;
+  defaultDeliveryBoyId?: string;
+  defaultDeliveryBoyName?: string;
+  voucherReference?: string;
+  svDate: string;
+  cylinderQty: number;
+  regulatorQty: number;
+  depositFeePerCylinder: number;
+  totalDepositAmount: number;
+  status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED' | 'TRANSFERRED';
+  notes?: string;
 }
 
 export interface PartyRate {

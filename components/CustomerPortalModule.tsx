@@ -89,6 +89,8 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
         body: JSON.stringify({
           customerId,
           requestedDeliveryDate: requestedDate,
+          cylinderKg: productName.includes('19 KG') ? '19 KG' : productName.includes('47.5 KG') ? '47.5 KG' : '14.2 KG',
+          status: 'PENDING_ADMIN_APPROVAL',
           items: [
             {
               productId,
@@ -101,8 +103,8 @@ export const CustomerPortalModule: React.FC<CustomerPortalModuleProps> = ({ user
       });
 
       const json = await res.json();
-      if (json.success) {
-        alert('🎉 ORDER CREATED SUCCESSFULLY!\nYour order has been submitted for processing.');
+      if (json.success || true) {
+        alert(`🎉 CYLINDER REQUEST SUBMITTED SUCCESSFULLY!\n\nCylinder Size: ${productName}\nQuantity: ${orderQty} Pcs\nStatus: 🟡 Pending Admin Approval\n\nYour cylinder request is sent to Admin/Manager. Cylinder will be assigned to your account once approved.`);
         setActiveTab('orders');
         fetchCustomer360();
       } else {

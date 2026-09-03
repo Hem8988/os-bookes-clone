@@ -95,6 +95,24 @@ export default function ApprovalQueueModule() {
         } else if (activeTab === 'ADMIN') {
           setItems([
             {
+              id: 'item_adm_cyl_kg_1',
+              requestType: 'CYLINDER_KG_APPROVAL',
+              referenceId: 'CYL-REQ-2026-0091',
+              requestedBy: 'Hotel Rajdhani (Customer Portal)',
+              notes: 'Customer requested 10 Pcs 19 KG Commercial LPG Cylinders. Pending Admin Approval.',
+              payload: {
+                customerName: 'Hotel Rajdhani (Connaught Place)',
+                customerId: 'cust_demo_1',
+                cylinderKg: '19 KG Commercial',
+                orderedQty: 10,
+                depositFeePerCylinder: 2000,
+                totalDepositAmount: 20000,
+                requestedDate: '2026-09-03',
+                status: 'PENDING_ADMIN_APPROVAL',
+              },
+              createdAt: '2026-09-03 08:30',
+            },
+            {
               id: 'item_adm_1',
               requestType: 'CREDIT_OVERRIDE',
               referenceId: 'CUST-0092',

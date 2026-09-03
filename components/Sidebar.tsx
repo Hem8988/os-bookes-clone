@@ -251,6 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           {openSection === 'masters' && (
             <div className="bg-slate-950/80 px-2 py-1 space-y-0.5 border-t border-slate-800/60 text-xs">
+              <button onClick={() => setActiveTab('staff')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'staff' ? 'bg-emerald-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Staff Management</button>
               <button onClick={() => setActiveTab('masters', 'customer')} className={`w-full text-left px-3 py-1.5 rounded hover:bg-slate-800`}>• Customers</button>
               <button onClick={() => setActiveTab('masters', 'product')} className={`w-full text-left px-3 py-1.5 rounded hover:bg-slate-800`}>• Products</button>
               <button onClick={() => setActiveTab('masters', 'company')} className={`w-full text-left px-3 py-1.5 rounded hover:bg-slate-800`}>• Areas</button>
@@ -275,6 +276,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           {openSection === 'admin' && (
             <div className="bg-slate-950/80 px-2 py-1 space-y-0.5 border-t border-slate-800/60 text-xs">
+              <button onClick={() => setActiveTab('staff')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'staff' ? 'bg-slate-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Staff Management</button>
               <button onClick={() => setActiveTab('admin')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'admin' ? 'bg-slate-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Users & Roles</button>
               <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-3 py-1.5 rounded ${activeTab === 'settings' ? 'bg-slate-700 text-white font-bold' : 'hover:bg-slate-800'}`}>• Settings</button>
               <button onClick={() => setActiveTab('admin')} className={`w-full text-left px-3 py-1.5 rounded hover:bg-slate-800`}>• Audit Logs</button>

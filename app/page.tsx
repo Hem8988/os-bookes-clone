@@ -5,6 +5,7 @@ import DeliveryBoyModule from '../components/DeliveryBoyModule';
 import DeliveryGpsTrackingModule from '../components/DeliveryGpsTrackingModule';
 import SaasTenantModule from '../components/SaasTenantModule';
 import WhatsAppInvoiceSenderModule from '../components/WhatsAppInvoiceSenderModule';
+import { StaffManagementModule } from '../components/StaffManagementModule';
 
 
 import React, { useState, useEffect } from 'react';
@@ -918,6 +919,8 @@ export default function Home() {
           {activeTab === 'gst-reports' && <GstReportsModule invoices={invoices} />}
 
           {activeTab === 'settings' && <SettingsModule />}
+
+          {activeTab === 'staff' && <StaffManagementModule />}
 
           {activeTab === 'admin' && (
             <AdminModule

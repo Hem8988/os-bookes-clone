@@ -410,6 +410,33 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({
             </div>
           </div>
 
+          {/* Card 5: Staff Assignments (Delivery Boy & Relationship Manager) */}
+          <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400 font-black text-xs border border-amber-500/30">
+                🚚 Staff Mapping
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase">Default Delivery Boy</div>
+                  <div className="font-extrabold text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    <span>🚚 {customer.defaultDeliveryBoyName || 'Ramesh Kumar'} (+91 98260 11223)</span>
+                  </div>
+                </div>
+                <div className="h-6 w-px bg-amber-200 dark:bg-amber-800 hidden sm:block" />
+                <div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase">Relationship Manager</div>
+                  <div className="font-extrabold text-xs text-indigo-800 dark:text-indigo-300 flex items-center gap-1">
+                    <span>👔 {customer.relationshipManagerName || 'Vikram Sharma'} (+91 98260 44556)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+              Assigned Staff
+            </span>
+          </div>
+
           {/* Module Navigation Tabs */}
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2 flex-wrap gap-2">
             

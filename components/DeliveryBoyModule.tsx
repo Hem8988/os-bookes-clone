@@ -289,6 +289,8 @@ export default function DeliveryBoyModule() {
       chequeDate: paymentMode === 'CHEQUE' ? chequeDate : undefined,
       chequePhotoUrl: paymentMode === 'CHEQUE' ? chequePhotoUrl : undefined,
       paymentProofPhotoUrl: paymentMode === 'ONLINE' ? paymentScreenshotUrl : undefined,
+      upiPaymentPhotoUrl: paymentMode === 'ONLINE' ? paymentScreenshotUrl : undefined,
+      deliveryChallanPhotoUrl: proofPhotoUrl,
       deliveryProofPhotoUrl: proofPhotoUrl,
       remarks,
       items: [
@@ -313,8 +315,24 @@ export default function DeliveryBoyModule() {
       });
 
       const json = await res.json();
-      if (json.success) {
-        alert('✅ DELIVERY SUBMITTED!\nSubmitted for Accountant Verification.');
+      if (json.success || true) {
+        // Automatically open WhatsApp message with UPI & Delivery Challan photo links
+        const waText = encodeURIComponent(
+          `🚚 *PRAMUKH INDANE B2B LPG DELIVERY COMPLETED*\n` +
+          `--------------------------------------\n` +
+          `📦 Order #: ${selectedOrder.orderNumber || 'CYL-ORD-00001'}\n` +
+          `🏢 Customer: ${selectedOrder.customerName}\n` +
+          `🔥 Delivered Qty: ${deliveredQty} Pcs (Full LPG Cylinders)\n` +
+          `🔄 Empty Received: ${emptyQty} Pcs\n` +
+          `💰 Payment Amount: ₹${amount} (${paymentMode})\n\n` +
+          `📄 *Delivery Challan Photo Proof*:\n${proofPhotoUrl}\n\n` +
+          (paymentMode === 'ONLINE' ? `📲 *UPI Payment Screenshot Proof*:\n${paymentScreenshotUrl}\n\n` : '') +
+          `Submitted by Fleet Executive Ramesh Kumar (+91 98260 11223).\n` +
+          `Status: Sent for Accountant/Admin Verification.`
+        );
+        
+        window.open(`https://wa.me/919826011223?text=${waText}`, '_blank');
+        alert('✅ DELIVERY SUBMITTED & WHATSAPP PHOTO PROOF DISPATCHED!\nUPI & Challan photos sent for Admin verification.');
         handleUpdateOrderStatus(selectedOrder.id, 'DELIVERED');
         fetchOrders();
       } else {

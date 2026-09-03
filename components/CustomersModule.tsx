@@ -424,9 +424,15 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                               </div>
                             )}
 
-                            <div className="flex items-center gap-1.5 mt-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
                                 ₹ Security Deposit: ₹{(c.totalDepositAmount || c.depositFeePerCylinder || 2000).toLocaleString('en-IN')} ({c.depositStatus || 'Paid'})
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                🚚 {c.defaultDeliveryBoyName || 'Ramesh Kumar'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                👔 RM: {c.relationshipManagerName || 'Vikram Sharma'}
                               </span>
                             </div>
                           </div>

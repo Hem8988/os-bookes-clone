@@ -83,12 +83,39 @@ export default function DeliveryBoyModule() {
   const [isDayCloseModalOpen, setIsDayCloseModalOpen] = useState(false);
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
 
-  // Spot Order Creation State
+  // Spot Order Creation State (Multi-Item)
   const [newOrderCustomer, setNewOrderCustomer] = useState('cust_demo_1');
   const [newOrderCustomerName, setNewOrderCustomerName] = useState('Hotel Rajdhani (Connaught Place)');
-  const [newOrderQty, setNewOrderQty] = useState('5');
-  const [newOrderProduct, setNewOrderProduct] = useState('19 KG Commercial LPG Cylinder');
   const [newOrderSubmitting, setNewOrderSubmitting] = useState(false);
+
+  const CYLINDER_PRODUCTS = [
+    { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder', price: 1850 },
+    { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder', price: 4500 },
+    { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder', price: 853 },
+    { id: 'prod_5kg', name: '5 KG Commercial LPG Cylinder', price: 490 },
+    { id: 'prod_19vot', name: '19 KG VOT Commercial Cylinder', price: 1950 },
+  ];
+
+  const [orderLines, setOrderLines] = useState([
+    { productId: 'prod_19kg', qty: '5' },
+  ]);
+
+  const addOrderLine = () => {
+    setOrderLines(prev => [...prev, { productId: 'prod_19kg', qty: '1' }]);
+  };
+
+  const removeOrderLine = (idx: number) => {
+    setOrderLines(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateOrderLine = (idx: number, field: 'productId' | 'qty', value: string) => {
+    setOrderLines(prev => prev.map((line, i) => i === idx ? { ...line, [field]: value } : line));
+  };
+
+  const orderTotal = orderLines.reduce((sum, line) => {
+    const prod = CYLINDER_PRODUCTS.find(p => p.id === line.productId);
+    return sum + (prod?.price || 0) * (Number(line.qty) || 0);
+  }, 0);
 
   // Offline Mode & Sync State
   const [isOnline, setIsOnline] = useState(true);
@@ -419,8 +446,19 @@ export default function DeliveryBoyModule() {
 
   const handleCreateOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (orderLines.length === 0) { alert('Please add at least one cylinder product.'); return; }
     setNewOrderSubmitting(true);
     try {
+      const itemsPayload = orderLines.map(line => {
+        const prod = CYLINDER_PRODUCTS.find(p => p.id === line.productId);
+        return {
+          productId: line.productId,
+          productName: prod?.name || line.productId,
+          orderedQty: Number(line.qty) || 1,
+          unitPrice: prod?.price || 1850,
+        };
+      });
+
       const res = await fetch('/api/cylinder/orders', {
         method: 'POST',
         headers: {
@@ -432,14 +470,7 @@ export default function DeliveryBoyModule() {
           customerName: newOrderCustomerName,
           requestedDeliveryDate: new Date().toISOString().split('T')[0],
           source: 'DELIVERY_BOY',
-          items: [
-            {
-              productId: 'prod_19kg',
-              productName: newOrderProduct,
-              orderedQty: Number(newOrderQty) || 1,
-              unitPrice: 1850,
-            },
-          ],
+          items: itemsPayload,
         }),
       });
 
@@ -451,14 +482,15 @@ export default function DeliveryBoyModule() {
           customerName: newOrderCustomerName,
           deliveryAddress: 'Customer Site Delivery Location',
           status: 'APPROVED',
-          items: [{ productId: 'prod_19kg', productName: newOrderProduct, orderedQty: Number(newOrderQty) || 1, unitPrice: 1850 }],
+          items: itemsPayload,
         };
 
         setOrders(prev => [createdOrder, ...prev.filter(o => o.id !== createdOrder.id)]);
         setSelectedOrder(createdOrder);
 
-        alert(`🎉 Spot Order Created Successfully!\nOrder Number: ${createdOrder.orderNumber}\nAssigned directly to your active delivery list.`);
+        alert(`🎉 Spot Order Created Successfully!\nOrder Number: ${createdOrder.orderNumber}\n${itemsPayload.length} item(s) assigned to your active delivery list.`);
         setIsCreateOrderModalOpen(false);
+        setOrderLines([{ productId: 'prod_19kg', qty: '5' }]);
       } else {
         alert('Error: ' + json.error);
       }
@@ -971,21 +1003,22 @@ export default function DeliveryBoyModule() {
         </div>
       )}
 
-      {/* CREATE SPOT ORDER MODAL */}
+      {/* CREATE SPOT ORDER MODAL - MULTI-ITEM */}
       {isCreateOrderModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
             <div className="border-b pb-2 flex justify-between items-start">
               <div>
                 <h3 className="text-base font-black text-indigo-600 flex items-center gap-2">
                   <Package className="w-5 h-5" /> Create Spot Cylinder Order
                 </h3>
-                <p className="text-xs text-slate-500">Place an order on-the-spot for customer delivery</p>
+                <p className="text-xs text-slate-500">Place an order on-the-spot — add multiple cylinder types</p>
               </div>
               <button onClick={() => setIsCreateOrderModalOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
 
-            <form onSubmit={handleCreateOrderSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleCreateOrderSubmit} className="space-y-4 text-xs">
+              {/* Customer Select */}
               <div>
                 <label className="block font-bold uppercase text-slate-400 mb-1">Select Customer</label>
                 <select
@@ -1000,40 +1033,81 @@ export default function DeliveryBoyModule() {
                   <option value="cust_demo_1">Hotel Rajdhani (Connaught Place)</option>
                   <option value="cust_demo_2">Sagar Ratna Restaurant (South Ext)</option>
                   <option value="cust_demo_3">Haldiram Foods Pvt Ltd (CP)</option>
-                  <option value="cust_demo_4">Kwality Restaurant & Caterers</option>
+                  <option value="cust_demo_4">Kwality Restaurant &amp; Caterers</option>
                 </select>
               </div>
 
+              {/* Multi-Item Lines */}
               <div>
-                <label className="block font-bold uppercase text-slate-400 mb-1">Cylinder Product</label>
-                <select
-                  value={newOrderProduct}
-                  onChange={(e) => setNewOrderProduct(e.target.value)}
-                  className="w-full px-3 py-2.5 border rounded-xl font-bold dark:bg-slate-900"
-                >
-                  <option value="19 KG Commercial LPG Cylinder">19 KG Commercial LPG Cylinder (₹1,850)</option>
-                  <option value="47.5 KG Industrial LPG Cylinder">47.5 KG Industrial LPG Cylinder (₹4,250)</option>
-                  <option value="14.2 KG Domestic LPG Cylinder">14.2 KG Domestic LPG Cylinder (₹853)</option>
-                </select>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="font-bold uppercase text-slate-400">Cylinder Items</label>
+                  <button
+                    type="button"
+                    onClick={addOrderLine}
+                    className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[11px] flex items-center gap-1 cursor-pointer transition"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {orderLines.map((line, idx) => {
+                    const prod = CYLINDER_PRODUCTS.find(p => p.id === line.productId);
+                    const lineTotal = (prod?.price || 0) * (Number(line.qty) || 0);
+                    return (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-800">
+                        {/* Product Select */}
+                        <select
+                          value={line.productId}
+                          onChange={(e) => updateOrderLine(idx, 'productId', e.target.value)}
+                          className="flex-1 px-2 py-1.5 border rounded-lg font-bold dark:bg-slate-900 text-[11px]"
+                        >
+                          {CYLINDER_PRODUCTS.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} (₹{p.price.toLocaleString('en-IN')})</option>
+                          ))}
+                        </select>
+
+                        {/* Qty */}
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={line.qty}
+                          onChange={(e) => updateOrderLine(idx, 'qty', e.target.value)}
+                          className="w-14 px-2 py-1.5 border rounded-lg font-black text-indigo-700 dark:text-indigo-300 text-center dark:bg-slate-900"
+                          required
+                        />
+
+                        {/* Line Total */}
+                        <span className="text-[11px] font-extrabold text-emerald-700 dark:text-emerald-400 min-w-[52px] text-right">
+                          ₹{lineTotal.toLocaleString('en-IN')}
+                        </span>
+
+                        {/* Remove Row */}
+                        {orderLines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeOrderLine(idx)}
+                            className="text-rose-500 hover:text-rose-700 font-black text-base cursor-pointer leading-none"
+                            title="Remove this item"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold uppercase text-slate-400 mb-1">Order Quantity (Full Cylinders)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={newOrderQty}
-                  onChange={(e) => setNewOrderQty(e.target.value)}
-                  className="w-full px-3 py-2.5 border rounded-xl font-bold text-indigo-600 text-base dark:bg-slate-900"
-                  required
-                />
-              </div>
-
+              {/* Order Total Summary */}
               <div className="bg-indigo-50 dark:bg-indigo-950/30 p-3 rounded-2xl text-xs space-y-1 border border-indigo-200 dark:border-indigo-800">
                 <div className="flex justify-between font-bold">
+                  <span>{orderLines.length} Item Type(s) | {orderLines.reduce((s, l) => s + (Number(l.qty) || 0), 0)} Total Cylinders</span>
+                </div>
+                <div className="flex justify-between font-extrabold text-sm">
                   <span>Estimated Total Amount:</span>
-                  <span className="text-indigo-600 font-extrabold">₹{(Number(newOrderQty) * 1850).toLocaleString('en-IN')}</span>
+                  <span className="text-indigo-600 font-extrabold">₹{orderTotal.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="text-slate-500 text-[11px]">Order will be assigned to your active delivery list immediately.</div>
               </div>

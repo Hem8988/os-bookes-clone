@@ -116,13 +116,13 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-emerald-500" />
+          <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-emerald-600" />
             Financial Account & Branch Management
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500">
             Real-time Debit/Credit Statements, Bank Books, Payment Verification & Day Closing Locks
           </p>
         </div>
@@ -137,7 +137,7 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
       </div>
 
       {/* Sub-tabs Navigation */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800 scrollbar-thin">
+      <div className="flex items-center gap-1 overflow-x-auto pb-2 border-b border-slate-200 scrollbar-thin">
         {accountSubTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
@@ -151,13 +151,13 @@ export const AccountHubModule: React.FC<AccountHubModuleProps> = ({
               className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 isActive
                   ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
               }`}
             >
               <Icon className="h-4 w-4" />
               <span>{tab.label}</span>
               {tab.shortcut && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-slate-950/80 text-emerald-300 font-mono">
+                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-900 font-mono">
                   {tab.shortcut}
                 </span>
               )}

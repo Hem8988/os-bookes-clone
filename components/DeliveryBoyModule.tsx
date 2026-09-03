@@ -493,7 +493,7 @@ export default function DeliveryBoyModule() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto min-h-screen bg-slate-100 dark:bg-slate-900 p-3 md:p-6 space-y-6 text-slate-800 dark:text-slate-100 pb-20 font-sans">
+    <div className="max-w-7xl mx-auto min-h-screen bg-slate-100 p-3 md:p-6 space-y-6 text-slate-900 pb-20 font-sans">
       
       {/* Pro App Top Header Bar */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4 md:p-6 rounded-3xl shadow-2xl border border-slate-700/60 space-y-4">

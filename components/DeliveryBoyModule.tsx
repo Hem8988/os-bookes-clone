@@ -75,17 +75,40 @@ export default function DeliveryBoyModule({
 
   // Payment Details
   const [transactionId, setTransactionId] = useState('');
-  const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState('https://placehold.co/400x300?text=UPI+Payment+Screenshot');
+  const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState<string | null>(null);
   const [chequeNumber, setChequeNumber] = useState('');
   const [chequeBank, setChequeBank] = useState('HDFC Bank');
   const [chequeDate, setChequeDate] = useState(new Date().toISOString().split('T')[0]);
   const [chequePhotoUrl, setChequePhotoUrl] = useState('https://placehold.co/400x300?text=Cheque+Photo');
 
-  // Delivery Proof & Remarks
-  const [proofPhotoUrl, setProofPhotoUrl] = useState('https://placehold.co/400x300?text=Mandatory+Delivery+Proof');
+  // Mandatory Delivery Proof Photos & Remarks
+  const [billPhotoUrl, setBillPhotoUrl] = useState<string | null>(null);
   const [remarks, setRemarks] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
+
+  // File Upload Handlers for Camera / Gallery
+  const handleBillPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBillPhotoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePaymentScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPaymentScreenshotUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Cash Wallet State
   const [submittedCash, setSubmittedCash] = useState(0);
@@ -354,6 +377,18 @@ export default function DeliveryBoyModule({
   const handleCompleteDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
+
+    // MANDATORY VALIDATION: Both Signed Bill Photo & Payment Screenshot MUST be uploaded!
+    if (!billPhotoUrl) {
+      alert('⚠️ MANDATORY: Please upload / capture the Signed Bill or Delivery Invoice photo before completing delivery!');
+      return;
+    }
+
+    if (!paymentScreenshotUrl) {
+      alert('⚠️ MANDATORY: Please upload / capture the Payment Screenshot / Receipt photo (UPI/Cash/Cheque) before completing delivery!');
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = {
@@ -368,10 +403,10 @@ export default function DeliveryBoyModule({
       chequeBank: paymentMode === 'CHEQUE' ? chequeBank : undefined,
       chequeDate: paymentMode === 'CHEQUE' ? chequeDate : undefined,
       chequePhotoUrl: paymentMode === 'CHEQUE' ? chequePhotoUrl : undefined,
-      paymentProofPhotoUrl: paymentMode === 'ONLINE' ? paymentScreenshotUrl : undefined,
-      upiPaymentPhotoUrl: paymentMode === 'ONLINE' ? paymentScreenshotUrl : undefined,
-      deliveryChallanPhotoUrl: proofPhotoUrl,
-      deliveryProofPhotoUrl: proofPhotoUrl,
+      paymentProofPhotoUrl: paymentScreenshotUrl,
+      upiPaymentPhotoUrl: paymentScreenshotUrl,
+      deliveryChallanPhotoUrl: billPhotoUrl,
+      deliveryProofPhotoUrl: billPhotoUrl,
       remarks,
       items: [
         {
@@ -396,7 +431,7 @@ export default function DeliveryBoyModule({
 
       const json = await res.json();
       if (json.success || true) {
-        // Automatically open WhatsApp message with UPI & Delivery Challan photo links
+        // Automatically open WhatsApp message with UPI & Delivery Challan photo confirmation
         const waText = encodeURIComponent(
           `🚚 *PRAMUKH INDANE B2B LPG DELIVERY COMPLETED*\n` +
           `--------------------------------------\n` +
@@ -405,15 +440,17 @@ export default function DeliveryBoyModule({
           `🔥 Delivered Qty: ${deliveredQty} Pcs (Full LPG Cylinders)\n` +
           `🔄 Empty Received: ${emptyQty} Pcs\n` +
           `💰 Payment Amount: ₹${amount} (${paymentMode})\n\n` +
-          `📄 *Delivery Challan Photo Proof*:\n${proofPhotoUrl}\n\n` +
-          (paymentMode === 'ONLINE' ? `📲 *UPI Payment Screenshot Proof*:\n${paymentScreenshotUrl}\n\n` : '') +
+          `📄 *Signed Bill Photo*: [Attached ✅]\n` +
+          `📲 *Payment Screenshot*: [Attached ✅]\n\n` +
           `Submitted by Fleet Executive Ramesh Kumar (+91 98260 11223).\n` +
           `Status: Sent for Accountant/Admin Verification.`
         );
         
         window.open(`https://wa.me/919826011223?text=${waText}`, '_blank');
-        alert('✅ DELIVERY SUBMITTED & WHATSAPP PHOTO PROOF DISPATCHED!\nUPI & Challan photos sent for Admin verification.');
+        alert('✅ DELIVERY SUBMITTED SUCCESSFULLY!\nSigned Bill Photo & Payment Screenshot verified and recorded for Admin.');
         handleUpdateOrderStatus(selectedOrder.id, 'DELIVERED');
+        setBillPhotoUrl(null);
+        setPaymentScreenshotUrl(null);
         fetchOrders();
       } else {
         alert('Error: ' + json.error);
@@ -932,7 +969,11 @@ export default function DeliveryBoyModule({
               {filteredOrders.map(order => (
                 <button
                   key={order.id}
-                  onClick={() => setSelectedOrder(order)}
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    setBillPhotoUrl(order.deliveryProofPhotoUrl || order.deliveryChallanPhotoUrl || null);
+                    setPaymentScreenshotUrl(order.paymentProofPhotoUrl || order.upiPaymentPhotoUrl || null);
+                  }}
                   className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between ${selectedOrder?.id === order.id ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700/60 hover:border-slate-300'}`}
                 >
                   <div className="space-y-1">
@@ -1063,24 +1104,146 @@ export default function DeliveryBoyModule({
                 </div>
               )}
 
-              {/* Proof Photo URL */}
-              <div>
-                <label className="block font-black uppercase text-slate-400 mb-1.5">Mandatory Delivery Proof Photo URL *</label>
-                <input
-                  type="text"
-                  value={proofPhotoUrl}
-                  onChange={e => setProofPhotoUrl(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-xl text-xs dark:bg-slate-900 font-mono"
-                  required
-                />
+              {/* MANDATORY VERIFICATION PHOTOS SECTION */}
+              <div className="space-y-3 border-t pt-3">
+                <div className="flex items-center justify-between">
+                  <label className="block font-black uppercase text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-rose-500" />
+                    Mandatory Delivery Verification Proofs (Both Photos Required *)
+                  </label>
+                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300">
+                    2 Photos Required
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* Photo 1: Signed Bill / Invoice Photo */}
+                  <div className={`p-3.5 rounded-2xl border-2 transition ${
+                    billPhotoUrl
+                      ? 'border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20'
+                      : 'border-dashed border-amber-300 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/10'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1">
+                        📄 1. Signed Bill / Invoice *
+                      </span>
+                      {billPhotoUrl ? (
+                        <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">
+                          ✓ Attached
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+
+                    {billPhotoUrl ? (
+                      <div className="space-y-2">
+                        <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm max-h-40 bg-black flex items-center justify-center">
+                          <img src={billPhotoUrl} alt="Bill Proof" className="max-h-40 object-contain w-full" />
+                          <button
+                            type="button"
+                            onClick={() => setBillPhotoUrl(null)}
+                            className="absolute top-1.5 right-1.5 p-1 rounded-full bg-slate-900/80 text-white hover:bg-rose-600 transition cursor-pointer"
+                            title="Remove photo"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-emerald-600 font-bold text-center">✓ Bill photo verified</p>
+                      </div>
+                    ) : (
+                      <div className="text-center py-3 space-y-2">
+                        <Camera className="w-7 h-7 mx-auto text-amber-500" />
+                        <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Take Signed Bill / Invoice Photo</p>
+                        <label className="inline-block px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-extrabold text-xs cursor-pointer shadow transition">
+                          📸 Capture / Select Bill
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handleBillPhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Photo 2: Payment Screenshot / Receipt Photo */}
+                  <div className={`p-3.5 rounded-2xl border-2 transition ${
+                    paymentScreenshotUrl
+                      ? 'border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20'
+                      : 'border-dashed border-sky-300 dark:border-sky-800 bg-sky-50/30 dark:bg-sky-950/10'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1">
+                        💳 2. Payment Screenshot *
+                      </span>
+                      {paymentScreenshotUrl ? (
+                        <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">
+                          ✓ Attached
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+
+                    {paymentScreenshotUrl ? (
+                      <div className="space-y-2">
+                        <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm max-h-40 bg-black flex items-center justify-center">
+                          <img src={paymentScreenshotUrl} alt="Payment Proof" className="max-h-40 object-contain w-full" />
+                          <button
+                            type="button"
+                            onClick={() => setPaymentScreenshotUrl(null)}
+                            className="absolute top-1.5 right-1.5 p-1 rounded-full bg-slate-900/80 text-white hover:bg-rose-600 transition cursor-pointer"
+                            title="Remove screenshot"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-emerald-600 font-bold text-center">✓ Payment screenshot verified</p>
+                      </div>
+                    ) : (
+                      <div className="text-center py-3 space-y-2">
+                        <DollarSign className="w-7 h-7 mx-auto text-sky-500" />
+                        <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">GPay / PhonePe / Cash / Cheque</p>
+                        <label className="inline-block px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-extrabold text-xs cursor-pointer shadow transition">
+                          📸 Capture / Select Payment
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePaymentScreenshotUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {(!billPhotoUrl || !paymentScreenshotUrl) && selectedOrder.status !== 'DELIVERED' && (
+                  <div className="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>Both the <strong>Signed Bill Photo</strong> and <strong>Payment Screenshot</strong> are mandatory to complete delivery.</span>
+                  </div>
+                )}
               </div>
 
               <button
                 type="submit"
                 disabled={submitting || selectedOrder.status === 'DELIVERED'}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-xl hover:shadow-emerald-600/30 transition flex items-center justify-center gap-2 text-base disabled:opacity-50"
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-xl hover:shadow-emerald-600/30 transition flex items-center justify-center gap-2 text-base disabled:opacity-50 cursor-pointer"
               >
-                <CheckCircle className="w-5 h-5" /> {submitting ? 'Submitting Delivery...' : selectedOrder.status === 'DELIVERED' ? 'Already Delivered' : 'Complete Delivery Execution'}
+                <CheckCircle className="w-5 h-5" />
+                {submitting
+                  ? 'Submitting Delivery...'
+                  : selectedOrder.status === 'DELIVERED'
+                  ? 'Already Delivered'
+                  : 'Complete Delivery Execution'}
               </button>
             </form>
           ) : (

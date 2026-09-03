@@ -769,8 +769,13 @@ export default function DeliveryBoyModule() {
             <form onSubmit={handleCompleteDelivery} className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-md space-y-5">
               <div className="border-b pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <div className="text-xs font-bold uppercase text-indigo-600 tracking-wider">Delivery Execution Console</div>
-                  <h2 className="font-black text-lg md:text-xl text-slate-900 dark:text-white">{selectedOrder.customerName}</h2>
+                  <div className="text-xs font-bold uppercase text-indigo-600 tracking-wider flex items-center gap-2 flex-wrap">
+                    <span>Delivery Execution Console</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-mono font-black text-[10px] border border-purple-300 dark:border-purple-800">
+                      🔥 {selectedOrder.items?.[0]?.productName || '19 KG Commercial LPG Cylinder'}
+                    </span>
+                  </div>
+                  <h2 className="font-black text-lg md:text-xl text-slate-900 dark:text-white mt-1">{selectedOrder.customerName}</h2>
                   <p className="text-xs text-slate-500 font-mono">Order #{selectedOrder.orderNumber} • Site: {selectedOrder.deliveryAddress}</p>
                 </div>
                 <span className={`px-3 py-1 text-xs font-black rounded-full uppercase self-start sm:self-center ${selectedOrder.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>

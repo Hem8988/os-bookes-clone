@@ -369,7 +369,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
           taxableAmount: parseFloat(totals.taxable.toFixed(2)),
           totalCgst: parseFloat(totals.cgst.toFixed(2)),
           totalSgst: parseFloat(totals.sgst.toFixed(2)),
-          discountPercent,
+          discountPercent: discountType === 'percent' ? discountValue : 0,
           discountAmount: parseFloat(totals.discountAmount.toFixed(2)),
           remark,
         });

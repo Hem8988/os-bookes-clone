@@ -420,7 +420,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
             let badgeColor = 'bg-sky-100 text-sky-800';
             let pulse = '';
             
-            if (so.status === 'Converted to Bill' || so.status === 'Delivered') {
+            if ((so.status as string) === 'Converted to Bill' || (so.status as string) === 'Delivered') {
               badgeColor = 'bg-emerald-100 text-emerald-800';
               rowBgClass = 'bg-emerald-50/50 dark:bg-emerald-900/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30';
             } else if (so.date) {

@@ -118,7 +118,8 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentMode, setPaymentMode] = useState<'Cash' | 'Credit'>('Credit');
   const [remark, setRemark] = useState('');
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountValue, setDiscountValue] = useState(0);
   const [items, setItems] = useState<PurchaseOrderItem[]>([]);
   const [entry, setEntry] = useState(emptyEntry(products));
   const [lastSavedTotal, setLastSavedTotal] = useState(0);
@@ -131,7 +132,8 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       setDate(soToEdit.date);
       setPaymentMode(soToEdit.paymentMode || 'Credit');
       setRemark(soToEdit.remark || '');
-      setDiscountPercent(soToEdit.discountPercent || 0);
+      setDiscountType(soToEdit.discountAmount && !soToEdit.discountPercent ? 'fixed' : 'percent');
+      setDiscountValue(soToEdit.discountAmount && !soToEdit.discountPercent ? soToEdit.discountAmount : (soToEdit.discountPercent || 0));
       setItems(soToEdit.items || []);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,28 +203,44 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
 
   const totals = useMemo(() => {
     let totalQty = 0;
-    let taxable = 0;
-    let gstTotal = 0;
+    let baseTaxable = 0;
     let disOnListPrice = 0;
-    let itemsAmount = 0;
+
+    // First pass to get total baseTaxable
+    items.forEach((item) => {
+      const priceExclTax = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
+      baseTaxable += priceExclTax * item.quantity;
+      disOnListPrice += Math.max(0, item.mrp - priceExclTax) * item.quantity;
+    });
+
+    const discountAmount = discountType === 'fixed' 
+      ? discountValue 
+      : (baseTaxable * discountValue) / 100;
+    
+    // Safety check to avoid NaN
+    const discountFactor = baseTaxable > 0 ? (1 - discountAmount / baseTaxable) : 1;
+
+    let gstTotal = 0;
+    let discountedTaxable = 0;
 
     items.forEach((item) => {
-      const { taxable: rowTaxable, gstAmount } = rowCalc(item);
-      totalQty += item.quantity;
-      taxable += rowTaxable;
-      gstTotal += gstAmount;
-      itemsAmount += item.amount;
       const priceExclTax = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
-      disOnListPrice += Math.max(0, item.mrp - priceExclTax) * item.quantity;
+      const rowTaxable = priceExclTax * item.quantity;
+      
+      const discountedRowTaxable = rowTaxable * discountFactor;
+      const rowGst = (discountedRowTaxable * item.gstRate) / 100;
+
+      totalQty += item.quantity;
+      discountedTaxable += discountedRowTaxable;
+      gstTotal += rowGst;
     });
 
     const cgst = gstTotal / 2;
     const sgst = gstTotal / 2;
-    const discountAmount = (taxable * discountPercent) / 100;
-    const grandTotal = itemsAmount - discountAmount;
+    const grandTotal = discountedTaxable + gstTotal;
 
-    return { totalQty, taxable, cgst, sgst, disOnListPrice, discountAmount, grandTotal };
-  }, [items, discountPercent]);
+    return { totalQty, taxable: baseTaxable, discountedTaxable, cgst, sgst, disOnListPrice, discountAmount, grandTotal };
+  }, [items, discountType, discountValue]);
 
   const handleSearchInvoice = () => {
     const match = saleOrders.find(
@@ -237,7 +255,8 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
     setDate(match.date);
     setPaymentMode(match.paymentMode || 'Credit');
     setRemark(match.remark || '');
-    setDiscountPercent(match.discountPercent || 0);
+    setDiscountType(match.discountAmount && !match.discountPercent ? 'fixed' : 'percent');
+    setDiscountValue(match.discountAmount && !match.discountPercent ? match.discountAmount : (match.discountPercent || 0));
     setItems(match.items || []);
     setLastSavedTotal(match.totalAmount);
   };
@@ -248,7 +267,8 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
     setDate(new Date().toISOString().split('T')[0]);
     setPaymentMode('Credit');
     setRemark('');
-    setDiscountPercent(0);
+    setDiscountType('percent');
+    setDiscountValue(0);
     setItems([]);
     setEntry(emptyEntry(products));
   };
@@ -277,8 +297,8 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       taxableAmount: parseFloat(totals.taxable.toFixed(2)),
       totalCgst: parseFloat(totals.cgst.toFixed(2)),
       totalSgst: parseFloat(totals.sgst.toFixed(2)),
-      discountPercent,
-      discountAmount: parseFloat(totals.discountAmount.toFixed(2)),
+      discountPercent: discountType === 'percent' ? discountValue : 0,
+      discountAmount: discountType === 'fixed' ? discountValue : parseFloat(totals.discountAmount.toFixed(2)),
       remark,
       createdBy: soToEdit?.createdBy || 'Shiv Kumar (Admin)',
       payments: soToEdit?.payments,
@@ -589,74 +609,74 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
 
       {/* Line Item Entry Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[900px]">
+        <table className="w-full text-left text-[10px] text-slate-700 dark:text-slate-300 min-w-[900px]">
           <thead className="bg-slate-900 text-white font-bold">
             <tr>
-              <th className="px-2 py-2.5 w-14 text-center">S.NO.#</th>
-              <th className="px-2 py-2.5">Product Name</th>
-              <th className="px-2 py-2.5 w-20">GST %</th>
-              <th className="px-2 py-2.5 w-24">HSN/SAC</th>
-              <th className="px-2 py-2.5 w-24">Quantity</th>
-              <th className="px-2 py-2.5 w-24">MRP</th>
-              <th className="px-2 py-2.5 w-24">List Price</th>
-              <th className="px-2 py-2.5 w-28">
+              <th className="px-2 py-1 w-14 text-center">S.NO.#</th>
+              <th className="px-2 py-1">Product Name</th>
+              <th className="px-2 py-1 w-20">GST %</th>
+              <th className="px-2 py-1 w-24">HSN/SAC</th>
+              <th className="px-2 py-1 w-24">Quantity</th>
+              <th className="px-2 py-1 w-24">MRP</th>
+              <th className="px-2 py-1 w-24">List Price</th>
+              <th className="px-2 py-1 w-28">
                 Price
                 <span className="block text-[9px] font-normal text-slate-300">(TAX EXCLUDED)</span>
               </th>
-              <th className="px-2 py-2.5 w-28">Amount</th>
-              <th className="px-2 py-2.5 w-20 text-center">Action</th>
+              <th className="px-2 py-1 w-28">Amount</th>
+              <th className="px-2 py-1 w-20 text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             <tr className="bg-sky-50/60 dark:bg-slate-800/40">
-              <td className="px-2 py-2 text-center font-bold text-slate-500">{items.length + 1}</td>
-              <td className="px-2 py-2 relative">
+              <td className="px-2 py-1 text-center font-bold text-slate-500">{items.length + 1}</td>
+              <td className="px-2 py-1 relative">
                 <ProductSearchDropdown
                   products={products}
                   selectedProductId={entry.productId}
                   onSelect={handleProductSelect}
                 />
               </td>
-              <td className="px-2 py-2">
+              <td className="px-2 py-1">
                 <select
                   value={entry.gstRate}
                   onChange={(e) => setEntry({ ...entry, gstRate: Number(e.target.value) })}
-                  className="w-full py-1.5 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-center"
+                  className="w-full py-1 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[10px] font-bold text-center"
                 >
                   {GST_SLABS.map((rate) => (
                     <option key={rate} value={rate}>@{rate} %</option>
                   ))}
                 </select>
               </td>
-              <td className="px-2 py-2 font-mono text-slate-500 text-center">{entryProduct?.hsnCode || '-'}</td>
-              <td className="px-2 py-2">
+              <td className="px-2 py-1 font-mono text-slate-500 text-center">{entryProduct?.hsnCode || '-'}</td>
+              <td className="px-2 py-1">
                 <input
                   type="number"
                   min={1}
                   value={entry.quantity}
                   onChange={(e) => setEntry({ ...entry, quantity: parseInt(e.target.value) || 1 })}
-                  className="w-full py-1.5 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-center"
+                  className="w-full py-1 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[10px] font-bold text-center"
                 />
               </td>
-              <td className="px-2 py-2">
+              <td className="px-2 py-1">
                 <input
                   type="number"
                   min={0}
                   value={entry.mrp}
                   onChange={(e) => setEntry({ ...entry, mrp: parseFloat(e.target.value) || 0 })}
-                  className="w-full py-1.5 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-right"
+                  className="w-full py-1 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[10px] text-right"
                 />
               </td>
-              <td className="px-2 py-2">
+              <td className="px-2 py-1">
                 <input
                   type="number"
                   min={0}
                   value={entry.listPrice}
                   onChange={(e) => setEntry({ ...entry, listPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full py-1.5 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-right"
+                  className="w-full py-1 px-2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[10px] text-right"
                 />
               </td>
-              <td className="px-2 py-2">
+              <td className="px-2 py-1">
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
@@ -676,34 +696,34 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                   <span className="font-mono font-bold text-right flex-1">₹{entryPriceExclTax.toFixed(2)}</span>
                 </div>
               </td>
-              <td className="px-2 py-2 font-mono font-black text-right">
+              <td className="px-2 py-1 font-mono font-black text-right">
                 ₹{entryAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
               </td>
-              <td className="px-2 py-2 text-center">
-                <button type="button" onClick={handleAddRow} title="Add Item" className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white">
-                  <Plus className="h-3.5 w-3.5" />
+              <td className="px-2 py-1 text-center">
+                <button type="button" onClick={handleAddRow} title="Add Item" className="p-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white">
+                  <Plus className="h-3 w-3" />
                 </button>
               </td>
             </tr>
 
             {items.map((item, idx) => (
               <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td className="px-2 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
-                <td className="px-2 py-2.5 font-extrabold text-slate-900 dark:text-slate-100">{item.productName}</td>
-                <td className="px-2 py-2.5 text-center font-bold text-emerald-600 dark:text-emerald-400">@{item.gstRate}%</td>
-                <td className="px-2 py-2.5 font-mono text-center">{item.hsnCode}</td>
-                <td className="px-2 py-2.5 text-center font-bold">{item.quantity}</td>
-                <td className="px-2 py-2.5 text-right font-mono">₹{item.mrp.toLocaleString('en-IN')}</td>
-                <td className="px-2 py-2.5 text-right font-mono">₹{item.listPrice.toLocaleString('en-IN')}</td>
-                <td className="px-2 py-2.5 text-right font-mono text-[11px] text-slate-500">{item.taxExcluded ? 'Excl.' : 'Incl.'}</td>
-                <td className="px-2 py-2.5 text-right font-mono font-black">₹{item.amount.toLocaleString('en-IN')}</td>
-                <td className="px-2 py-2.5 text-center">
+                <td className="px-2 py-1 text-center font-bold text-slate-500">{idx + 1}</td>
+                <td className="px-2 py-1 font-extrabold text-slate-900 dark:text-slate-100">{item.productName}</td>
+                <td className="px-2 py-1 text-center font-bold text-emerald-600 dark:text-emerald-400">@{item.gstRate}%</td>
+                <td className="px-2 py-1 font-mono text-center">{item.hsnCode}</td>
+                <td className="px-2 py-1 text-center font-bold">{item.quantity}</td>
+                <td className="px-2 py-1 text-right font-mono">₹{item.mrp.toLocaleString('en-IN')}</td>
+                <td className="px-2 py-1 text-right font-mono">₹{item.listPrice.toLocaleString('en-IN')}</td>
+                <td className="px-2 py-1 text-right font-mono text-[9px] text-slate-500">{item.taxExcluded ? 'Excl.' : 'Incl.'}</td>
+                <td className="px-2 py-1 text-right font-mono font-black">₹{item.amount.toLocaleString('en-IN')}</td>
+                <td className="px-2 py-1 text-center">
                   <div className="flex items-center justify-center gap-1">
-                    <button onClick={() => handleEditRow(item)} className="p-1.5 rounded bg-teal-600 hover:bg-teal-500 text-white cursor-pointer">
-                      <Edit3 className="h-3.5 w-3.5" />
+                    <button onClick={() => handleEditRow(item)} className="p-1 rounded bg-teal-600 hover:bg-teal-500 text-white cursor-pointer">
+                      <Edit3 className="h-3 w-3" />
                     </button>
-                    <button onClick={() => handleDeleteRow(item.id)} className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white cursor-pointer">
-                      <Trash2 className="h-3.5 w-3.5" />
+                    <button onClick={() => handleDeleteRow(item.id)} className="p-1 rounded bg-red-600 hover:bg-red-500 text-white cursor-pointer">
+                      <Trash2 className="h-3 w-3" />
                     </button>
                   </div>
                 </td>
@@ -723,7 +743,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
             </div>
             <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-center">
               <div className="text-[10px] font-bold text-slate-500">Taxable</div>
-              <div className="font-black text-slate-900 dark:text-slate-100">₹{totals.taxable.toFixed(2)}</div>
+              <div className="font-black text-slate-900 dark:text-slate-100">₹{totals.discountedTaxable.toFixed(2)}</div>
             </div>
             <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-center">
               <div className="text-[10px] font-bold text-slate-500">CGST</div>
@@ -763,26 +783,41 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Dis.%</label>
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Dis. Type</label>
+              <div className="relative">
+                <select
+                  value={discountType}
+                  onChange={(e) => {
+                    setDiscountType(e.target.value as 'percent' | 'fixed');
+                    setDiscountValue(0);
+                  }}
+                  className="w-full py-2 px-3 pr-8 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                >
+                  <option value="percent">% Percent</option>
+                  <option value="fixed">₹ Amount</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">
+                {discountType === 'percent' ? 'Dis. %' : 'Dis. ₹'}
+              </label>
               <input
                 type="number"
                 min={0}
-                max={100}
-                value={discountPercent}
-                onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
-                className="w-full py-2 px-3 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-xs text-right text-slate-900 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1">Dis. Amount</label>
-              <input
-                type="text"
-                readOnly
-                value={`₹${totals.discountAmount.toFixed(2)}`}
-                className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold text-right text-slate-900 dark:text-slate-100"
+                max={discountType === 'percent' ? 100 : undefined}
+                value={discountValue}
+                onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
+                className="w-full py-2 px-3 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-xs text-right font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
           </div>
+          {discountType === 'percent' && totals.discountAmount > 0 && (
+            <div className="text-right text-[10px] text-slate-500 font-bold -mt-1">
+              Discount: -₹{totals.discountAmount.toFixed(2)}
+            </div>
+          )}
         </div>
       </div>
 

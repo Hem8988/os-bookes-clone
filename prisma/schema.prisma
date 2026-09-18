@@ -216,6 +216,7 @@ model Customer {
   id              String   @id
   tenantId        String   @default("tenant_default")
   name            String
+  shortName       String?
   tradeName       String?
   contactPerson   String?
   phone           String
@@ -273,6 +274,8 @@ model CustomerAddress {
   pincode     String?
   area        String?
   route       String?
+  contactPerson String?
+  phone       String?
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
 }

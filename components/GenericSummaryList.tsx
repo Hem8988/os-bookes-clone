@@ -33,9 +33,11 @@ interface GenericSummaryListProps<T> {
   createLabel?: string;
   onClose: () => void;
   emptyMessage: string;
-  renderCard: (item: T, idx: number) => React.ReactNode;
+  renderCard?: (item: T, idx: number) => React.ReactNode;
   headerExtra?: React.ReactNode;
   defaultDateFilter?: DateFilter;
+  tableHeaders?: string[];
+  renderTableRow?: (item: T, idx: number) => React.ReactNode;
 }
 
 export function GenericSummaryList<T>({
@@ -54,6 +56,8 @@ export function GenericSummaryList<T>({
   renderCard,
   headerExtra,
   defaultDateFilter = 'All',
+  tableHeaders,
+  renderTableRow,
 }: GenericSummaryListProps<T>) {
   const hasPartyFilter = !!(partyLabel && partyOptions && getItemPartyName);
   const [filterByParty, setFilterByParty] = useState(false);
@@ -213,16 +217,45 @@ export function GenericSummaryList<T>({
         </div>
       )}
 
-      {/* List */}
-      <div className="p-4 space-y-3">
-        {filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-400">{emptyMessage}</div>
-        ) : (
-          filtered.map((item, idx) => (
-            <React.Fragment key={getId(item)}>{renderCard(item, idx)}</React.Fragment>
-          ))
-        )}
-      </div>
+      {/* List / Table */}
+      {tableHeaders && renderTableRow ? (
+        <div className="overflow-x-auto p-4">
+          <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+              <tr>
+                {tableHeaders.map((h, i) => (
+                  <th key={i} className="px-3 py-2 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={tableHeaders.length} className="py-16 text-center text-sm text-slate-400">
+                    {emptyMessage}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((item, idx) => (
+                  <React.Fragment key={getId(item)}>
+                    {renderTableRow(item, idx)}
+                  </React.Fragment>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {filtered.length === 0 ? (
+            <div className="py-16 text-center text-sm text-slate-400">{emptyMessage}</div>
+          ) : (
+            filtered.map((item, idx) => (
+              <React.Fragment key={getId(item)}>{renderCard && renderCard(item, idx)}</React.Fragment>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

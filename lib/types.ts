@@ -222,12 +222,15 @@ export interface CustomerAddress {
   pincode?: string;
   area?: string;
   route?: string;
+  contactPerson?: string;
+  phone?: string;
   isDefault?: boolean;
 }
 
 export interface Customer {
   id: string;
   name: string;
+  shortName?: string;
   tradeName?: string;
   contactPerson?: string;
   phone: string;

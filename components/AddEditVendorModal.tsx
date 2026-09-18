@@ -26,6 +26,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
   // Form State matching OS-BOOKS Party Master Screenshot exactly
   const [partyName, setPartyName] = useState('');
+  const [shortName, setShortName] = useState('');
   const [active, setActive] = useState(true);
   const [dueDays, setDueDays] = useState<number | ''>(7);
 
@@ -50,6 +51,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
   // Address & GST Details
   const [address, setAddress] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryContactPerson, setDeliveryContactPerson] = useState('');
+  const [deliveryPhone, setDeliveryPhone] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState('');
+  const [deliveryPincode, setDeliveryPincode] = useState('');
   const [pinCode, setPinCode] = useState('');
   const [gstin, setGstin] = useState('');
   const [gstApplicable, setGstApplicable] = useState('GST');
@@ -107,6 +113,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       );
       setPartyCategory(customerToEdit.type || defaultType);
       setPartyName(customerToEdit.name || '');
+      setShortName(customerToEdit.shortName || '');
       setTradeName(customerToEdit.tradeName || '');
       setContactPerson(customerToEdit.contactPerson || '');
       setStatus(customerToEdit.status || (customerToEdit.active === false ? 'INACTIVE' : 'ACTIVE'));
@@ -132,6 +139,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setRateMode(customerToEdit.rateMode || 'item');
       setPartyRates(Array.isArray(customerToEdit.partyRates) ? customerToEdit.partyRates : []);
       setAddress(customerToEdit.address || '');
+      const defaultDel = Array.isArray(customerToEdit.deliveryAddresses) && customerToEdit.deliveryAddresses.length > 0 ? customerToEdit.deliveryAddresses[0] : null;
+      setDeliveryAddress(defaultDel?.address || '');
+      setDeliveryContactPerson(defaultDel?.contactPerson || '');
+      setDeliveryPhone(defaultDel?.phone || '');
+      setDeliveryCity(defaultDel?.city || '');
+      setDeliveryPincode(defaultDel?.pincode || '');
       setPinCode(customerToEdit.pincode || '');
       setGstin(customerToEdit.gstin || '');
       setGstApplicable(customerToEdit.gstApplicable || 'GST');
@@ -157,6 +170,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     } else {
       setPartyCategory(defaultType);
       setPartyName('');
+      setShortName('');
       setTradeName('');
       setContactPerson('');
       setStatus('ACTIVE');
@@ -179,6 +193,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setRateMode('item');
       setPartyRates([]);
       setAddress('');
+      setDeliveryAddress('');
+      setDeliveryContactPerson('');
+      setDeliveryPhone('');
+      setDeliveryCity('');
+      setDeliveryPincode('');
       setPinCode('452001');
       setGstin('');
       setGstApplicable('GST');
@@ -242,6 +261,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     const savedCustomer: Customer = {
       id: customerToEdit?.id || `party-${Date.now()}`,
       name: partyName.trim(),
+      shortName: shortName.trim() || undefined,
       tradeName: tradeName.trim() || undefined,
       contactPerson: contactPerson.trim() || undefined,
       status,
@@ -252,6 +272,14 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       portalAccessEnabled,
       gstin: gstin.trim().toUpperCase() || undefined,
       address: address.trim() || 'Main Commercial Area',
+      deliveryAddresses: deliveryAddress.trim() || deliveryContactPerson.trim() || deliveryPhone.trim() ? [{ 
+        label: 'Delivery Address', 
+        address: deliveryAddress.trim(),
+        contactPerson: deliveryContactPerson.trim() || undefined,
+        phone: deliveryPhone.trim() || undefined,
+        city: deliveryCity.trim() || undefined,
+        pincode: deliveryPincode.trim() || undefined
+      }] : [],
       city: city.trim() || 'Indore',
       area: areaName.trim() || undefined,
       route: routeName.trim() || undefined,
@@ -340,129 +368,198 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           
 
 
-          {/* Row 1: Party Name, Active Toggle, Due Days */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-            
-            {/* Party Name & Active Toggle */}
-            <div className="md:col-span-9 space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-slate-900 dark:text-slate-100">
-                  {partyCategory === 'Vendor' ? 'Vendor / Supplier Name *' : 'Customer Name *'}
-                </label>
-                
-                {/* Active Toggle */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActive(!active)}
-                    className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      active ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        active ? 'translate-x-5' : 'translate-x-0'
+          {/* Card 1: Billing & Official Details */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
+            <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h4 className="font-extrabold text-sm text-indigo-600 dark:text-indigo-400">
+                Billing & Official Details
+              </h4>
+            </div>
+
+            {/* Row 1: Party Name, Active Toggle, Due Days */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+              <div className="md:col-span-9 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-900 dark:text-slate-100">
+                    {partyCategory === 'Vendor' ? 'Vendor / Supplier Legal Name *' : 'Customer Legal Name *'}
+                  </label>
+                  
+                  {/* Active Toggle */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActive(!active)}
+                      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        active ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
                       }`}
-                    />
-                  </button>
-                  <span className="font-extrabold text-slate-900 dark:text-slate-100">Active</span>
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          active ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="font-extrabold text-slate-900 dark:text-slate-100 text-[10px]">Active</span>
+                  </div>
                 </div>
+
+                <input
+                  type="text"
+                  required
+                  placeholder={partyCategory === 'Vendor' ? 'e.g. Indian Oil Corporation' : 'e.g. Rbrands Asia Pvt Ltd'}
+                  value={partyName}
+                  onChange={(e) => setPartyName(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                />
               </div>
 
+              {/* Due Days */}
+              <div className="md:col-span-3 space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Due Days</label>
+                <input
+                  type="number"
+                  value={dueDays}
+                  onChange={(e) => setDueDays(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Billing Address */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Billing Address</label>
               <input
                 type="text"
-                required
-                placeholder={partyCategory === 'Vendor' ? 'e.g. Indian Oil Corporation / Bottling Plant Ltd' : 'e.g. Hotel Rajdhani / Sharma Store'}
-                value={partyName}
-                onChange={(e) => setPartyName(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                placeholder="Enter Official Billing Address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
               />
             </div>
+            
+            {/* Row 3: Mobile Number & City */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Billing Mobile Number</label>
+                <input
+                  type="text"
+                  placeholder="Official / Accounts Contact Number"
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                />
+              </div>
 
-            {/* Due Days */}
-            <div className="md:col-span-3 space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Due Days</label>
-              <input
-                type="number"
-                value={dueDays}
-                onChange={(e) => setDueDays(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Billing City</label>
+                <div className="relative">
+                  <select
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                  >
+                    <option value="">Select / Search City...</option>
+                    <option value="Hyderabad">Hyderabad</option>
+                    <option value="Indore">Indore</option>
+                    <option value="Bhopal">Bhopal</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Bangalore">Bangalore</option>
+                    <option value="Chennai">Chennai</option>
+                  </select>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400">
+                    {city && <X className="h-3 w-3 cursor-pointer pointer-events-auto" onClick={() => setCity('')} />}
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                </div>
+              </div>
             </div>
-
           </div>
 
-          {/* Row 2: Mobile Number & City */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Card 2: Delivery & Local Details (Customers Only) */}
+          {partyCategory === 'Customer' && (
+            <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-800/50 space-y-4 shadow-sm">
+            <div className="flex items-center gap-2 border-b border-teal-100 dark:border-teal-800/50 pb-2">
+              <h4 className="font-extrabold text-sm text-teal-700 dark:text-teal-400">
+                Delivery Location & Local Details
+              </h4>
+            </div>
+
+            {/* Row 1: Short Name & Contact Person */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Shop / Short Name (Delivery App) *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Burger King FC Road"
+                  value={shortName}
+                  onChange={(e) => setShortName(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Contact Person</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Manager"
+                  value={deliveryContactPerson}
+                  onChange={(e) => setDeliveryContactPerson(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Delivery Address */}
             <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Mobile Number</label>
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Actual Delivery Address</label>
               <input
                 type="text"
-                placeholder="Hint - Better to use WhatsApp Number"
-                value={mobileNumber}
-                onChange={(e) => setMobileNumber(e.target.value)}
+                placeholder="Enter exact shop/godown address for delivery boy"
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
                 className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">City</label>
-              <div className="relative">
-                <select
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                >
-                  <option value="">Select / Search City...</option>
-                  <option value="Hyderabad">Hyderabad</option>
-                  <option value="Indore">Indore</option>
-                  <option value="Bhopal">Bhopal</option>
-                  <option value="Mumbai">Mumbai</option>
-                  <option value="Delhi">Delhi</option>
-                  <option value="Bangalore">Bangalore</option>
-                  <option value="Chennai">Chennai</option>
-                </select>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400">
-                  {city && <X className="h-3 w-3 cursor-pointer pointer-events-auto" onClick={() => setCity('')} />}
-                  <ChevronDown className="h-4 w-4" />
+            {/* Row 3: Delivery Mobile & City */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Mobile Number</label>
+                <input
+                  type="text"
+                  placeholder="Manager / Shop Phone Number"
+                  value={deliveryPhone}
+                  onChange={(e) => setDeliveryPhone(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery City</label>
+                <div className="relative">
+                  <select
+                    value={deliveryCity}
+                    onChange={(e) => setDeliveryCity(e.target.value)}
+                    className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                  >
+                    <option value="">Select / Search City...</option>
+                    <option value="Hyderabad">Hyderabad</option>
+                    <option value="Indore">Indore</option>
+                    <option value="Bhopal">Bhopal</option>
+                    <option value="Mumbai">Mumbai</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Bangalore">Bangalore</option>
+                    <option value="Chennai">Chennai</option>
+                  </select>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400">
+                    {deliveryCity && <X className="h-3 w-3 cursor-pointer pointer-events-auto" onClick={() => setDeliveryCity('')} />}
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* Row 3: Party Tags */}
-          <div className="space-y-1">
-            <label className="font-bold text-slate-900 dark:text-slate-100 block">Party Tags</label>
-            <div className="relative">
-              <select
-                value={partyTags}
-                onChange={(e) => setPartyTags(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer font-bold"
-              >
-                <option value="">-- Select Party Tag --</option>
-                <option value="COMMERCIAL">COMMERCIAL (Hotel / Restaurant / Factory)</option>
-                <option value="VIP">VIP Priority Client</option>
-                <option value="REGULAR">REGULAR B2B Customer</option>
-                <option value="DISTRIBUTOR">DISTRIBUTOR / Sub-Dealer</option>
-                <option value="CREDIT_HOLD">CREDIT HOLD / Payment Pending</option>
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-
-
-
-          {/* Row 5: Address */}
-          <div className="space-y-1">
-            <label className="font-bold text-slate-900 dark:text-slate-100 block">Address</label>
-            <input
-              type="text"
-              placeholder="Enter Full Address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
-            />
-          </div>
+          )}
 
           {/* Row 6: Pin Code, Gstin, Gst Applicable */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

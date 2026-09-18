@@ -253,55 +253,36 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Purchase Bills found for the selected filters."
-          renderCard={(pur) => {
+          tableHeaders={['Date', 'Bill No', 'Vendor Name', 'Vendor Inv #', 'Amount', 'Balance', 'Actions']}
+          renderTableRow={(pur) => {
             const paid = pur.status === 'Paid' ? pur.grandTotal : 0;
             const balance = pur.grandTotal - paid;
             return (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-                <div className="p-4">
-                  <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <span className="font-semibold">#Purchase Bill : {pur.purchaseNumber}</span>
-                    <div className="text-sm">{pur.date}</div>
+              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{pur.date}</td>
+                <td className="px-3 py-2 font-mono text-xs">{pur.purchaseNumber}</td>
+                <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{pur.vendorName}</td>
+                <td className="px-3 py-2 text-xs text-slate-500">{pur.vendorInvoiceNumber || '-'}</td>
+                <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{pur.grandTotal.toLocaleString('en-IN')}</td>
+                <td className="px-3 py-2">
+                  <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${balance === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                    ₹{balance.toLocaleString('en-IN')}
                   </div>
-                  <div className="flex items-start justify-between gap-2 mt-1">
-                    <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{pur.vendorName}</div>
-                    <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{pur.grandTotal.toLocaleString('en-IN')}</div>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button onClick={() => setPrintPurchase(pur)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                      <Printer className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => { setEditingPurchase(pur); setPurchaseView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                      <Edit3 className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => { if (window.confirm(`Delete Purchase Bill ${pur.purchaseNumber}?`)) onDeletePurchase(pur.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-bold text-slate-700 dark:text-slate-300">Vendor Invoice # : {pur.vendorInvoiceNumber}</div>
-                    <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                      <div>ITC Claimable : ₹{pur.itcEligibleAmount.toLocaleString('en-IN')}</div>
-                      <div className="font-bold text-slate-700 dark:text-slate-300">Balance : ₹{balance.toLocaleString('en-IN')}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                  <button type="button" onClick={() => setPrintPurchase(pur)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                    <Printer className="h-3.5 w-3.5" /> Print
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingPurchase(pur);
-                      setPurchaseView('create');
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Delete Purchase Bill ${pur.purchaseNumber}?`)) {
-                        onDeletePurchase(pur.id);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </button>
-                </div>
-              </div>
+                </td>
+              </tr>
             );
           }}
         />
@@ -358,52 +339,33 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Purchase Returns found for the selected filters."
-          renderCard={(pr) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Debit Note : {pr.docNumber}</span>
-                  <div className="text-sm">{pr.date}</div>
+          tableHeaders={['Date', 'Debit Note', 'Vendor Name', 'Orig Invoice', 'Amount', 'Status', 'Actions']}
+          renderTableRow={(pr) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{pr.date}</td>
+              <td className="px-3 py-2 font-mono text-xs">{pr.docNumber}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{pr.partyName}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{pr.originalInvNumber || '-'}</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{pr.amount.toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2">
+                <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${pr.status === 'Processed' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+                  {pr.status}
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{pr.partyName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{pr.amount.toLocaleString('en-IN')}</div>
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintPReturn(pr)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingPReturn(pr); setPreturnView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Debit Note ${pr.docNumber}?`)) onDeletePurchaseReturn(pr.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">Original Invoice : {pr.originalInvNumber}</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div>Reason : {pr.returnReason}</div>
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Status : {pr.status}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintPReturn(pr)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingPReturn(pr);
-                    setPreturnView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Debit Note ${pr.docNumber}?`)) {
-                      onDeletePurchaseReturn(pr.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -452,52 +414,56 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Sale Orders found for the selected filters."
-          renderCard={(so) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#SO No : {so.soNumber}</span>
-                  <div className="text-sm">{so.date}</div>
-                </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{so.customerName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{so.totalAmount.toLocaleString('en-IN')}</div>
-                </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">Valid Until : {so.validUntil}</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Status : {so.status}</div>
+          tableHeaders={['Date', 'SO No', 'Customer Name', 'Valid Until', 'Amount', 'Status', 'Actions']}
+          renderTableRow={(so) => {
+            let rowBgClass = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 bg-white dark:bg-slate-900';
+            let badgeColor = 'bg-sky-100 text-sky-800';
+            let pulse = '';
+            
+            if (so.status === 'Converted to Bill' || so.status === 'Delivered') {
+              badgeColor = 'bg-emerald-100 text-emerald-800';
+              rowBgClass = 'bg-emerald-50/50 dark:bg-emerald-900/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30';
+            } else if (so.date) {
+              const hrs = (Date.now() - new Date(so.date).getTime()) / 3600000;
+              if (hrs >= 36) { 
+                badgeColor = 'bg-rose-100 text-rose-800'; 
+                pulse = 'animate-pulse';
+                rowBgClass = 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100/50 dark:hover:bg-rose-900/30';
+              } else if (hrs >= 24) { 
+                badgeColor = 'bg-orange-100 text-orange-800'; 
+                pulse = 'animate-pulse';
+                rowBgClass = 'bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100/50 dark:hover:bg-orange-900/30';
+              }
+            }
+
+            return (
+              <tr className={`transition-colors border-b border-slate-100 dark:border-slate-800 ${rowBgClass}`}>
+                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{so.date}</td>
+                <td className="px-3 py-2 font-mono text-xs">{so.soNumber}</td>
+                <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{so.customerName}</td>
+                <td className="px-3 py-2 text-xs text-slate-500">{so.validUntil || '-'}</td>
+                <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{so.totalAmount.toLocaleString('en-IN')}</td>
+                <td className="px-3 py-2">
+                  <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${badgeColor} ${pulse}`}>
+                    {so.status}
                   </div>
+                </td>
+                <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintSO(so)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingSO(so); setSoView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Sale Order ${so.soNumber}?`)) onDeleteSO(so.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintSO(so)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSO(so);
-                    setSoView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Sale Order ${so.soNumber}?`)) {
-                      onDeleteSO(so.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
-          )}
+              </td>
+            </tr>
+            );
+          }}
         />
       )}
 
@@ -551,54 +517,34 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Sales Invoices found for the selected filters."
-          renderCard={(s) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Invoice No : {s.invoiceNumber}</span>
-                  <div className="text-sm">{s.date}</div>
+          tableHeaders={['Date', 'Invoice No', 'Customer Name', 'Taxable', 'GST', 'Amount', 'Status', 'Actions']}
+          renderTableRow={(s) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{s.date}</td>
+              <td className="px-3 py-2 font-mono text-xs">{s.invoiceNumber}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{s.customerName}</td>
+              <td className="px-3 py-2 font-mono text-xs">₹{s.subTotal.toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2 font-mono text-xs text-slate-500">₹{(s.totalCgst + s.totalSgst + s.totalIgst).toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{s.grandTotal.toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2">
+                <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${s.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {s.status} ({s.paymentMode})
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{s.customerName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{s.grandTotal.toLocaleString('en-IN')}</div>
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintSale(s)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingSale(s); setSalesView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Invoice ${s.invoiceNumber}?`)) onDeleteInvoice(s.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Taxable : ₹{s.subTotal.toLocaleString('en-IN')}
-                  </div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div>GST : ₹{(s.totalCgst + s.totalSgst + s.totalIgst).toLocaleString('en-IN')}</div>
-                    <div className="font-bold text-slate-700 dark:text-slate-300">{s.status} ({s.paymentMode})</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintSale(s)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSale(s);
-                    setSalesView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Invoice ${s.invoiceNumber}?`)) {
-                      onDeleteInvoice(s.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -653,52 +599,33 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Sales Returns found for the selected filters."
-          renderCard={(sr) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Credit Note : {sr.docNumber}</span>
-                  <div className="text-sm">{sr.date}</div>
+          tableHeaders={['Date', 'Credit Note', 'Customer Name', 'Orig Invoice', 'Amount', 'Status', 'Actions']}
+          renderTableRow={(sr) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{sr.date}</td>
+              <td className="px-3 py-2 font-mono text-xs">{sr.docNumber}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{sr.partyName}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{sr.originalInvNumber || '-'}</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{sr.amount.toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2">
+                <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${sr.status === 'Processed' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+                  {sr.status}
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{sr.partyName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{sr.amount.toLocaleString('en-IN')}</div>
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintSReturn(sr)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingSReturn(sr); setSreturnView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Credit Note ${sr.docNumber}?`)) onDeleteSalesReturn(sr.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">Original Invoice : {sr.originalInvNumber}</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div>Reason : {sr.returnReason}</div>
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Status : {sr.status}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintSReturn(sr)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingSReturn(sr);
-                    setSreturnView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Credit Note ${sr.docNumber}?`)) {
-                      onDeleteSalesReturn(sr.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -747,51 +674,33 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Customer Challans found for the selected filters."
-          renderCard={(ch) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Challan No : {ch.challanNumber}</span>
-                  <div className="text-sm">{ch.dispatchDate}</div>
+          tableHeaders={['Date', 'Challan No', 'Customer Name', 'Vehicle No', 'Qty', 'Status', 'Actions']}
+          renderTableRow={(ch) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{ch.dispatchDate}</td>
+              <td className="px-3 py-2 font-mono text-xs">{ch.challanNumber}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{ch.customerName}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{ch.vehicleNumber || '-'}</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">{ch.totalQty} Units</td>
+              <td className="px-3 py-2">
+                <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${ch.status === 'Dispatched' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'}`}>
+                  {ch.status}
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{ch.customerName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">{ch.totalQty} Units</div>
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintChallan(ch)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingChallan(ch); setChallanView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Challan ${ch.challanNumber}?`)) onDeleteChallan(ch.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">Vehicle No : {ch.vehicleNumber}</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Status : {ch.status}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintChallan(ch)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingChallan(ch);
-                    setChallanView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Challan ${ch.challanNumber}?`)) {
-                      onDeleteChallan(ch.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -840,30 +749,27 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Customer Invoices found for the selected filters."
-          renderCard={(inv) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Tax Invoice : {inv.invoiceNumber}</span>
-                  <div className="text-sm">{inv.date}</div>
+          tableHeaders={['Date', 'Invoice No', 'Customer Name', 'GSTIN', 'Amount', 'Status', 'Actions']}
+          renderTableRow={(inv) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{inv.date}</td>
+              <td className="px-3 py-2 font-mono text-xs">{inv.invoiceNumber}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{inv.customerName}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{inv.customerGstin || 'Unregistered'}</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{inv.grandTotal.toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2">
+                <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {inv.status}
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{inv.customerName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{inv.grandTotal.toLocaleString('en-IN')}</div>
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintCInvoice(inv)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">GSTIN : {inv.customerGstin || 'Unregistered'}</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Status : {inv.status}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintCInvoice(inv)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -893,51 +799,33 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Quotations found for the selected filters."
-          renderCard={(qt) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Quotation No : {qt.quoteNumber}</span>
-                  <div className="text-sm">{qt.date}</div>
+          tableHeaders={['Date', 'Quote No', 'Customer Name', 'Validity', 'Amount', 'Status', 'Actions']}
+          renderTableRow={(qt) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{qt.date}</td>
+              <td className="px-3 py-2 font-mono text-xs">{qt.quoteNumber}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{qt.customerName}</td>
+              <td className="px-3 py-2 text-xs text-slate-500">{qt.validDays} Days</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{qt.grandTotal.toLocaleString('en-IN')}</td>
+              <td className="px-3 py-2">
+                <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${qt.status === 'Accepted' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                  {qt.status}
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{qt.customerName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">₹{qt.grandTotal.toLocaleString('en-IN')}</div>
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintQuotation(qt)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingQuotation(qt); setQuotationView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Quotation ${qt.quoteNumber}?`)) onDeleteQuotation(qt.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-slate-700 dark:text-slate-300">Validity : {qt.validDays} Days</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Status : {qt.status}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintQuotation(qt)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingQuotation(qt);
-                    setQuotationView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Quotation ${qt.quoteNumber}?`)) {
-                      onDeleteQuotation(qt.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -986,52 +874,31 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Stock Adjustments found for the selected filters."
-          renderCard={(adj) => (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-semibold">#Audit No : {adj.adjustCode}</span>
-                  <div className="text-sm">{adj.date}</div>
+          tableHeaders={['Date', 'Audit No', 'Product Name', 'Type', 'Reason', 'Qty', 'Actions']}
+          renderTableRow={(adj) => (
+            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{adj.date}</td>
+              <td className="px-3 py-2 font-mono text-xs">{adj.adjustCode}</td>
+              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{adj.productName}</td>
+              <td className="px-3 py-2">
+                <span className={`text-xs font-bold ${adj.adjustmentType.includes('+') ? 'text-emerald-600' : 'text-rose-600'}`}>{adj.adjustmentType}</span>
+              </td>
+              <td className="px-3 py-2 text-xs text-slate-500">{adj.reason}</td>
+              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">{adj.qty}</td>
+              <td className="px-3 py-2 text-right">
+                <div className="flex items-center justify-end gap-1.5">
+                  <button onClick={() => setPrintAdjustment(adj)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { setEditingAdjustment(adj); setAdjustmentView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete Stock Adjustment ${adj.adjustCode}?`)) onDeleteAdjustment(adj.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{adj.productName}</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100">{adj.qty} Units</div>
-                </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-bold text-rose-600 dark:text-rose-400">{adj.adjustmentType}</div>
-                  <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                    <div>Reason : {adj.reason}</div>
-                    <div className="font-bold text-slate-700 dark:text-slate-300">Approved By : {adj.approvedBy}</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setPrintAdjustment(adj)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-400 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold">
-                  <Printer className="h-3.5 w-3.5" /> Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingAdjustment(adj);
-                    setAdjustmentView('create');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-500 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-xs font-bold"
-                >
-                  <Edit3 className="h-3.5 w-3.5" /> Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(`Delete Stock Adjustment ${adj.adjustCode}?`)) {
-                      onDeleteAdjustment(adj.id);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </button>
-              </div>
-            </div>
+              </td>
+            </tr>
           )}
         />
       )}
@@ -1071,37 +938,29 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           }}
           onClose={() => setActiveSubTab('stock')}
           emptyMessage="No Products found for the selected filters."
-          renderCard={(p) => {
+          tableHeaders={['SKU', 'Category', 'Product Name', 'HSN', 'Stock', 'Valuation', 'Status']}
+          renderTableRow={(p) => {
             const isLow = p.stock <= p.minStockAlert;
             return (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-                <div className="p-4">
-                  <div className="flex items-center justify-between gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <span className="font-semibold">SKU : {p.sku} | HSN : {p.hsnCode}</span>
-                    <div className="text-sm">{p.category}</div>
-                  </div>
-                  <div className="flex items-start justify-between gap-2 mt-1">
-                    <div className="font-extrabold text-slate-900 dark:text-slate-100 text-base">{p.name}</div>
-                    <div className="text-lg font-black text-slate-900 dark:text-slate-100">{p.stock} {p.unit}</div>
-                  </div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                      Valuation : ₹{(p.stock * p.purchasePrice).toLocaleString('en-IN')}
-                    </div>
-                    <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
-                      {isLow ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
-                          Low Stock Alert
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                          Optimal
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <td className="px-3 py-2 font-mono text-xs text-slate-500">{p.sku}</td>
+                <td className="px-3 py-2 text-xs text-slate-500">{p.category}</td>
+                <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{p.name}</td>
+                <td className="px-3 py-2 font-mono text-xs">{p.hsnCode}</td>
+                <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">{p.stock} {p.unit}</td>
+                <td className="px-3 py-2 font-bold text-slate-900 dark:text-slate-100">₹{(p.stock * p.purchasePrice).toLocaleString('en-IN')}</td>
+                <td className="px-3 py-2 text-right">
+                  {isLow ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+                      Low Stock Alert
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                      Optimal
+                    </span>
+                  )}
+                </td>
+              </tr>
             );
           }}
         />

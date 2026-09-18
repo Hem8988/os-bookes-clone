@@ -296,9 +296,10 @@ export default function DeliveryBoyModule({
           {
             id: 'demo_ord_1',
             orderNumber: 'CYL-ORD-00001',
-            customerName: 'Hotel Rajdhani (Connaught Place)',
+            customerName: 'Hotel Rajdhani (Koti)',
             deliveryAddress: '7 Barakhamba Road, Connaught Place, New Delhi',
             status: 'ASSIGNED',
+            assignedAt: new Date(Date.now() - 25 * 3600000).toISOString(),
             items: [{ productId: 'prod_19kg', productName: '19 KG Commercial LPG Cylinder', orderedQty: 10, unitPrice: 1850 }],
           },
           {
@@ -307,7 +308,17 @@ export default function DeliveryBoyModule({
             customerName: 'Apex Industrial Fabrics (Okhla)',
             deliveryAddress: 'Phase 1, Okhla Industrial Area, New Delhi',
             status: 'OUT_FOR_DELIVERY',
+            assignedAt: new Date(Date.now() - 40 * 3600000).toISOString(),
             items: [{ productId: 'prod_47kg', productName: '47.5 KG Industrial LPG Cylinder', orderedQty: 5, unitPrice: 4500 }],
+          },
+          {
+            id: 'demo_ord_3',
+            orderNumber: 'CYL-ORD-00003',
+            customerName: 'Fresh Foods (Banjara Hills)',
+            deliveryAddress: 'Road No 12, Banjara Hills, Hyderabad',
+            status: 'ASSIGNED',
+            assignedAt: new Date(Date.now() - 5 * 3600000).toISOString(),
+            items: [{ productId: 'prod_19kg', productName: '19 KG Commercial LPG Cylinder', orderedQty: 20, unitPrice: 1850 }],
           },
         ];
         setOrders(demoOrders);
@@ -572,6 +583,7 @@ export default function DeliveryBoyModule({
           customerName: newOrderCustomerName,
           deliveryAddress: 'Customer Site Delivery Location',
           status: 'APPROVED',
+          assignedAt: new Date().toISOString(),
           items: itemsPayload,
         };
 
@@ -966,37 +978,68 @@ export default function DeliveryBoyModule({
             </div>
           ) : (
             <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1">
-              {filteredOrders.map(order => (
-                <button
-                  key={order.id}
-                  onClick={() => {
-                    setSelectedOrder(order);
-                    setBillPhotoUrl(order.deliveryProofPhotoUrl || order.deliveryChallanPhotoUrl || null);
-                    setPaymentScreenshotUrl(order.paymentProofPhotoUrl || order.upiPaymentPhotoUrl || null);
-                  }}
-                  className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between ${selectedOrder?.id === order.id ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700/60 hover:border-slate-300'}`}
-                >
-                  <div className="space-y-1">
-                    <div className="font-extrabold text-xs md:text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>{order.customerName}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                      <span className="truncate max-w-[200px] md:max-w-[260px]">{order.deliveryAddress}</span>
-                    </div>
-                    <div className="text-[10px] font-mono text-indigo-600 font-bold">
-                      {order.orderNumber} • {order.items?.[0]?.productName || '19 KG Cylinder'} x {order.items?.[0]?.orderedQty || 10} Pcs
-                    </div>
-                  </div>
+              {filteredOrders.map(order => {
+                let statusColor = 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-300';
+                let pulse = '';
+                let elapsedHours = 0;
+                let cardColorClass = 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700/60 hover:border-slate-300';
+                
+                if (order.status === 'DELIVERED') {
+                  statusColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300';
+                  cardColorClass = 'bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-300';
+                } else if (order.assignedAt) {
+                  elapsedHours = (Date.now() - new Date(order.assignedAt).getTime()) / 3600000;
+                  if (elapsedHours >= 36) {
+                    statusColor = 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300';
+                    pulse = 'animate-pulse';
+                    cardColorClass = 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 hover:border-rose-300';
+                  } else if (elapsedHours >= 24) {
+                    statusColor = 'bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-300';
+                    pulse = 'animate-pulse';
+                    cardColorClass = 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 hover:border-orange-300';
+                  }
+                }
 
-                  <div className="text-right flex flex-col items-end gap-1">
-                    <span className={`px-2.5 py-1 text-[10px] font-black rounded-full uppercase ${order.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 animate-pulse'}`}>
-                      {order.status}
-                    </span>
-                    <ChevronRight className={`w-4 h-4 ${selectedOrder?.id === order.id ? 'text-emerald-600' : 'text-slate-300'}`} />
-                  </div>
-                </button>
-              ))}
+                return (
+                  <button
+                    key={order.id}
+                    onClick={() => {
+                      setSelectedOrder(order);
+                      setBillPhotoUrl(order.deliveryProofPhotoUrl || order.deliveryChallanPhotoUrl || null);
+                      setPaymentScreenshotUrl(order.paymentProofPhotoUrl || order.upiPaymentPhotoUrl || null);
+                    }}
+                    className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between ${selectedOrder?.id === order.id ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/20 shadow-md' : cardColorClass}`}
+                  >
+                    <div className="space-y-1">
+                      <div className="font-extrabold text-xs md:text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>{order.customerName}</span>
+                        {elapsedHours >= 36 && order.status !== 'DELIVERED' && (
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                        <span className="truncate max-w-[200px] md:max-w-[260px]">{order.deliveryAddress}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-indigo-600 font-bold">
+                        {order.orderNumber} • {order.items?.[0]?.productName || '19 KG Cylinder'} x {order.items?.[0]?.orderedQty || 10} Pcs
+                      </div>
+                      {order.assignedAt && order.status !== 'DELIVERED' && (
+                         <div className="text-[9px] font-bold text-slate-400 mt-0.5">
+                           Elapsed: {Math.floor(elapsedHours)} hrs
+                         </div>
+                      )}
+                    </div>
+
+                    <div className="text-right flex flex-col items-end gap-1">
+                      <span className={`px-2.5 py-1 text-[10px] font-black rounded-full uppercase ${statusColor} ${pulse}`}>
+                        {order.status}
+                      </span>
+                      <ChevronRight className={`w-4 h-4 ${selectedOrder?.id === order.id ? 'text-emerald-600' : 'text-slate-300'}`} />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1016,9 +1059,20 @@ export default function DeliveryBoyModule({
                   <h2 className="font-black text-lg md:text-xl text-slate-900 dark:text-white mt-1">{selectedOrder.customerName}</h2>
                   <p className="text-xs text-slate-500 font-mono">Order #{selectedOrder.orderNumber} • Site: {selectedOrder.deliveryAddress}</p>
                 </div>
-                <span className={`px-3 py-1 text-xs font-black rounded-full uppercase self-start sm:self-center ${selectedOrder.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                  {selectedOrder.status}
-                </span>
+                {(() => {
+                  let badgeColor = 'bg-sky-100 text-sky-800';
+                  if (selectedOrder.status === 'DELIVERED') badgeColor = 'bg-emerald-100 text-emerald-800';
+                  else if (selectedOrder.assignedAt) {
+                    const hrs = (Date.now() - new Date(selectedOrder.assignedAt).getTime()) / 3600000;
+                    if (hrs >= 36) badgeColor = 'bg-rose-100 text-rose-800';
+                    else if (hrs >= 24) badgeColor = 'bg-orange-100 text-orange-800';
+                  }
+                  return (
+                    <span className={`px-3 py-1 text-xs font-black rounded-full uppercase self-start sm:self-center ${badgeColor}`}>
+                      {selectedOrder.status}
+                    </span>
+                  );
+                })()}
               </div>
 
               {/* Quantities Grid */}

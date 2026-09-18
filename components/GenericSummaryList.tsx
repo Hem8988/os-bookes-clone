@@ -205,15 +205,17 @@ export function GenericSummaryList<T>({
         </div>
       )}
 
-      {/* Stats Bar */}
+      {/* Stats KPI Metric Cards (Light Theme) */}
       {stats.length > 0 && (
-        <div className={`grid gap-4 px-4 py-3 bg-slate-900 text-white text-center`} style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
-          {stats.map((s) => (
-            <div key={s.label}>
-              <div className="text-xs font-bold text-slate-300">{s.label}:</div>
-              <div className={`text-lg font-black ${s.valueClassName || ''}`}>{s.value}</div>
-            </div>
-          ))}
+        <div className="p-4 bg-slate-50/70 border-b border-slate-200">
+          <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
+            {stats.map((s) => (
+              <div key={s.label} className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-2xs text-center">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{s.label}:</div>
+                <div className={`text-lg md:text-xl font-black font-mono mt-0.5 ${s.valueClassName || 'text-slate-900'}`}>{s.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

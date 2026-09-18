@@ -471,6 +471,7 @@ export interface SaleOrder {
   totalSgst?: number;
   discountPercent?: number;
   discountAmount?: number;
+  discountApplyOn?: 'taxable' | 'total';
   remark?: string;
   createdBy?: string;
   payments?: PurchaseOrderPayment[];

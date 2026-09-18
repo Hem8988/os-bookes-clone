@@ -221,19 +221,21 @@ export const PurchaseOrderSummaryModule: React.FC<PurchaseOrderSummaryModuleProp
         </div>
       </div>
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-3 gap-4 px-4 py-3 bg-slate-900 text-white text-center">
-        <div>
-          <div className="text-xs font-bold text-slate-300">TOTAL AMT:</div>
-          <div className="text-lg font-black">₹{totals.totalAmt.toLocaleString('en-IN')}</div>
-        </div>
-        <div>
-          <div className="text-xs font-bold text-slate-300">TOTAL PAID:</div>
-          <div className="text-lg font-black text-emerald-400">₹{totals.totalPaid.toLocaleString('en-IN')}</div>
-        </div>
-        <div>
-          <div className="text-xs font-bold text-slate-300">BALANCE:</div>
-          <div className="text-lg font-black text-rose-400">₹{totals.balance.toLocaleString('en-IN')}</div>
+      {/* Stats KPI Metric Cards (Light Theme) */}
+      <div className="p-4 bg-slate-50/70 border-b border-slate-200">
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-2xs">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TOTAL AMT:</div>
+            <div className="text-lg md:text-xl font-black font-mono text-slate-900 mt-0.5">₹{totals.totalAmt.toLocaleString('en-IN')}</div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-2xs">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PAID:</div>
+            <div className="text-lg md:text-xl font-black font-mono text-emerald-600 mt-0.5">₹{totals.totalPaid.toLocaleString('en-IN')}</div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-2xs">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">BALANCE:</div>
+            <div className="text-lg md:text-xl font-black font-mono text-rose-600 mt-0.5">₹{totals.balance.toLocaleString('en-IN')}</div>
+          </div>
         </div>
       </div>
 

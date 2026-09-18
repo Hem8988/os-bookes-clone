@@ -373,38 +373,38 @@ export const BillingModule: React.FC<BillingModuleProps> = ({
         </div>
 
         {/* Calculation Box */}
-        <div className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-2">
-          <div className="flex justify-between text-xs text-slate-400">
+        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+          <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Taxable Subtotal:</span>
-            <span className="font-mono text-slate-200">₹{subTotal.toLocaleString('en-IN')}</span>
+            <span className="font-mono font-bold text-slate-800 dark:text-slate-200">₹{subTotal.toLocaleString('en-IN')}</span>
           </div>
 
           {!isIgst ? (
             <>
-              <div className="flex justify-between text-xs text-slate-400">
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>CGST Amount:</span>
-                <span className="font-mono text-emerald-400">₹{totalCgst.toLocaleString('en-IN')}</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{totalCgst.toLocaleString('en-IN')}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-400">
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>SGST Amount:</span>
-                <span className="font-mono text-emerald-400">₹{totalSgst.toLocaleString('en-IN')}</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{totalSgst.toLocaleString('en-IN')}</span>
               </div>
             </>
           ) : (
-            <div className="flex justify-between text-xs text-slate-400">
+            <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
               <span>IGST Amount:</span>
-              <span className="font-mono text-purple-400">₹{totalIgst.toLocaleString('en-IN')}</span>
+              <span className="font-mono font-bold text-purple-600 dark:text-purple-400">₹{totalIgst.toLocaleString('en-IN')}</span>
             </div>
           )}
 
-          <div className="flex justify-between text-xs text-slate-400">
+          <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Round Off:</span>
             <span className="font-mono">{roundOff >= 0 ? `+₹${roundOff}` : `-₹${Math.abs(roundOff)}`}</span>
           </div>
 
-          <div className="pt-2 border-t border-slate-700 flex justify-between items-center">
-            <span className="text-sm font-bold text-slate-200">Grand Total:</span>
-            <span className="text-xl font-black text-emerald-400">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">Grand Total:</span>
+            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">
               ₹{grandTotal.toLocaleString('en-IN')}
             </span>
           </div>
@@ -412,15 +412,15 @@ export const BillingModule: React.FC<BillingModuleProps> = ({
           <div className="pt-3 grid grid-cols-2 gap-2">
             <button
               onClick={() => handleSaveInvoice(false)}
-              className="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 flex items-center justify-center gap-1 transition-all"
+              className="py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 transition-all"
             >
-              <Save className="h-4 w-4 text-emerald-400" />
+              <Save className="h-4 w-4 text-emerald-600" />
               <span>Save Invoice</span>
             </button>
 
             <button
               onClick={() => handleSaveInvoice(true)}
-              className="py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs shadow-md flex items-center justify-center gap-1 transition-all"
+              className="py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1 transition-all"
             >
               <Printer className="h-4 w-4" />
               <span>Print & Save</span>

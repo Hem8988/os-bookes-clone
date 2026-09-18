@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     let newCustomer: any = null;
 
     try {
-      newCustomer = await prisma.customer.create({
+      newCustomer = await (prisma as any).customer.create({
         data: {
           id: `cust_${Date.now()}`,
           tenantId,
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
               isDefault: addr.isDefault ?? true,
             })),
           },
-        },
+        } as any,
         include: { deliveryAddresses: true },
       });
     } catch (dbErr: any) {

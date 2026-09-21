@@ -219,11 +219,16 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
 
   const handleProductSelect = (productId: string) => {
     const prod = products.find((p) => p.id === productId);
+    const customPartyRate = customer?.partyRates?.find((pr) => pr.productId === productId);
+    const defaultRate = (customPartyRate && ((customPartyRate.customRate || customPartyRate.price) > 0))
+      ? (customPartyRate.customRate || customPartyRate.price)
+      : (prod?.salePrice || 0);
+
     setEntry((prev) => ({
       ...prev,
       productId,
       mrp: prod?.mrp || prod?.salePrice || 0,
-      listPrice: prod?.salePrice || 0,
+      listPrice: defaultRate,
       discountType: 'percent',
       discountValue: 0,
       gstRate: prod?.taxRate ?? 18,
@@ -679,6 +684,16 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                   <AlertCircle className={`h-3.5 w-3.5 ${dueBalance > 0 ? 'text-rose-500' : 'text-emerald-500'}`} />
                   Due Balance: ₹{dueBalance.toLocaleString('en-IN')}
                 </div>
+                {customer?.customerCode && (
+                  <span className="inline-flex text-[11px] font-mono font-black text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-2.5 py-1 rounded-lg">
+                    ID: {customer.customerCode}
+                  </span>
+                )}
+                {customer?.partyRates && customer.partyRates.length > 0 && (
+                  <span className="inline-flex text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-lg">
+                    🏷️ {customer.partyRates.length} Monthly Rates
+                  </span>
+                )}
                 {customer?.phone && (
                   <span className="hidden sm:inline-flex text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
                     📞 {customer.phone}
@@ -834,9 +849,16 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
 
               {/* Rate / List Price (1 Col) */}
               <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Rate (₹)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    Rate (₹)
+                  </label>
+                  {customer?.partyRates?.some(pr => pr.productId === entry.productId && ((pr.customRate ?? pr.price) > 0)) && (
+                    <span className="text-[9px] font-black text-amber-600 dark:text-amber-400" title="Custom Rate Active">
+                      🏷️
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   min={0}

@@ -229,6 +229,7 @@ export interface CustomerAddress {
 
 export interface Customer {
   id: string;
+  customerCode?: string;
   name: string;
   shortName?: string;
   tradeName?: string;
@@ -307,6 +308,9 @@ export interface PartyRate {
   productId: string;
   productName: string;
   price: number;
+  customRate?: number;
+  effectiveMonth?: string;
+  updatedAt?: string;
 }
 
 export type FollowUpType = 'Call' | 'WhatsApp' | 'Email' | 'SMS' | 'Visit' | 'Meeting' | 'Other';

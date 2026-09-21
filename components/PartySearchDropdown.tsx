@@ -32,7 +32,9 @@ export const PartySearchDropdown: React.FC<PartySearchDropdownProps> = ({
     return parties.filter(
       (p) =>
         p.name.toLowerCase().includes(lowerQuery) ||
-        (p.phone && p.phone.includes(query))
+        (p.customerCode && p.customerCode.toLowerCase().includes(lowerQuery)) ||
+        (p.phone && p.phone.includes(query)) ||
+        (p.gstin && p.gstin.toLowerCase().includes(lowerQuery))
     );
   }, [parties, query, isOpen]);
 
@@ -107,7 +109,19 @@ export const PartySearchDropdown: React.FC<PartySearchDropdownProps> = ({
                     className={`p-2 border-b border-slate-100 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${selectedPartyId === p.id ? 'bg-sky-100 dark:bg-sky-900/40' : ''}`}
                   >
                     <div className="flex justify-between items-center mb-1">
-                      <span className="font-bold text-sm text-slate-900 dark:text-slate-100">{p.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-900 dark:text-slate-100">{p.name}</span>
+                        {p.customerCode && (
+                          <span className="px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-mono font-black text-[10px] border border-teal-200 dark:border-teal-800">
+                            {p.customerCode}
+                          </span>
+                        )}
+                        {p.partyRates && p.partyRates.length > 0 && (
+                          <span className="px-1 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold text-[9px]">
+                            🏷️ Custom Rate
+                          </span>
+                        )}
+                      </div>
                       <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{p.balance}</span>
                     </div>
                     <div className="flex justify-between items-center text-[11px] font-semibold text-slate-600 dark:text-slate-400">

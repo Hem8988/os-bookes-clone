@@ -756,6 +756,7 @@ export default function Home() {
               products={products}
               onAddCustomer={handleAddCustomer} 
               onUpdateCustomer={handleUpdateCustomer}
+              onUpdateCustomers={setCustomers}
               onDeleteCustomer={handleDeleteCustomer}
             />
           )}

@@ -437,6 +437,7 @@ export const INITIAL_ACCOUNTS: AccountMaster[] = [
 export const INITIAL_CUSTOMERS: Customer[] = [
   {
     id: 'cust-1',
+    customerCode: 'CUST-1001',
     name: 'Sharma Electronics & Superstore',
     phone: '+91 98260 12345',
     email: 'sharma.store@gmail.com',
@@ -450,9 +451,14 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     creditDays: 30,
     type: 'Customer',
     accountGroup: 'Sundry Debtors',
+    partyRates: [
+      { productId: 'prod_19com', productName: '19 KG Commercial LPG Cylinder', price: 1920, effectiveMonth: '2026-09' },
+      { productId: 'prod_475com', productName: '47.5 KG Industrial LPG Cylinder', price: 4750, effectiveMonth: '2026-09' },
+    ],
   },
   {
     id: 'cust-2',
+    customerCode: 'CUST-1002',
     name: 'Apex Infotech Solutions',
     phone: '+91 94250 67890',
     email: 'billing@apexinfotech.in',
@@ -466,9 +472,14 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     creditDays: 15,
     type: 'Customer',
     accountGroup: 'Sundry Debtors',
+    partyRates: [
+      { productId: 'prod_19com', productName: '19 KG Commercial LPG Cylinder', price: 1900, effectiveMonth: '2026-09' },
+      { productId: 'prod_19vot', productName: '19 KG VOT Commercial Cylinder', price: 1910, effectiveMonth: '2026-09' },
+    ],
   },
   {
     id: 'cust-3',
+    customerCode: 'CUST-1003',
     name: 'Rajput Wholesale Traders',
     phone: '+91 98930 11223',
     email: 'rajput.traders@yahoo.com',
@@ -482,9 +493,14 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     creditDays: 45,
     type: 'Customer',
     accountGroup: 'Sundry Debtors',
+    partyRates: [
+      { productId: 'prod_19com', productName: '19 KG Commercial LPG Cylinder', price: 1890, effectiveMonth: '2026-09' },
+      { productId: 'prod_475com', productName: '47.5 KG Industrial LPG Cylinder', price: 4680, effectiveMonth: '2026-09' },
+    ],
   },
   {
     id: 'cust-4',
+    customerCode: 'VEND-2001',
     name: 'National Distributors Pvt Ltd',
     phone: '+91 731 400500',
     email: 'orders@nationaldist.com',
@@ -501,6 +517,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
   },
   {
     id: 'cust-5',
+    customerCode: 'CUST-1004',
     name: 'Malwa Retail Mart & General Store',
     phone: '+91 98270 99887',
     email: 'malwa.retail@gmail.com',
@@ -514,9 +531,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     creditDays: 20,
     type: 'Customer',
     accountGroup: 'Sundry Debtors',
+    partyRates: [
+      { productId: 'prod_19com', productName: '19 KG Commercial LPG Cylinder', price: 1930, effectiveMonth: '2026-09' },
+    ],
   },
   {
     id: 'cust-6',
+    customerCode: 'VEND-2002',
     name: 'Gujarat Tech Supplies Ltd',
     phone: '+91 79 26543210',
     email: 'sales@gujtechsupplies.com',

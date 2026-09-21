@@ -376,6 +376,13 @@ export interface PurchaseOrderItem {
   listPrice: number;
   taxExcluded: boolean;
   amount: number;
+  discountType?: 'percent' | 'fixed';
+  discountPercent?: number;
+  discountValue?: number;
+  discountAmount?: number;
+  taxableAmount?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
   otherInfo?: string;
 }
 

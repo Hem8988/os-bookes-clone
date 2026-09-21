@@ -105,6 +105,8 @@ const emptyEntry = (products: Product[]) => ({
   quantity: 1,
   mrp: products[0]?.mrp || products[0]?.salePrice || 0,
   listPrice: products[0]?.salePrice || 0,
+  discountType: 'percent' as 'percent' | 'fixed',
+  discountValue: 0,
   gstRate: products[0]?.taxRate ?? 18,
   taxExcluded: true,
 });
@@ -164,9 +166,13 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
   const entryPriceExclTax = entry.taxExcluded
     ? entry.listPrice
     : entry.listPrice / (1 + entry.gstRate / 100);
-  const entryTaxable = entryPriceExclTax * entry.quantity;
-  const entryGstAmount = (entryTaxable * entry.gstRate) / 100;
-  const entryAmount = entryTaxable + entryGstAmount;
+  const entryGrossTaxable = entryPriceExclTax * entry.quantity;
+  const entryDiscountAmount = entry.discountType === 'percent'
+    ? (entryGrossTaxable * (Number(entry.discountValue) || 0)) / 100
+    : (Number(entry.discountValue) || 0);
+  const entryNetTaxable = Math.max(0, entryGrossTaxable - entryDiscountAmount);
+  const entryGstAmount = (entryNetTaxable * entry.gstRate) / 100;
+  const entryAmount = entryNetTaxable + entryGstAmount;
 
   const handleAddRow = () => {
     if (!entryProduct) return;
@@ -180,6 +186,13 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       mrp: entry.mrp,
       listPrice: entry.listPrice,
       taxExcluded: entry.taxExcluded,
+      discountType: entry.discountType,
+      discountValue: entry.discountValue || 0,
+      discountPercent: entry.discountType === 'percent' ? (entry.discountValue || 0) : 0,
+      discountAmount: parseFloat(entryDiscountAmount.toFixed(2)),
+      taxableAmount: parseFloat(entryNetTaxable.toFixed(2)),
+      cgstAmount: parseFloat((entryGstAmount / 2).toFixed(2)),
+      sgstAmount: parseFloat((entryGstAmount / 2).toFixed(2)),
       amount: parseFloat(entryAmount.toFixed(2)),
     };
     setItems([...items, newItem]);
@@ -192,6 +205,8 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       quantity: item.quantity,
       mrp: item.mrp,
       listPrice: item.listPrice,
+      discountType: item.discountType || (item.discountPercent ? 'percent' : 'percent'),
+      discountValue: item.discountValue ?? item.discountPercent ?? (item.discountAmount || 0),
       gstRate: item.gstRate,
       taxExcluded: item.taxExcluded,
     });
@@ -209,94 +224,60 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       productId,
       mrp: prod?.mrp || prod?.salePrice || 0,
       listPrice: prod?.salePrice || 0,
+      discountType: 'percent',
+      discountValue: 0,
       gstRate: prod?.taxRate ?? 18,
     }));
   };
 
   const totals = useMemo(() => {
     let totalQty = 0;
-    let baseTaxable = 0;
+    let grossTaxable = 0;
+    let totalLineDiscount = 0;
+    let netTaxable = 0;
+    let totalGst = 0;
     let disOnListPrice = 0;
 
-    // First pass to get total baseTaxable
     items.forEach((item) => {
       const priceExclTax = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
-      baseTaxable += priceExclTax * item.quantity;
-      disOnListPrice += Math.max(0, item.mrp - priceExclTax) * item.quantity;
+      const rowGrossTaxable = priceExclTax * item.quantity;
+      
+      const rowDiscountType = item.discountType || (item.discountPercent ? 'percent' : 'percent');
+      const rowDiscountVal = item.discountValue ?? item.discountPercent ?? (item.discountAmount || 0);
+      const rowDiscountAmt = item.discountAmount !== undefined && item.discountAmount > 0
+        ? item.discountAmount
+        : (rowDiscountType === 'percent' ? (rowGrossTaxable * rowDiscountVal) / 100 : rowDiscountVal);
+
+      const rowNetTaxable = Math.max(0, rowGrossTaxable - rowDiscountAmt);
+      const rowGst = (rowNetTaxable * item.gstRate) / 100;
+
       totalQty += item.quantity;
+      grossTaxable += rowGrossTaxable;
+      totalLineDiscount += rowDiscountAmt;
+      netTaxable += rowNetTaxable;
+      totalGst += rowGst;
+      disOnListPrice += Math.max(0, item.mrp - priceExclTax) * item.quantity;
     });
 
-    if (discountApplyOn === 'total') {
-      // Option 2: Apply Discount on Total Bill Amount (With GST / Post-GST)
-      let gstTotal = 0;
-      items.forEach((item) => {
-        const priceExclTax = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
-        const rowTaxable = priceExclTax * item.quantity;
-        const rowGst = (rowTaxable * item.gstRate) / 100;
-        gstTotal += rowGst;
-      });
+    const cgst = totalGst / 2;
+    const sgst = totalGst / 2;
+    const grandTotal = netTaxable + totalGst;
 
-      const grossWithGst = baseTaxable + gstTotal;
-      const discountAmount = discountType === 'fixed'
-        ? discountValue
-        : (grossWithGst * discountValue) / 100;
-
-      const cgst = gstTotal / 2;
-      const sgst = gstTotal / 2;
-      const grandTotal = Math.max(0, grossWithGst - discountAmount);
-
-      return {
-        totalQty,
-        taxable: baseTaxable,
-        discountedTaxable: baseTaxable,
-        grossWithGst,
-        cgst,
-        sgst,
-        disOnListPrice,
-        discountAmount,
-        grandTotal,
-        discountApplyOn: 'total' as const,
-      };
-    } else {
-      // Option 1: Apply Discount on Taxable Amount (Without GST / Pre-GST)
-      const discountAmount = discountType === 'fixed' 
-        ? discountValue 
-        : (baseTaxable * discountValue) / 100;
-      
-      const discountFactor = baseTaxable > 0 ? Math.max(0, 1 - discountAmount / baseTaxable) : 1;
-
-      let gstTotal = 0;
-      let discountedTaxable = 0;
-
-      items.forEach((item) => {
-        const priceExclTax = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
-        const rowTaxable = priceExclTax * item.quantity;
-        
-        const discountedRowTaxable = rowTaxable * discountFactor;
-        const rowGst = (discountedRowTaxable * item.gstRate) / 100;
-
-        discountedTaxable += discountedRowTaxable;
-        gstTotal += rowGst;
-      });
-
-      const cgst = gstTotal / 2;
-      const sgst = gstTotal / 2;
-      const grandTotal = discountedTaxable + gstTotal;
-
-      return {
-        totalQty,
-        taxable: baseTaxable,
-        discountedTaxable,
-        grossWithGst: baseTaxable + (baseTaxable * 0.18), // approximate reference
-        cgst,
-        sgst,
-        disOnListPrice,
-        discountAmount,
-        grandTotal,
-        discountApplyOn: 'taxable' as const,
-      };
-    }
-  }, [items, discountType, discountValue, discountApplyOn]);
+    return {
+      totalQty,
+      grossTaxable,
+      totalLineDiscount,
+      taxable: netTaxable,
+      discountedTaxable: netTaxable,
+      grossWithGst: netTaxable + totalGst,
+      cgst,
+      sgst,
+      disOnListPrice,
+      discountAmount: totalLineDiscount,
+      grandTotal,
+      discountApplyOn: 'taxable' as const,
+    };
+  }, [items]);
 
   const handleSearchInvoice = () => {
     const match = saleOrders.find(
@@ -355,9 +336,9 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       taxableAmount: parseFloat(totals.taxable.toFixed(2)),
       totalCgst: parseFloat(totals.cgst.toFixed(2)),
       totalSgst: parseFloat(totals.sgst.toFixed(2)),
-      discountPercent: discountType === 'percent' ? discountValue : 0,
-      discountAmount: discountType === 'fixed' ? discountValue : parseFloat(totals.discountAmount.toFixed(2)),
-      discountApplyOn,
+      discountPercent: 0,
+      discountAmount: parseFloat(totals.totalLineDiscount.toFixed(2)),
+      discountApplyOn: 'taxable',
       remark,
       createdBy: soToEdit?.createdBy || 'Shiv Kumar (Admin)',
       payments: soToEdit?.payments,
@@ -790,13 +771,13 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                 Fast Line Item Entry
               </h3>
               <span className="text-[11px] text-slate-400">
-                (Fill details and click Add or press Enter)
+                (Set item rate, per-item discount, quantity and click Add)
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
-              {/* Product Search (4 Cols) */}
-              <div className="sm:col-span-2 md:col-span-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2.5 items-end">
+              {/* Product Search (3 Cols) */}
+              <div className="sm:col-span-2 md:col-span-3">
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
                   Product / Item Name <span className="text-rose-500">*</span>
                 </label>
@@ -816,7 +797,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                 <select
                   value={entry.gstRate}
                   onChange={(e) => setEntry({ ...entry, gstRate: Number(e.target.value) })}
-                  className="w-full py-2 px-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full py-2 px-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   {GST_SLABS.map((rate) => (
                     <option key={rate} value={rate}>@{rate}%</option>
@@ -829,7 +810,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
                   HSN/SAC
                 </label>
-                <div className="py-2 px-2 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono font-semibold text-slate-600 dark:text-slate-300 text-center truncate">
+                <div className="py-2 px-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-mono font-semibold text-slate-600 dark:text-slate-300 text-center truncate">
                   {entryProduct?.hsnCode || '-'}
                 </div>
               </div>
@@ -837,7 +818,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
               {/* Quantity (1 Col) */}
               <div className="md:col-span-1">
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Quantity
+                  Qty
                 </label>
                 <input
                   type="number"
@@ -847,7 +828,21 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleAddRow();
                   }}
-                  className="w-full py-2 px-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-black text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full py-2 px-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-black text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              {/* Rate / List Price (1 Col) */}
+              <div className="md:col-span-1">
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                  Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={entry.listPrice}
+                  onChange={(e) => setEntry({ ...entry, listPrice: parseFloat(e.target.value) || 0 })}
+                  className="w-full py-2 px-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-right text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -861,27 +856,49 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                   min={0}
                   value={entry.mrp}
                   onChange={(e) => setEntry({ ...entry, mrp: parseFloat(e.target.value) || 0 })}
-                  className="w-full py-2 px-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-right text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full py-2 px-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-right text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
-              {/* List Price (1 Col) */}
-              <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Rate (₹)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={entry.listPrice}
-                  onChange={(e) => setEntry({ ...entry, listPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full py-2 px-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-right text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
+              {/* Item Discount (Dis % / ₹) (2 Cols) */}
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                    Item Discount
+                  </label>
+                  {entryDiscountAmount > 0 && (
+                    <span className="text-[10px] font-bold font-mono text-rose-600 dark:text-rose-400">
+                      -₹{entryDiscountAmount.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <select
+                    value={entry.discountType}
+                    onChange={(e) => setEntry({ ...entry, discountType: e.target.value as 'percent' | 'fixed' })}
+                    className="w-14 py-2 px-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                  >
+                    <option value="percent">%</option>
+                    <option value="fixed">₹</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    max={entry.discountType === 'percent' ? 100 : undefined}
+                    value={entry.discountValue || ''}
+                    placeholder="0"
+                    onChange={(e) => setEntry({ ...entry, discountValue: parseFloat(e.target.value) || 0 })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddRow();
+                    }}
+                    className="w-full py-2 px-2 rounded-xl bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-900/50 text-xs font-bold font-mono text-right text-rose-600 dark:text-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-500 placeholder-rose-300"
+                  />
+                </div>
               </div>
 
-              {/* Tax Mode & Price Excl (1 Col) */}
+              {/* Tax Mode Switch (1 Col) */}
               <div className="md:col-span-1">
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 text-center">
                   Tax Excl.
                 </label>
                 <div className="flex items-center justify-center py-2">
@@ -890,7 +907,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                     role="switch"
                     aria-checked={entry.taxExcluded}
                     onClick={() => setEntry({ ...entry, taxExcluded: !entry.taxExcluded })}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 cursor-pointer ${
                       entry.taxExcluded ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
                     }`}
                   >
@@ -903,20 +920,20 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                 </div>
               </div>
 
-              {/* Amount Preview & Add Action (2 Cols) */}
-              <div className="sm:col-span-2 md:col-span-2 flex items-center gap-2">
-                <div className="flex-1 text-right">
-                  <span className="block text-[10px] font-bold text-slate-400 uppercase">Line Total</span>
-                  <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+              {/* Amount Preview & Add Action (1 Col) */}
+              <div className="sm:col-span-2 md:col-span-1 flex flex-col items-stretch gap-1">
+                <div className="text-right">
+                  <span className="block text-[9px] font-bold text-slate-400 uppercase">Net Total</span>
+                  <span className="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400 truncate block">
                     ₹{entryAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleAddRow}
-                  className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all flex-shrink-0"
+                  className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" /> Add
+                  <Plus className="h-3.5 w-3.5" /> Add
                 </button>
               </div>
             </div>
@@ -924,92 +941,113 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
 
           {/* Line Items Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[950px]">
+            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[1050px]">
               <thead className="bg-slate-100/90 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 py-3 w-14 text-center">#</th>
+                  <th className="px-3 py-3 w-12 text-center">#</th>
                   <th className="px-3 py-3">Product Name</th>
-                  <th className="px-3 py-3 w-24 text-center">GST %</th>
-                  <th className="px-3 py-3 w-28 text-center">HSN/SAC</th>
-                  <th className="px-3 py-3 w-24 text-center">Qty</th>
-                  <th className="px-3 py-3 w-28 text-right">MRP</th>
-                  <th className="px-3 py-3 w-28 text-right">List Rate</th>
-                  <th className="px-3 py-3 w-28 text-center">Tax Mode</th>
-                  <th className="px-3 py-3 w-32 text-right">Total (₹)</th>
-                  <th className="px-3 py-3 w-24 text-center">Action</th>
+                  <th className="px-3 py-3 w-20 text-center">GST %</th>
+                  <th className="px-3 py-3 w-24 text-center">HSN/SAC</th>
+                  <th className="px-3 py-3 w-20 text-center">Qty</th>
+                  <th className="px-3 py-3 w-24 text-right">Rate</th>
+                  <th className="px-3 py-3 w-24 text-right">MRP</th>
+                  <th className="px-3 py-3 w-36 text-center">Item Discount</th>
+                  <th className="px-3 py-3 w-28 text-right">Taxable Val</th>
+                  <th className="px-3 py-3 w-24 text-right">GST Amt</th>
+                  <th className="px-3 py-3 w-28 text-right">Net Total</th>
+                  <th className="px-3 py-3 w-20 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400 dark:text-slate-500">
+                    <td colSpan={12} className="py-12 text-center text-slate-400 dark:text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Layers className="h-8 w-8 text-slate-300 dark:text-slate-600" />
                         <p className="font-semibold text-sm">No items added to this order yet</p>
-                        <p className="text-xs text-slate-400">Use the fast entry bar above to add products to your sale order.</p>
+                        <p className="text-xs text-slate-400">Use the fast entry bar above to add products with individual discounts to your sale order.</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  items.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-3 py-3 text-center font-bold text-slate-400">{idx + 1}</td>
-                      <td className="px-3 py-3 font-bold text-slate-900 dark:text-slate-100">
-                        {item.productName}
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
-                          @{item.gstRate}%
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 font-mono text-center text-slate-500 dark:text-slate-400">
-                        {item.hsnCode || '-'}
-                      </td>
-                      <td className="px-3 py-3 text-center font-bold text-slate-900 dark:text-slate-100">
-                        <span className="inline-block px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono">
-                          {item.quantity}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                        ₹{item.mrp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        ₹{item.listPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          item.taxExcluded
-                            ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                            : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300'
-                        }`}>
-                          {item.taxExcluded ? 'Tax Excl.' : 'Tax Incl.'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono font-black text-slate-900 dark:text-white">
-                        ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleEditRow(item)}
-                            title="Edit Item"
-                            className="p-1.5 rounded-lg text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/50 transition-colors"
-                          >
-                            <Edit3 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRow(item.id)}
-                            title="Delete Item"
-                            className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  items.map((item, idx) => {
+                    const priceExclTax = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
+                    const rowGrossTaxable = priceExclTax * item.quantity;
+                    const rowDiscountType = item.discountType || (item.discountPercent ? 'percent' : 'percent');
+                    const rowDiscountVal = item.discountValue ?? item.discountPercent ?? (item.discountAmount || 0);
+                    const rowDiscountAmt = item.discountAmount !== undefined && item.discountAmount > 0
+                      ? item.discountAmount
+                      : (rowDiscountType === 'percent' ? (rowGrossTaxable * rowDiscountVal) / 100 : rowDiscountVal);
+                    const rowNetTaxable = Math.max(0, rowGrossTaxable - rowDiscountAmt);
+                    const rowGst = (rowNetTaxable * item.gstRate) / 100;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="px-3 py-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                        <td className="px-3 py-3 font-bold text-slate-900 dark:text-slate-100">
+                          {item.productName}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">
+                            @{item.gstRate}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 font-mono text-center text-slate-500 dark:text-slate-400">
+                          {item.hsnCode || '-'}
+                        </td>
+                        <td className="px-3 py-3 text-center font-bold text-slate-900 dark:text-slate-100">
+                          <span className="inline-block px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 font-mono">
+                            {item.quantity}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          ₹{item.listPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-slate-500 dark:text-slate-400">
+                          ₹{item.mrp.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {rowDiscountAmt > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 text-[11px] font-bold font-mono">
+                              <Tag className="h-3 w-3 text-rose-500" />
+                              {rowDiscountType === 'fixed' ? `₹${rowDiscountVal}` : `${rowDiscountVal}%`} (-₹{rowDiscountAmt.toFixed(2)})
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[11px]">0%</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          ₹{rowNetTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                          +₹{rowGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono font-black text-slate-900 dark:text-white">
+                          ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleEditRow(item)}
+                              title="Edit Item"
+                              className="p-1.5 rounded-lg text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/50 transition-colors"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRow(item.id)}
+                              title="Delete Item"
+                              className="p-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1026,30 +1064,30 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 shadow-xs flex flex-col justify-center">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Taxable Value</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Gross Subtotal</span>
             <span className="text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
-              ₹{totals.discountedTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{totals.grossTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 shadow-xs flex flex-col justify-center">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">CGST</span>
-            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-              ₹{totals.cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 shadow-xs flex flex-col justify-center">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">SGST</span>
-            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-              ₹{totals.sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 shadow-xs flex flex-col justify-center">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Dis. (List Price)</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Item Discounts</span>
             <span className="text-lg font-black text-rose-600 dark:text-rose-400 font-mono mt-0.5">
-              ₹{totals.disOnListPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              -₹{totals.totalLineDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 shadow-xs flex flex-col justify-center">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Net Taxable</span>
+            <span className="text-lg font-black text-slate-900 dark:text-white font-mono mt-0.5">
+              ₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3.5 shadow-xs flex flex-col justify-center">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total GST</span>
+            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+              +₹{(totals.cgst + totals.sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         </div>
@@ -1092,137 +1130,53 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
 
           {/* Commercial Breakdown Card (5 Cols) */}
           <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 md:p-5 shadow-xs space-y-3">
-            <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              Commercial Summary
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Commercial Summary
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Itemized GST Billing
+              </span>
+            </div>
 
-            {/* Base Subtotal */}
+            {/* Base Gross Subtotal */}
             <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-slate-500 dark:text-slate-400">Base Subtotal:</span>
+              <span className="text-slate-500 dark:text-slate-400">Gross Subtotal (Before Discount):</span>
+              <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                ₹{totals.grossTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Total Item Discounts Banner */}
+            {totals.totalLineDiscount > 0 && (
+              <div className="flex items-center justify-between text-xs text-rose-700 dark:text-rose-300 font-bold bg-rose-50 dark:bg-rose-950/30 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900/40">
+                <span className="flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 text-rose-600" /> Total Item-Wise Discount:
+                </span>
+                <span className="font-mono font-black text-sm">-₹{totals.totalLineDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+
+            {/* Net Taxable */}
+            <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-slate-500 dark:text-slate-400">Net Taxable Value:</span>
               <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
                 ₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
 
-            {/* Discount Control Row */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Discount Type
-                </label>
-                <div className="relative">
-                  <select
-                    value={discountType}
-                    onChange={(e) => {
-                      setDiscountType(e.target.value as 'percent' | 'fixed');
-                      setDiscountValue(0);
-                    }}
-                    className="w-full py-1.5 px-2.5 pr-7 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
-                  >
-                    <option value="percent">% Percentage</option>
-                    <option value="fixed">₹ Fixed Amount</option>
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  {discountType === 'percent' ? 'Discount Rate (%)' : 'Discount Amount (₹)'}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={discountType === 'percent' ? 100 : undefined}
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
-                  className="w-full py-1.5 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-right font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
+            {/* Total GST */}
+            <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-slate-500 dark:text-slate-400">Total GST (CGST + SGST):</span>
+              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                +₹{(totals.cgst + totals.sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
-
-            {/* Discount Application Mode Checkbox / Switch */}
-            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={discountApplyOn === 'total'}
-                    onChange={(e) => setDiscountApplyOn(e.target.checked ? 'total' : 'taxable')}
-                    className="w-4 h-4 rounded text-teal-600 border-slate-300 dark:border-slate-600 focus:ring-teal-500 cursor-pointer accent-teal-600"
-                  />
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Apply Discount on Total (With GST)
-                  </span>
-                </label>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  discountApplyOn === 'total'
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-                    : 'bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
-                }`}>
-                  {discountApplyOn === 'total' ? 'Post-GST Total' : 'Pre-GST Taxable'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 pl-6 leading-tight">
-                {discountApplyOn === 'total'
-                  ? 'Discount will be deducted from the Complete Bill Total (including GST).'
-                  : 'Discount is deducted from Taxable Value first, and GST is calculated on the discounted amount.'}
-              </p>
-            </div>
-
-            {/* Dynamic Breakdown based on discount mode */}
-            {discountApplyOn === 'taxable' ? (
-              <>
-                {totals.discountAmount > 0 && (
-                  <div className="flex items-center justify-between text-xs text-rose-600 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-950/30 px-3 py-1.5 rounded-xl border border-rose-100 dark:border-rose-900/40">
-                    <span>Discount on Taxable:</span>
-                    <span>-₹{totals.discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500 dark:text-slate-400">Net Taxable:</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                    ₹{totals.discountedTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500 dark:text-slate-400">Total GST (CGST + SGST):</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    +₹{(totals.cgst + totals.sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500 dark:text-slate-400">Total GST (CGST + SGST):</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    +₹{(totals.cgst + totals.sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500 dark:text-slate-400">Total with GST (Gross):</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                    ₹{totals.grossWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                {totals.discountAmount > 0 && (
-                  <div className="flex items-center justify-between text-xs text-purple-700 dark:text-purple-300 font-semibold bg-purple-50 dark:bg-purple-950/30 px-3 py-1.5 rounded-xl border border-purple-100 dark:border-purple-900/40">
-                    <span>Discount on Gross Total:</span>
-                    <span>-₹{totals.discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-              </>
-            )}
 
             {/* Grand Total Banner */}
-            <div className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 p-3 text-white flex items-center justify-between shadow-md shadow-teal-600/20">
+            <div className="rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 p-3.5 text-white flex items-center justify-between shadow-md shadow-teal-600/20">
               <div>
-                <span className="block text-[11px] font-medium text-teal-100 uppercase tracking-wider">Grand Total (Net)</span>
+                <span className="block text-[11px] font-medium text-teal-100 uppercase tracking-wider">Grand Total (Net Payable)</span>
                 <span className="text-xl font-black font-mono tracking-tight">
                   ₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>

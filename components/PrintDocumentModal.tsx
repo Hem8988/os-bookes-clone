@@ -112,7 +112,13 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
   const hsnMap = displayItems.reduce((acc, item) => {
     const hsn = item.hsnCode || '27111900';
     const priceExcl = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
-    const taxable = priceExcl * item.quantity;
+    const grossTaxable = priceExcl * item.quantity;
+    const discType = item.discountType || (item.discountPercent ? 'percent' : 'percent');
+    const discVal = item.discountValue ?? item.discountPercent ?? (item.discountAmount || 0);
+    const discAmt = item.discountAmount !== undefined && item.discountAmount > 0
+      ? item.discountAmount
+      : (discType === 'percent' ? (grossTaxable * discVal) / 100 : discVal);
+    const taxable = Math.max(0, grossTaxable - discAmt);
     const taxAmt = (taxable * item.gstRate) / 100;
     
     if (!acc[hsn]) {
@@ -297,18 +303,25 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
                 <tr>
                   <th className="py-2.5 px-2.5 w-10 text-center border-r border-slate-800">#</th>
                   <th className="py-2.5 px-3 border-r border-slate-800">Product / Item Description</th>
-                  <th className="py-2.5 px-2.5 w-24 text-center border-r border-slate-800">HSN/SAC</th>
-                  <th className="py-2.5 px-2.5 w-16 text-center border-r border-slate-800">Qty</th>
-                  <th className="py-2.5 px-2.5 w-24 text-right border-r border-slate-800">Rate (₹)</th>
-                  <th className="py-2.5 px-2.5 w-24 text-right border-r border-slate-800">Taxable (₹)</th>
-                  <th className="py-2.5 px-2.5 w-20 text-center border-r border-slate-800">GST %</th>
-                  <th className="py-2.5 px-3 w-28 text-right">Amount (₹)</th>
+                  <th className="py-2.5 px-2.5 w-20 text-center border-r border-slate-800">HSN/SAC</th>
+                  <th className="py-2.5 px-2.5 w-14 text-center border-r border-slate-800">Qty</th>
+                  <th className="py-2.5 px-2.5 w-20 text-right border-r border-slate-800">Rate (₹)</th>
+                  <th className="py-2.5 px-2.5 w-20 text-center border-r border-slate-800">Discount</th>
+                  <th className="py-2.5 px-2.5 w-20 text-right border-r border-slate-800">Taxable (₹)</th>
+                  <th className="py-2.5 px-2.5 w-16 text-center border-r border-slate-800">GST %</th>
+                  <th className="py-2.5 px-3 w-24 text-right">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-800">
                 {displayItems.map((item, idx) => {
                   const priceExcl = item.taxExcluded ? item.listPrice : item.listPrice / (1 + item.gstRate / 100);
-                  const taxableAmt = priceExcl * item.quantity;
+                  const grossTaxable = priceExcl * item.quantity;
+                  const discType = item.discountType || (item.discountPercent ? 'percent' : 'percent');
+                  const discVal = item.discountValue ?? item.discountPercent ?? (item.discountAmount || 0);
+                  const discAmt = item.discountAmount !== undefined && item.discountAmount > 0
+                    ? item.discountAmount
+                    : (discType === 'percent' ? (grossTaxable * discVal) / 100 : discVal);
+                  const taxableAmt = Math.max(0, grossTaxable - discAmt);
                   return (
                     <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
                       <td className="py-2.5 px-2.5 text-center font-mono text-slate-400 font-bold border-r border-slate-200">
@@ -325,6 +338,15 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
                       </td>
                       <td className="py-2.5 px-2.5 text-right font-mono text-slate-700 border-r border-slate-200">
                         ₹{item.listPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2.5 px-2.5 text-center font-mono text-slate-700 border-r border-slate-200">
+                        {discAmt > 0 ? (
+                          <span className="font-bold text-rose-600">
+                            {discType === 'fixed' ? `₹${discVal}` : `${discVal}%`}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="py-2.5 px-2.5 text-right font-mono font-semibold text-slate-800 border-r border-slate-200">
                         ₹{taxableAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}

@@ -45,6 +45,7 @@ import {
   Invoice,
   InvoiceItem,
   NarrationMaster,
+  EmployeeMaster,
 } from '../lib/types';
 import { PaymentStatusModal } from './PaymentStatusModal';
 import { ProductSearchDropdown } from './ProductSearchDropdown';
@@ -56,6 +57,7 @@ interface SaleOrderModuleProps {
   banks: BankMaster[];
   narrations: NarrationMaster[];
   onAddNarration?: (narration: NarrationMaster) => void;
+  staff?: EmployeeMaster[];
   saleOrders: SaleOrder[];
   soToEdit?: SaleOrder | null;
   onAddSO: (so: SaleOrder) => void;
@@ -117,6 +119,7 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
   banks,
   narrations,
   onAddNarration,
+  staff = [],
   saleOrders,
   soToEdit,
   onAddSO,
@@ -145,6 +148,12 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
   const [entry, setEntry] = useState(emptyEntry(products));
   const [lastSavedTotal, setLastSavedTotal] = useState(0);
 
+  // Delivery / Driver Assignment State
+  const [deliveryBoyId, setDeliveryBoyId] = useState(soToEdit?.deliveryBoyId || '');
+  const [deliveryBoyName, setDeliveryBoyName] = useState(soToEdit?.deliveryBoyName || '');
+  const [driverPhone, setDriverPhone] = useState(soToEdit?.driverPhone || '');
+  const [vehicleNumber, setVehicleNumber] = useState(soToEdit?.vehicleNumber || '');
+
   useEffect(() => {
     if (soToEdit) {
       const matched = customers.find((c) => c.name === soToEdit.customerName);
@@ -157,10 +166,53 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       setDiscountValue(soToEdit.discountAmount && !soToEdit.discountPercent ? soToEdit.discountAmount : (soToEdit.discountPercent || 0));
       setDiscountApplyOn(soToEdit.discountApplyOn || 'taxable');
       setItems(soToEdit.items || []);
+      setDeliveryBoyId(soToEdit.deliveryBoyId || '');
+      setDeliveryBoyName(soToEdit.deliveryBoyName || '');
+      setDriverPhone(soToEdit.driverPhone || '');
+      setVehicleNumber(soToEdit.vehicleNumber || '');
     }
   }, [soToEdit, customers]);
 
   const customer = customers.find((c) => c.id === customerId);
+
+  // Auto-fill driver from customer's default assigned delivery person if not manually set
+  useEffect(() => {
+    if (customer && !soToEdit && !deliveryBoyId) {
+      if (customer.defaultDeliveryBoyId || customer.defaultDeliveryBoyName) {
+        const dId = customer.defaultDeliveryBoyId || '';
+        const dName = customer.defaultDeliveryBoyName || '';
+        setDeliveryBoyId(dId);
+        setDeliveryBoyName(dName);
+        const matchedEmp = staff.find((s) => s.id === dId || s.name.toLowerCase() === dName.toLowerCase());
+        if (matchedEmp) {
+          setDriverPhone(matchedEmp.phone || '');
+          if (matchedEmp.designation && matchedEmp.designation.includes('(') && matchedEmp.designation.includes(')')) {
+            const vMatch = matchedEmp.designation.match(/\((.*?)\)/);
+            if (vMatch) setVehicleNumber(vMatch[1]);
+          }
+        }
+      }
+    }
+  }, [customerId, customer, staff, soToEdit, deliveryBoyId]);
+
+  const handleDriverSelect = (empId: string) => {
+    setDeliveryBoyId(empId);
+    if (!empId) {
+      setDeliveryBoyName('');
+      setDriverPhone('');
+      setVehicleNumber('');
+      return;
+    }
+    const emp = staff.find((s) => s.id === empId);
+    if (emp) {
+      setDeliveryBoyName(emp.name);
+      setDriverPhone(emp.phone || '');
+      if (emp.designation && emp.designation.includes('(') && emp.designation.includes(')')) {
+        const vMatch = emp.designation.match(/\((.*?)\)/);
+        if (vMatch) setVehicleNumber(vMatch[1]);
+      }
+    }
+  };
   const entryProduct = products.find((p) => p.id === entry.productId);
 
   const entryPriceExclTax = entry.taxExcluded
@@ -330,7 +382,10 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
     const so: SaleOrder = {
       id: soToEdit?.id || `so-${Date.now()}`,
       soNumber: soToEdit?.soNumber || `SO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      customerId: customer.id,
       customerName: customer.name,
+      customerPhone: customer.phone,
+      customerAddress: customer.address || customer.city,
       customerGstin: customer.gstin,
       date,
       validUntil: soToEdit?.validUntil || new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
@@ -348,6 +403,12 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
       createdBy: soToEdit?.createdBy || 'Shiv Kumar (Admin)',
       payments: soToEdit?.payments,
       shippingParty: soToEdit?.shippingParty,
+      deliveryBoyId: deliveryBoyId || undefined,
+      deliveryBoyName: deliveryBoyName || undefined,
+      driverPhone: driverPhone || undefined,
+      vehicleNumber: vehicleNumber || undefined,
+      deliveryStatus: deliveryBoyId ? (soToEdit?.deliveryStatus || 'Assigned') : 'Unassigned',
+      assignedAt: deliveryBoyId ? (soToEdit?.assignedAt || new Date().toISOString()) : undefined,
     };
 
     setPendingSO(so);
@@ -763,13 +824,68 @@ export const SaleOrderModule: React.FC<SaleOrderModuleProps> = ({
                   <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                 </div>
               </div>
+
+              {/* Driver / Delivery Person Assignment */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Truck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                    Assign Driver / Delivery
+                  </span>
+                  {deliveryBoyName && (
+                    <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold">
+                      Assigned
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={deliveryBoyId}
+                  onChange={(e) => handleDriverSelect(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 cursor-pointer"
+                >
+                  <option value="">-- No Driver (Unassigned) --</option>
+                  {staff
+                    .filter((s) => s.active !== false)
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.role === 'Delivery Boy' || emp.role === 'Driver' ? '🚚 ' : '👤 '}
+                        {emp.name} ({emp.role}) {emp.phone ? `- ${emp.phone}` : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Vehicle Number */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Vehicle No. / Delivery Route
+                </label>
+                <input
+                  type="text"
+                  value={vehicleNumber}
+                  onChange={(e) => setVehicleNumber(e.target.value)}
+                  placeholder="e.g. MP-09-GF-4432 (Route 1)"
+                  className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+              </div>
             </div>
 
             {/* Quick Status Bar */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Payment Terms:</span>
+            <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400 font-medium">Driver:</span>
+                {deliveryBoyName ? (
+                  <span className="inline-flex items-center gap-1 font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-md text-[11px]">
+                    🚚 {deliveryBoyName} {vehicleNumber ? `(${vehicleNumber})` : ''}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md text-[11px]">
+                    ⚠️ Unassigned
+                  </span>
+                )}
+              </div>
               <span className="font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">
-                {paymentMode === 'Cash' ? 'Immediate Cash Settlement' : 'Standard 15-Day Net Credit'}
+                {paymentMode === 'Cash' ? 'Cash Settlement' : 'Net Credit'}
               </span>
             </div>
           </div>

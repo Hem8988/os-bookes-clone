@@ -846,6 +846,7 @@ export default function Home() {
               narrations={narrations}
               onAddNarration={handleAddNarration}
               onAddCustomer={handleAddCustomer}
+              staff={staff}
               initialSubTab={activeInventorySubTab}
               setActiveTab={handleTabChange}
               onAddPO={handleAddPO}

@@ -24,12 +24,14 @@ import {
   Invoice,
   Customer,
   BankMaster,
-  NarrationMaster
+  NarrationMaster,
+  EmployeeMaster,
 } from '../lib/types';
 import { PurchaseOrderModule } from './PurchaseOrderModule';
 import { PurchaseOrderSummaryModule } from './PurchaseOrderSummaryModule';
 import { PurchaseInvoiceModule } from './PurchaseInvoiceModule';
 import { SaleOrderModule } from './SaleOrderModule';
+import { SaleOrderSummaryView } from './SaleOrderSummaryView';
 import { SalesInvoiceModule } from './SalesInvoiceModule';
 import { PurchaseReturnModule } from './PurchaseReturnModule';
 import { SalesReturnModule } from './SalesReturnModule';
@@ -52,6 +54,7 @@ interface InventoryHubModuleProps {
   banks: BankMaster[];
   narrations: NarrationMaster[];
   onAddNarration?: (narration: NarrationMaster) => void;
+  staff?: EmployeeMaster[];
   initialSubTab?: string;
   setActiveTab: (tab: string) => void;
   onAddPO: (po: PurchaseOrder) => void;
@@ -100,6 +103,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
   banks,
   narrations,
   onAddNarration,
+  staff = [],
   initialSubTab = 'stock',
   setActiveTab,
   onAddPO,
@@ -391,79 +395,22 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
 
       {/* 4. SALE ORDER */}
       {activeSubTab === 'so' && soView === 'list' && (
-        <GenericSummaryList
-          title="Sale Order Summary"
-          items={saleOrders}
-          getId={(so) => so.id}
-          getDate={(so) => so.date}
-          partyLabel="Customer Name"
-          partyOptions={customers.filter((c) => c.type === 'Customer').map((v) => ({ id: v.id, name: v.name }))}
-          getItemPartyName={(so) => so.customerName}
-          computeStats={(list) => {
-            const totalAmt = list.reduce((sum, so) => sum + so.totalAmount, 0);
-            const converted = list.reduce((sum, so) => sum + (so.status === 'Converted to Bill' ? so.totalAmount : 0), 0);
-            return [
-              { label: 'TOTAL ORDER VALUE', value: `₹${totalAmt.toLocaleString('en-IN')}` },
-              { label: 'CONVERTED', value: `₹${converted.toLocaleString('en-IN')}`, valueClassName: 'text-emerald-400' },
-              { label: 'PENDING', value: `₹${(totalAmt - converted).toLocaleString('en-IN')}`, valueClassName: 'text-rose-400' },
-            ];
-          }}
-          onCreateNew={() => {
+        <SaleOrderSummaryView
+          saleOrders={saleOrders}
+          customers={customers.filter((c) => c.type === 'Customer')}
+          staff={staff}
+          onAddSO={() => {
             setEditingSO(null);
             setSoView('create');
           }}
-          onClose={() => setActiveSubTab('stock')}
-          emptyMessage="No Sale Orders found for the selected filters."
-          tableHeaders={['Date', 'SO No', 'Customer Name', 'Valid Until', 'Amount', 'Status', 'Actions']}
-          renderTableRow={(so) => {
-            let rowBgClass = 'hover:bg-slate-50 dark:hover:bg-slate-800/50 bg-white dark:bg-slate-900';
-            let badgeColor = 'bg-sky-100 text-sky-800';
-            let pulse = '';
-            
-            if ((so.status as string) === 'Converted to Bill' || (so.status as string) === 'Delivered') {
-              badgeColor = 'bg-emerald-100 text-emerald-800';
-              rowBgClass = 'bg-emerald-50/50 dark:bg-emerald-900/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30';
-            } else if (so.date) {
-              const hrs = (Date.now() - new Date(so.date).getTime()) / 3600000;
-              if (hrs >= 36) { 
-                badgeColor = 'bg-rose-100 text-rose-800'; 
-                pulse = 'animate-pulse';
-                rowBgClass = 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100/50 dark:hover:bg-rose-900/30';
-              } else if (hrs >= 24) { 
-                badgeColor = 'bg-orange-100 text-orange-800'; 
-                pulse = 'animate-pulse';
-                rowBgClass = 'bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100/50 dark:hover:bg-orange-900/30';
-              }
-            }
-
-            return (
-              <tr className={`transition-colors border-b border-slate-100 dark:border-slate-800 ${rowBgClass}`}>
-                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{so.date}</td>
-                <td className="px-3 py-2 font-mono text-xs">{so.soNumber}</td>
-                <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{so.customerName}</td>
-                <td className="px-3 py-2 text-xs text-slate-500">{so.validUntil || '-'}</td>
-                <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">₹{so.totalAmount.toLocaleString('en-IN')}</td>
-                <td className="px-3 py-2">
-                  <div className={`px-2 py-0.5 text-[10px] font-black rounded-full uppercase inline-block ${badgeColor} ${pulse}`}>
-                    {so.status}
-                  </div>
-                </td>
-                <td className="px-3 py-2 text-right">
-                <div className="flex items-center justify-end gap-1.5">
-                  <button onClick={() => setPrintSO(so)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
-                    <Printer className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => { setEditingSO(so); setSoView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => { if (window.confirm(`Delete Sale Order ${so.soNumber}?`)) onDeleteSO(so.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-            );
+          onEditSO={(so) => {
+            setEditingSO(so);
+            setSoView('create');
           }}
+          onDeleteSO={onDeleteSO}
+          onPrintSO={(so) => setPrintSO(so)}
+          onUpdateSO={onUpdateSO}
+          onClose={() => setActiveSubTab('stock')}
         />
       )}
 
@@ -474,6 +421,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           banks={banks}
           narrations={narrations}
           onAddNarration={onAddNarration}
+          staff={staff}
           saleOrders={saleOrders}
           soToEdit={editingSO}
           onAddSO={onAddSO}

@@ -68,7 +68,7 @@ export interface BankMaster {
 export interface EmployeeMaster {
   id: string;
   name: string;
-  role: 'Admin' | 'Salesman' | 'Accountant' | 'Billing Executive' | 'Store Manager' | 'Delivery Boy' | 'Relationship Manager';
+  role: 'Admin' | 'Salesman' | 'Accountant' | 'Billing Executive' | 'Store Manager' | 'Delivery Boy' | 'Relationship Manager' | 'Driver';
   phone: string;
   email: string;
   salary: number;
@@ -487,6 +487,15 @@ export interface SaleOrder {
   createdBy?: string;
   payments?: PurchaseOrderPayment[];
   shippingParty?: string;
+  customerId?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  deliveryBoyId?: string;
+  deliveryBoyName?: string;
+  driverPhone?: string;
+  vehicleNumber?: string;
+  deliveryStatus?: 'Unassigned' | 'Assigned' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  assignedAt?: string;
 }
 
 export interface DeliveryChallan {

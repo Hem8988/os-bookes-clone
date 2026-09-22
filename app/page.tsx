@@ -97,7 +97,8 @@ export default function Home() {
   const [userEmail, setUserEmail] = usePersistedState('osbooks.userEmail', '');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeMastersSubTab, setActiveMastersSubTab] = useState('bank');
-  const [activeInventorySubTab, setActiveInventorySubTab] = useState('stock');
+  const [activeInventorySubTab, setActiveInventorySubTab] = useState('so');
+  const [activeCylinderSubTab, setActiveCylinderSubTab] = useState('godown');
   const [activeAccountSubTab, setActiveAccountSubTab] = useState('customer-ledger');
 
   const [reportsCategory, setReportsCategory] = useState('account-summary');
@@ -151,6 +152,8 @@ export default function Home() {
           setActiveMastersSubTab(urlSubTab);
         } else if (urlTab === 'inventory-hub' && urlSubTab) {
           setActiveInventorySubTab(urlSubTab);
+        } else if (urlTab === 'cylinder-inventory' && urlSubTab) {
+          setActiveCylinderSubTab(urlSubTab);
         } else if (urlTab === 'account-hub' && urlSubTab) {
           setActiveAccountSubTab(urlSubTab);
         }
@@ -321,6 +324,10 @@ export default function Home() {
       const targetSub = subTab || activeInventorySubTab;
       if (subTab) setActiveInventorySubTab(subTab);
       updateUrlParams('inventory-hub', targetSub);
+    } else if (tab === 'cylinder-inventory') {
+      const targetSub = subTab || activeCylinderSubTab || 'godown';
+      if (subTab) setActiveCylinderSubTab(subTab);
+      updateUrlParams('cylinder-inventory', targetSub);
     } else if (tab === 'account-hub') {
       const targetSub = subTab || activeAccountSubTab;
       if (subTab) setActiveAccountSubTab(subTab);
@@ -727,6 +734,7 @@ export default function Home() {
           unpaidCount={unpaidCount}
           activeMastersSubTab={activeMastersSubTab}
           activeInventorySubTab={activeInventorySubTab}
+          activeCylinderSubTab={activeCylinderSubTab}
           activeAccountSubTab={activeAccountSubTab}
           reportsSubTab={reportsSubTab}
           pendingRequestsCount={deliveryRequests.filter(r => r.status === 'PENDING').length}
@@ -734,7 +742,15 @@ export default function Home() {
 
         {/* Dynamic Content View Area */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto bg-slate-100 text-slate-900">
-          {activeTab === 'cylinder-inventory' && <CylinderBalanceModule />}
+          {activeTab === 'cylinder-inventory' && (
+            <CylinderBalanceModule 
+              initialSubTab={activeCylinderSubTab}
+              onSubTabChange={(st) => handleTabChange('cylinder-inventory', st)}
+              customers={customers}
+              products={products}
+              staff={staff}
+            />
+          )}
           {activeTab === 'approval-queue' && <ApprovalQueueModule />}
           {activeTab === 'delivery-app' && (
             <DeliveryBoyModule

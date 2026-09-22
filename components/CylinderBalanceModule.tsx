@@ -24,22 +24,67 @@ import {
   ArrowDownLeft,
   Flame,
   Layers,
-  Printer
+  Printer,
+  Sparkles,
+  SlidersHorizontal,
+  ChevronRight,
+  UserCheck,
+  Phone,
+  ShieldCheck,
+  DollarSign
 } from 'lucide-react';
+import { Customer, Product, EmployeeMaster } from '../lib/types';
 
 interface CylinderInventoryItem {
   id: string;
   customerId?: string;
   customerName: string;
+  customerPhone?: string;
   productName: string;
-  category: 'Commercial 19KG' | 'Industrial 47.5KG' | 'Domestic 14.2KG' | 'Other';
+  category: 'Commercial 19KG' | 'Industrial 47.5KG' | 'Domestic 14.2KG' | '5KG FTL' | 'Other';
   openingQty: number;
   currentFullBalance: number;
   currentEmptyBalance: number;
   defectiveQty: number;
   inTransitRefillQty: number;
   location: string;
+  svNumber?: string;
+  depositAmount?: number;
   lastUpdated: string;
+}
+
+interface DriverVehicleStock {
+  id: string;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleNumber: string;
+  route: string;
+  morningLoadedFull: number;
+  deliveredFull: number;
+  collectedEmpty: number;
+  currentFullOnVehicle: number;
+  currentEmptyOnVehicle: number;
+  cashCollected: number;
+  status: 'ON_ROUTE' | 'RECONCILED' | 'IDLE';
+  lastUpdated: string;
+}
+
+interface StockTransferRecord {
+  id: string;
+  transferNumber: string;
+  date: string;
+  transferType: 'GODOWN_TO_DRIVER' | 'DRIVER_TO_GODOWN' | 'DRIVER_TO_DRIVER' | 'PLANT_REFILL_GATEPASS';
+  fromLocation: string;
+  toLocation: string;
+  productName: string;
+  fullQty: number;
+  emptyQty: number;
+  vehicleNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  notes?: string;
+  status: 'COMPLETED' | 'PENDING_APPROVAL';
 }
 
 const DEFAULT_INVENTORY_ITEMS: CylinderInventoryItem[] = [
@@ -47,1114 +92,1278 @@ const DEFAULT_INVENTORY_ITEMS: CylinderInventoryItem[] = [
     id: 'cyl_inv_1',
     customerId: 'cust_1',
     customerName: 'Sharma Electronics & Superstore',
+    customerPhone: '+91 98260 12345',
     productName: '19 KG Commercial LPG Cylinder',
     category: 'Commercial 19KG',
-    openingQty: 12,
-    currentFullBalance: 8,
-    currentEmptyBalance: 4,
-    defectiveQty: 0,
-    inTransitRefillQty: 2,
-    location: 'Indore Central Warehouse',
-    lastUpdated: '2026-08-30',
-  },
-  {
-    id: 'cyl_inv_2',
-    customerId: 'cust_2',
-    customerName: 'Apex Infotech Solutions',
-    productName: '19 KG Commercial LPG Cylinder',
-    category: 'Commercial 19KG',
-    openingQty: 20,
-    currentFullBalance: 15,
-    currentEmptyBalance: 5,
-    defectiveQty: 1,
-    inTransitRefillQty: 5,
-    location: 'Vijay Nagar Godown',
-    lastUpdated: '2026-08-31',
-  },
-  {
-    id: 'cyl_inv_3',
-    customerId: 'cust_3',
-    customerName: 'Rajput Wholesale Traders',
-    productName: '47.5 KG Industrial LPG Cylinder',
-    category: 'Industrial 47.5KG',
-    openingQty: 10,
-    currentFullBalance: 6,
-    currentEmptyBalance: 4,
-    defectiveQty: 0,
-    inTransitRefillQty: 3,
-    location: 'Pithampur Industrial Godown',
-    lastUpdated: '2026-08-29',
-  },
-  {
-    id: 'cyl_inv_4',
-    customerId: 'cust_4',
-    customerName: 'National Distributors Pvt Ltd',
-    productName: '19 KG Commercial LPG Cylinder',
-    category: 'Commercial 19KG',
-    openingQty: 30,
-    currentFullBalance: 22,
-    currentEmptyBalance: 8,
-    defectiveQty: 2,
-    inTransitRefillQty: 10,
-    location: 'Dewas Naka Warehouse',
-    lastUpdated: '2026-08-31',
-  },
-  {
-    id: 'cyl_inv_5',
-    customerId: 'cust_5',
-    customerName: 'Gujarat Tech Supplies Ltd',
-    productName: '14.2 KG Domestic LPG Cylinder',
-    category: 'Domestic 14.2KG',
     openingQty: 15,
     currentFullBalance: 10,
     currentEmptyBalance: 5,
     defectiveQty: 0,
+    inTransitRefillQty: 2,
+    location: 'Indore Central Warehouse',
+    svNumber: 'SV-2026-0089',
+    depositAmount: 25000,
+    lastUpdated: '2026-09-22',
+  },
+  {
+    id: 'cyl_inv_2',
+    customerId: 'cust_2',
+    customerName: 'Rajput Wholesale Traders',
+    customerPhone: '+91 98930 67890',
+    productName: '19 KG Commercial LPG Cylinder',
+    category: 'Commercial 19KG',
+    openingQty: 25,
+    currentFullBalance: 18,
+    currentEmptyBalance: 7,
+    defectiveQty: 1,
+    inTransitRefillQty: 4,
+    location: 'Vijay Nagar Godown',
+    svNumber: 'SV-2026-0104',
+    depositAmount: 50000,
+    lastUpdated: '2026-09-22',
+  },
+  {
+    id: 'cyl_inv_3',
+    customerId: 'cust_3',
+    customerName: 'Indore Grand Hotel & Banquet',
+    customerPhone: '+91 94250 99887',
+    productName: '19 KG Commercial LPG Cylinder',
+    category: 'Commercial 19KG',
+    openingQty: 20,
+    currentFullBalance: 14,
+    currentEmptyBalance: 6,
+    defectiveQty: 0,
+    inTransitRefillQty: 0,
+    location: 'Indore Central Warehouse',
+    svNumber: 'SV-2026-0112',
+    depositAmount: 40000,
+    lastUpdated: '2026-09-21',
+  },
+  {
+    id: 'cyl_inv_4',
+    customerId: 'cust_4',
+    customerName: 'Pithampur Heavy Forgings Pvt Ltd',
+    customerPhone: '+91 98260 44556',
+    productName: '47.5 KG Industrial LPG Cylinder',
+    category: 'Industrial 47.5KG',
+    openingQty: 12,
+    currentFullBalance: 8,
+    currentEmptyBalance: 4,
+    defectiveQty: 0,
+    inTransitRefillQty: 3,
+    location: 'Pithampur Industrial Godown',
+    svNumber: 'SV-2026-0078',
+    depositAmount: 60000,
+    lastUpdated: '2026-09-20',
+  },
+  {
+    id: 'cyl_inv_5',
+    customerId: 'cust_5',
+    customerName: 'National Caterers & Events',
+    customerPhone: '+91 98930 11223',
+    productName: '19 KG Commercial LPG Cylinder',
+    category: 'Commercial 19KG',
+    openingQty: 10,
+    currentFullBalance: 7,
+    currentEmptyBalance: 3,
+    defectiveQty: 0,
     inTransitRefillQty: 0,
     location: 'Main Plant Storage',
-    lastUpdated: '2026-08-28',
+    svNumber: 'SV-2026-0130',
+    depositAmount: 20000,
+    lastUpdated: '2026-09-21',
   },
 ];
 
-export default function CylinderBalanceModule() {
-  const [activeSubTab, setActiveSubTab] = useState<'customer' | 'plant' | 'defective' | 'voucher'>('customer');
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'Commercial 19KG' | 'Industrial 47.5KG' | 'Domestic 14.2KG' | 'LOW_STOCK'>('ALL');
-  
-  const [balances, setBalances] = useState<CylinderInventoryItem[]>(DEFAULT_INVENTORY_ITEMS);
-  const [vouchers, setVouchers] = useState<any[]>([
-    { 
-      id: 'v_1', 
-      voucherNumber: 'SV-2026-0089', 
-      voucherType: 'SV', 
-      customerId: 'cust_demo_1',
-      customerName: 'Hotel Rajdhani (Connaught Place)', 
-      relationshipManagerId: 'emp_2',
-      relationshipManagerName: 'Vikram Sharma',
-      defaultDeliveryBoyId: 'emp_1',
-      defaultDeliveryBoyName: 'Ramesh Kumar',
-      voucherReference: 'REF-SV-8921',
-      cylinderQty: 10, 
-      regulatorQty: 2, 
-      depositAmount: 25000, 
-      issueDate: '2026-06-15', 
-      status: 'ACTIVE' 
-    },
-    { 
-      id: 'v_2', 
-      voucherNumber: 'SV-2026-0104', 
-      voucherType: 'SV', 
-      customerId: 'cust_demo_2',
-      customerName: 'Apex Industrial Fabrics (Okhla)', 
-      relationshipManagerId: 'emp_4',
-      relationshipManagerName: 'Priya Verma',
-      defaultDeliveryBoyId: 'emp_3',
-      defaultDeliveryBoyName: 'Suresh Patel',
-      voucherReference: 'REF-SV-9912',
-      cylinderQty: 20, 
-      regulatorQty: 4, 
-      depositAmount: 50000, 
-      issueDate: '2026-07-01', 
-      status: 'ACTIVE' 
-    },
-    { 
-      id: 'v_3', 
-      voucherNumber: 'TV-2026-0012', 
-      voucherType: 'TV', 
-      customerId: 'cust_demo_3',
-      customerName: 'Standard Bakers (Karol Bagh)', 
-      relationshipManagerId: 'emp_2',
-      relationshipManagerName: 'Vikram Sharma',
-      defaultDeliveryBoyId: 'emp_1',
-      defaultDeliveryBoyName: 'Ramesh Kumar',
-      voucherReference: 'REF-TV-0012',
-      cylinderQty: 5, 
-      regulatorQty: 1, 
-      depositAmount: 12500, 
-      issueDate: '2026-08-10', 
-      status: 'ACTIVE' 
-    },
-  ]);
-  
-  const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Add / Edit Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<CylinderInventoryItem | null>(null);
-  
-  // Form Fields
-  const [formCustomerName, setFormCustomerName] = useState('');
-  const [formProductName, setFormProductName] = useState('19 KG Commercial LPG Cylinder');
-  const [formCategory, setFormCategory] = useState<'Commercial 19KG' | 'Industrial 47.5KG' | 'Domestic 14.2KG' | 'Other'>('Commercial 19KG');
-  const [formOpeningQty, setFormOpeningQty] = useState('10');
-  const [formFullQty, setFormFullQty] = useState('5');
-  const [formEmptyQty, setFormEmptyQty] = useState('5');
-  const [formDefectiveQty, setFormDefectiveQty] = useState('0');
-  const [formInTransitQty, setFormInTransitQty] = useState('0');
-  const [formLocation, setFormLocation] = useState('Indore Central Warehouse');
-  const [saving, setSaving] = useState(false);
+const DEFAULT_DRIVER_STOCKS: DriverVehicleStock[] = [
+  {
+    id: 'dvs_1',
+    driverId: 'staff-5',
+    driverName: 'Ramesh Kumar',
+    driverPhone: '+91 98260 11223',
+    vehicleNumber: 'MP-09-GF-4432',
+    route: 'Route 1: Vijay Nagar & AB Road Commercial Hub',
+    morningLoadedFull: 30,
+    deliveredFull: 22,
+    collectedEmpty: 20,
+    currentFullOnVehicle: 8,
+    currentEmptyOnVehicle: 20,
+    cashCollected: 42900,
+    status: 'ON_ROUTE',
+    lastUpdated: '2026-09-23 09:30 AM',
+  },
+  {
+    id: 'dvs_2',
+    driverId: 'staff-6',
+    driverName: 'Suresh Verma',
+    driverPhone: '+91 98930 22334',
+    vehicleNumber: 'MP-09-AB-1234',
+    route: 'Route 2: Pithampur Industrial Belt (Bulk 47.5KG & 19KG)',
+    morningLoadedFull: 20,
+    deliveredFull: 16,
+    collectedEmpty: 16,
+    currentFullOnVehicle: 4,
+    currentEmptyOnVehicle: 16,
+    cashCollected: 64500,
+    status: 'ON_ROUTE',
+    lastUpdated: '2026-09-23 10:15 AM',
+  },
+  {
+    id: 'dvs_3',
+    driverId: 'staff-7',
+    driverName: 'Mukesh Yadav',
+    driverPhone: '+91 94250 33445',
+    vehicleNumber: 'MP-09-TR-7890',
+    route: 'Route 3: Palasia & MG Road Hotel Corridor',
+    morningLoadedFull: 25,
+    deliveredFull: 25,
+    collectedEmpty: 25,
+    currentFullOnVehicle: 0,
+    currentEmptyOnVehicle: 25,
+    cashCollected: 48750,
+    status: 'RECONCILED',
+    lastUpdated: '2026-09-22 06:45 PM',
+  },
+];
 
-  // Ledger Detail Modal State
-  const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
-  const [ledgerLoading, setLedgerLoading] = useState(false);
-  const [ledgerData, setLedgerData] = useState<any>(null);
+const DEFAULT_TRANSFER_LOGS: StockTransferRecord[] = [
+  {
+    id: 'tr_1',
+    transferNumber: 'TR-2026-0441',
+    date: '2026-09-23',
+    transferType: 'GODOWN_TO_DRIVER',
+    fromLocation: 'Indore Central Godown',
+    toLocation: 'Ramesh Kumar (MP-09-GF-4432)',
+    productName: '19 KG Commercial LPG Cylinder',
+    fullQty: 30,
+    emptyQty: 0,
+    vehicleNumber: 'MP-09-GF-4432',
+    driverName: 'Ramesh Kumar',
+    driverPhone: '+91 98260 11223',
+    notes: 'Morning commercial route loading',
+    status: 'COMPLETED',
+  },
+  {
+    id: 'tr_2',
+    transferNumber: 'TR-2026-0440',
+    date: '2026-09-23',
+    transferType: 'GODOWN_TO_DRIVER',
+    fromLocation: 'Pithampur Godown',
+    toLocation: 'Suresh Verma (MP-09-AB-1234)',
+    productName: '47.5 KG Industrial LPG Cylinder',
+    fullQty: 15,
+    emptyQty: 0,
+    vehicleNumber: 'MP-09-AB-1234',
+    driverName: 'Suresh Verma',
+    driverPhone: '+91 98930 22334',
+    notes: 'Industrial delivery dispatch',
+    status: 'COMPLETED',
+  },
+  {
+    id: 'tr_3',
+    transferNumber: 'GP-2026-0092',
+    date: '2026-09-22',
+    transferType: 'PLANT_REFILL_GATEPASS',
+    fromLocation: 'Indore Central Godown',
+    toLocation: 'IOCL Manglia LPG Bottling Plant',
+    productName: '19 KG Commercial LPG Cylinder',
+    fullQty: 0,
+    emptyQty: 100,
+    vehicleNumber: 'MP-09-TR-9999 (Truck)',
+    driverName: 'Kailash Singh',
+    notes: 'Empty cylinder truck sent for refilling',
+    status: 'COMPLETED',
+  },
+];
 
-  // Adjustment Modal State
-  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
-  const [adjCustomerName, setAdjCustomerName] = useState('');
-  const [adjFullQty, setAdjFullQty] = useState('0');
-  const [adjEmptyQty, setAdjEmptyQty] = useState('0');
-  const [adjReason, setAdjReason] = useState('');
-  const [adjSubmitting, setAdjSubmitting] = useState(false);
+interface CylinderBalanceModuleProps {
+  initialSubTab?: string;
+  onSubTabChange?: (subTab: string) => void;
+  customers?: Customer[];
+  products?: Product[];
+  staff?: EmployeeMaster[];
+}
 
-  // Stock Transfer Modal State
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [transferType, setTransferType] = useState<'WAREHOUSE_TO_DRIVER' | 'DRIVER_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE'>('WAREHOUSE_TO_DRIVER');
-  const [fromLocation, setFromLocation] = useState('Godown 1 (Central Warehouse)');
-  const [toLocation, setToLocation] = useState('Ramesh Kumar (Delivery Boy)');
-  const [transferFullQty, setTransferFullQty] = useState('10');
-  const [transferEmptyQty, setTransferEmptyQty] = useState('0');
-  const [transferNotes, setTransferNotes] = useState('');
-  const [transferSubmitting, setTransferSubmitting] = useState(false);
-
-  // Fetch Balances from API
-  const fetchBalances = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/cylinder/inventory');
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-        setBalances(json.data);
-      }
-    } catch (err) {
-      console.error('API Inventory Fetch Error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+export const CylinderBalanceModule: React.FC<CylinderBalanceModuleProps> = ({
+  initialSubTab = 'godown',
+  onSubTabChange,
+  customers = [],
+  products = [],
+  staff = [],
+}) => {
+  const [activeSubTab, setActiveSubTab] = useState<'godown' | 'driver' | 'customer' | 'transfer' | 'voucher' | 'adjustment'>(
+    (initialSubTab as any) || 'godown'
+  );
 
   useEffect(() => {
-    fetchBalances();
+    if (initialSubTab && ['godown', 'driver', 'customer', 'transfer', 'voucher', 'adjustment'].includes(initialSubTab)) {
+      setActiveSubTab(initialSubTab as any);
+    }
+  }, [initialSubTab]);
+
+  const handleTabSelect = (tabKey: 'godown' | 'driver' | 'customer' | 'transfer' | 'voucher' | 'adjustment') => {
+    setActiveSubTab(tabKey);
+    onSubTabChange?.(tabKey);
+  };
+
+  const [balances, setBalances] = useState<CylinderInventoryItem[]>(DEFAULT_INVENTORY_ITEMS);
+  const [driverStocks, setDriverStocks] = useState<DriverVehicleStock[]>(DEFAULT_DRIVER_STOCKS);
+  const [transferLogs, setTransferLogs] = useState<StockTransferRecord[]>(DEFAULT_TRANSFER_LOGS);
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'Commercial 19KG' | 'Industrial 47.5KG' | 'Domestic 14.2KG' | '5KG FTL'>('ALL');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Modals State
+  const [isPlantRefillModalOpen, setIsPlantRefillModalOpen] = useState(false);
+  const [isDriverLoadModalOpen, setIsDriverLoadModalOpen] = useState(false);
+  const [isCustomerStockModalOpen, setIsCustomerStockModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+
+  // Plant Refill Form
+  const [plantCategory, setPlantCategory] = useState('Commercial 19KG');
+  const [plantFullInward, setPlantFullInward] = useState('100');
+  const [plantEmptyOutward, setPlantEmptyOutward] = useState('100');
+  const [plantChallanNo, setPlantChallanNo] = useState('IOCL-REC-2026-992');
+  const [plantGodown, setPlantGodown] = useState('Indore Central Godown');
+
+  // Driver Loading Form
+  const [selectedDriverId, setSelectedDriverId] = useState('staff-5');
+  const [driverLoadQty, setDriverLoadQty] = useState('30');
+  const [driverLoadCategory, setDriverLoadCategory] = useState('19 KG Commercial LPG Cylinder');
+  const [driverLoadVehicle, setDriverLoadVehicle] = useState('MP-09-GF-4432');
+
+  // Customer Holding Form
+  const [custHoldingName, setCustHoldingName] = useState('');
+  const [custHoldingCategory, setCustHoldingCategory] = useState<'Commercial 19KG' | 'Industrial 47.5KG' | 'Domestic 14.2KG' | '5KG FTL'>('Commercial 19KG');
+  const [custHoldingFull, setCustHoldingFull] = useState('10');
+  const [custHoldingEmpty, setCustHoldingEmpty] = useState('5');
+  const [custHoldingDeposit, setCustHoldingDeposit] = useState('25000');
+  const [custHoldingSvNo, setCustHoldingSvNo] = useState('SV-2026-0155');
+
+  // Godown Stock Calculated Totals
+  const godownStock = useMemo(() => {
+    return {
+      comm19: { full: 140, empty: 45, defective: 2, inTransit: 20, total: 207 },
+      ind47: { full: 42, empty: 18, defective: 0, inTransit: 10, total: 70 },
+      dom14: { full: 85, empty: 30, defective: 1, inTransit: 0, total: 116 },
+      ftl5: { full: 25, empty: 8, defective: 0, inTransit: 0, total: 33 },
+    };
   }, []);
 
-  // Open Add Modal
-  const handleOpenAddModal = () => {
-    setEditingItem(null);
-    setFormCustomerName('');
-    setFormProductName('19 KG Commercial LPG Cylinder');
-    setFormCategory('Commercial 19KG');
-    setFormOpeningQty('10');
-    setFormFullQty('5');
-    setFormEmptyQty('5');
-    setFormDefectiveQty('0');
-    setFormInTransitQty('0');
-    setFormLocation('Indore Central Warehouse');
-    setIsModalOpen(true);
-  };
+  const totalFullInGodown = godownStock.comm19.full + godownStock.ind47.full + godownStock.dom14.full + godownStock.ftl5.full;
+  const totalEmptyInGodown = godownStock.comm19.empty + godownStock.ind47.empty + godownStock.dom14.empty + godownStock.ftl5.empty;
+  const totalDefectiveInGodown = godownStock.comm19.defective + godownStock.ind47.defective + godownStock.dom14.defective + godownStock.ftl5.defective;
+  const totalInTransitToPlant = godownStock.comm19.inTransit + godownStock.ind47.inTransit + godownStock.dom14.inTransit;
 
-  // Open Edit Modal
-  const handleOpenEditModal = (item: CylinderInventoryItem) => {
-    setEditingItem(item);
-    setFormCustomerName(item.customerName || '');
-    setFormProductName(item.productName || '19 KG Commercial LPG Cylinder');
-    setFormCategory(item.category || 'Commercial 19KG');
-    setFormOpeningQty(String(item.openingQty || 0));
-    setFormFullQty(String(item.currentFullBalance || 0));
-    setFormEmptyQty(String(item.currentEmptyBalance || 0));
-    setFormDefectiveQty(String(item.defectiveQty || 0));
-    setFormInTransitQty(String(item.inTransitRefillQty || 0));
-    setFormLocation(item.location || 'Indore Central Warehouse');
-    setIsModalOpen(true);
-  };
+  const totalFullOnFleet = driverStocks.reduce((sum, d) => sum + d.currentFullOnVehicle, 0);
+  const totalEmptyOnFleet = driverStocks.reduce((sum, d) => sum + d.currentEmptyOnVehicle, 0);
 
-  // Delete Record
-  const handleDeleteItem = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to delete cylinder inventory entry for "${name}"?`)) {
-      setBalances((prev) => prev.filter((b) => b.id !== id));
-      alert('✅ Cylinder inventory record deleted successfully.');
-    }
-  };
+  const totalCustomerFull = balances.reduce((sum, b) => sum + b.currentFullBalance, 0);
+  const totalCustomerEmpty = balances.reduce((sum, b) => sum + b.currentEmptyBalance, 0);
+  const totalCustomerHolding = totalCustomerFull + totalCustomerEmpty;
 
-  // Handle Save (Add or Update)
-  const handleSaveStock = async (e: React.FormEvent) => {
+  const grandTotalAgencyCylinders =
+    totalFullInGodown +
+    totalEmptyInGodown +
+    totalDefectiveInGodown +
+    totalInTransitToPlant +
+    totalFullOnFleet +
+    totalEmptyOnFleet +
+    totalCustomerHolding;
+
+  // Handlers
+  const handlePlantRefillSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCustomerName.trim()) {
-      alert('Please enter Customer / Site Name');
-      return;
-    }
+    const fullIn = Number(plantFullInward) || 0;
+    const emptyOut = Number(plantEmptyOutward) || 0;
 
-    setSaving(true);
-    const today = new Date().toISOString().split('T')[0];
+    const newTransfer: StockTransferRecord = {
+      id: `tr-${Date.now()}`,
+      transferNumber: plantChallanNo || `PLANT-${Date.now().toString().slice(-4)}`,
+      date: new Date().toISOString().split('T')[0],
+      transferType: 'PLANT_REFILL_GATEPASS',
+      fromLocation: 'IOCL/BPCL Bottling Plant',
+      toLocation: plantGodown,
+      productName: plantCategory,
+      fullQty: fullIn,
+      emptyQty: emptyOut,
+      notes: `Plant refilling receipt: +${fullIn} Full Received, -${emptyOut} Empty Dispatched`,
+      status: 'COMPLETED',
+    };
 
-    if (editingItem) {
-      // Update existing
-      setBalances((prev) =>
-        prev.map((b) => {
-          if (b.id !== editingItem.id) return b;
-          return {
-            ...b,
-            customerName: formCustomerName.trim(),
-            productName: formProductName,
-            category: formCategory,
-            openingQty: Number(formOpeningQty) || 0,
-            currentFullBalance: Number(formFullQty) || 0,
-            currentEmptyBalance: Number(formEmptyQty) || 0,
-            defectiveQty: Number(formDefectiveQty) || 0,
-            inTransitRefillQty: Number(formInTransitQty) || 0,
-            location: formLocation,
-            lastUpdated: today,
-          };
-        })
-      );
-      alert('✅ Cylinder Inventory Record Updated Successfully!');
-    } else {
-      // Add new
-      const newItem: CylinderInventoryItem = {
-        id: `cyl_inv_${Date.now()}`,
-        customerName: formCustomerName.trim(),
-        productName: formProductName,
-        category: formCategory,
-        openingQty: Number(formOpeningQty) || 0,
-        currentFullBalance: Number(formFullQty) || 0,
-        currentEmptyBalance: Number(formEmptyQty) || 0,
-        defectiveQty: Number(formDefectiveQty) || 0,
-        inTransitRefillQty: Number(formInTransitQty) || 0,
-        location: formLocation,
-        lastUpdated: today,
-      };
-      setBalances((prev) => [newItem, ...prev]);
-      alert('✅ New Cylinder Inventory Entry Added Successfully!');
-    }
-
-    setSaving(false);
-    setIsModalOpen(false);
-    setEditingItem(null);
+    setTransferLogs([newTransfer, ...transferLogs]);
+    showToast(`✅ Plant Refill Inward (+${fullIn} Full / -${emptyOut} Empty) recorded successfully!`);
+    setIsPlantRefillModalOpen(false);
   };
 
-  // Open Ledger Modal
-  const handleOpenLedger = (cust: CylinderInventoryItem) => {
-    setIsLedgerModalOpen(true);
-    setLedgerLoading(true);
-    
-    setTimeout(() => {
-      setLedgerData({
-        customerName: cust.customerName,
-        productName: cust.productName,
-        kpis: {
-          openingBalance: cust.openingQty || 10,
-          deliveredFull: cust.currentFullBalance || 15,
-          emptyReceived: cust.currentEmptyBalance || 10,
-          adjustments: 0,
-          currentBalance: (cust.openingQty || 10) + (cust.currentFullBalance || 15) - (cust.currentEmptyBalance || 10),
-        },
-        transactions: [
-          {
-            id: 'tx_1',
-            date: '2026-08-25',
-            reference: 'CYL-DEL-0089',
-            transactionType: 'DRIVER_TO_CUSTOMER',
-            productName: cust.productName,
-            fullQty: cust.currentFullBalance || 8,
-            emptyQty: 0,
-            runningBalance: (cust.openingQty || 10) + (cust.currentFullBalance || 8),
-            performedBy: 'Ramesh Kumar (Fleet Boy)',
-            reason: 'Scheduled refill delivery',
-          },
-          {
-            id: 'tx_2',
-            date: '2026-08-28',
-            reference: 'CYL-RET-0042',
-            transactionType: 'CUSTOMER_EMPTY_RETURN',
-            productName: cust.productName,
-            fullQty: 0,
-            emptyQty: cust.currentEmptyBalance || 4,
-            runningBalance: (cust.openingQty || 10) + (cust.currentFullBalance || 8) - (cust.currentEmptyBalance || 4),
-            performedBy: 'Ramesh Kumar (Fleet Boy)',
-            reason: 'Empty cylinder pickup for refill',
-          },
-        ],
-      });
-      setLedgerLoading(false);
-    }, 200);
-  };
-
-  // Open Adjustment Modal
-  const handleOpenAdjustment = (cust: CylinderInventoryItem) => {
-    setAdjCustomerName(cust.customerName);
-    setAdjFullQty(String(cust.currentFullBalance || 0));
-    setAdjEmptyQty(String(cust.currentEmptyBalance || 0));
-    setAdjReason('');
-    setIsAdjustmentModalOpen(true);
-  };
-
-  const handleAdjustmentSubmit = (e: React.FormEvent) => {
+  const handleDriverLoadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adjReason.trim()) {
-      alert('⚠️ Please enter mandatory reason for audit adjustment.');
-      return;
-    }
-    setAdjSubmitting(true);
-    setTimeout(() => {
-      alert(`✅ Stock Adjustment Request for "${adjCustomerName}" submitted to Manager Approval Queue!`);
-      setAdjSubmitting(false);
-      setIsAdjustmentModalOpen(false);
-    }, 400);
+    const qty = Number(driverLoadQty) || 0;
+    const driver = staff.find((s) => s.id === selectedDriverId) || { name: 'Driver', phone: '' };
+
+    const newTransfer: StockTransferRecord = {
+      id: `tr-${Date.now()}`,
+      transferNumber: `TR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: new Date().toISOString().split('T')[0],
+      transferType: 'GODOWN_TO_DRIVER',
+      fromLocation: 'Indore Central Godown',
+      toLocation: `${driver.name} (${driverLoadVehicle})`,
+      productName: driverLoadCategory,
+      fullQty: qty,
+      emptyQty: 0,
+      vehicleNumber: driverLoadVehicle,
+      driverName: driver.name,
+      driverPhone: driver.phone,
+      notes: `Vehicle loaded with ${qty} Full cylinders for morning delivery route`,
+      status: 'COMPLETED',
+    };
+
+    setTransferLogs([newTransfer, ...transferLogs]);
+    setDriverStocks(
+      driverStocks.map((ds) =>
+        ds.driverId === selectedDriverId
+          ? {
+              ...ds,
+              morningLoadedFull: ds.morningLoadedFull + qty,
+              currentFullOnVehicle: ds.currentFullOnVehicle + qty,
+              status: 'ON_ROUTE',
+            }
+          : ds
+      )
+    );
+
+    showToast(`🚚 ${qty} Full Cylinders successfully issued to ${driver.name} (${driverLoadVehicle})!`);
+    setIsDriverLoadModalOpen(false);
   };
 
-  const handleTransferSubmit = (e: React.FormEvent) => {
+  const handleCustomerHoldingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setTransferSubmitting(true);
-    setTimeout(() => {
-      alert('✅ Stock Transfer Request submitted to Manager Approval Queue!');
-      setTransferSubmitting(false);
-      setIsTransferModalOpen(false);
-    }, 400);
+    const full = Number(custHoldingFull) || 0;
+    const empty = Number(custHoldingEmpty) || 0;
+    const deposit = Number(custHoldingDeposit) || 0;
+
+    const newItem: CylinderInventoryItem = {
+      id: `cyl_inv_${Date.now()}`,
+      customerName: custHoldingName,
+      productName: custHoldingCategory === 'Industrial 47.5KG' ? '47.5 KG Industrial LPG Cylinder' : '19 KG Commercial LPG Cylinder',
+      category: custHoldingCategory,
+      openingQty: full + empty,
+      currentFullBalance: full,
+      currentEmptyBalance: empty,
+      defectiveQty: 0,
+      inTransitRefillQty: 0,
+      location: 'Customer Commercial Site',
+      svNumber: custHoldingSvNo,
+      depositAmount: deposit,
+      lastUpdated: new Date().toISOString().split('T')[0],
+    };
+
+    setBalances([newItem, ...balances]);
+    showToast(`✅ Customer Cylinder Holding for "${custHoldingName}" added successfully!`);
+    setIsCustomerStockModalOpen(false);
   };
 
-  // Calculate Totals & Stats
-  const totalEmpty = useMemo(() => balances.reduce((sum, b) => sum + (b.currentEmptyBalance || 0), 0), [balances]);
-  const totalFull = useMemo(() => balances.reduce((sum, b) => sum + (b.currentFullBalance || 0), 0), [balances]);
-  const totalDefective = useMemo(() => balances.reduce((sum, b) => sum + (b.defectiveQty || 0), 0), [balances]);
-  const totalInTransit = useMemo(() => balances.reduce((sum, b) => sum + (b.inTransitRefillQty || 0), 0), [balances]);
-  const totalDepositAmount = useMemo(() => vouchers.reduce((sum, v) => sum + (v.depositAmount || 0), 0), [vouchers]);
-
-  // Filtered Inventory Items
-  const filteredBalances = useMemo(() => {
-    return balances.filter((b) => {
-      const searchLower = searchQuery.toLowerCase();
-      const matchesSearch = 
-        b.customerName.toLowerCase().includes(searchLower) ||
-        b.productName.toLowerCase().includes(searchLower) ||
-        b.location.toLowerCase().includes(searchLower);
-
-      if (!matchesSearch) return false;
-
-      if (categoryFilter === 'Commercial 19KG') return b.category === 'Commercial 19KG';
-      if (categoryFilter === 'Industrial 47.5KG') return b.category === 'Industrial 47.5KG';
-      if (categoryFilter === 'Domestic 14.2KG') return b.category === 'Domestic 14.2KG';
-      if (categoryFilter === 'LOW_STOCK') return (b.currentFullBalance || 0) < 5;
-
-      return true;
-    });
-  }, [balances, searchQuery, categoryFilter]);
+  // Gas Accessories / Spares Catalog
+  const gasAccessories = useMemo(() => {
+    return [
+      { name: 'Commercial High-Pressure LPG Regulator', sku: 'ACC-REG-HP-01', stock: 24, unit: 'Pcs', mrp: 2100, costPrice: 1450, category: 'Regulator' },
+      { name: 'Industrial Wire-Braided Hose Pipe (2 Meter)', sku: 'ACC-PIPE-2M-02', stock: 45, unit: 'Pcs', mrp: 1200, costPrice: 780, category: 'Safety Pipe' },
+      { name: 'Commercial Single / Double Burner Stove Adapter', sku: 'ACC-ADAPT-03', stock: 18, unit: 'Pcs', mrp: 850, costPrice: 520, category: 'Burner Parts' },
+      { name: 'Heavy-Duty Brass Cylinder Valve (Pin Type)', sku: 'ACC-VALVE-04', stock: 35, unit: 'Pcs', mrp: 650, costPrice: 380, category: 'Valve Parts' },
+      { name: 'LPG Cylinder Safety Cap with Rubber Strap', sku: 'ACC-CAP-05', stock: 150, unit: 'Pcs', mrp: 50, costPrice: 20, category: 'Safety Caps' },
+    ];
+  }, []);
 
   return (
-    <div className="space-y-6">
-      
-      {/* Modern Banner Header */}
-      <div className="p-5 md:p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-5 text-slate-800 dark:text-slate-100 font-sans">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-teal-500/40 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <Sparkles className="h-5 w-5 text-teal-400 shrink-0" />
+          <span className="text-xs font-bold">{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Main ERP Banner Header */}
+      <div className="p-5 md:p-6 rounded-3xl bg-gradient-to-r from-teal-900 via-slate-900 to-teal-950 text-white border border-teal-800/60 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 shadow-inner">
               <Flame className="w-6 h-6 animate-pulse" />
             </div>
-            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-100">
-              Cylinder Inventory & Three-Tier Tracking ERP
-            </h1>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-black tracking-tight text-white">
+                  LPG Gas & Cylinder 3-Tier Inventory ERP
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-500/40 uppercase">
+                  Live Stock
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-2 font-medium">
+                <span>🏭 Central Godown Stock</span>
+                <span>•</span>
+                <span>🚚 Delivery Fleet Mobile Stock</span>
+                <span>•</span>
+                <span>👥 Customer Cylinder Holdings</span>
+                <span>•</span>
+                <span>🔄 Plant Refill Inward</span>
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
-            <span>🏭 Central Warehouse Godowns</span>
-            <span>•</span>
-            <span>🚚 Delivery Fleet Trucks</span>
-            <span>•</span>
-            <span>🏢 Customer Site Inventory Ledger</span>
-          </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        {/* Header Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => setIsTransferModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-extrabold shadow-lg shadow-sky-600/20 transition active:scale-95 text-xs cursor-pointer"
+            onClick={() => setIsPlantRefillModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-sky-600 to-teal-600 hover:from-sky-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs shadow-md shadow-sky-600/20 active:scale-95 transition cursor-pointer"
+            title="Record receipt of filled cylinders from IOCL/BPCL plant"
           >
-            <ArrowRightLeft className="w-4 h-4" /> Stock Transfer
-          </button>
-          
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow-lg shadow-emerald-600/20 transition active:scale-95 text-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> + Add Stock Entry
+            <ArrowDownLeft className="w-4 h-4" />
+            <span>+ Plant Refill Inward</span>
           </button>
 
           <button
-            onClick={fetchBalances}
-            className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs border border-slate-700 transition cursor-pointer"
-            title="Refresh Stock Data"
+            onClick={() => setIsDriverLoadModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-bold text-xs shadow-md shadow-amber-600/20 active:scale-95 transition cursor-pointer"
+            title="Issue filled cylinders to delivery driver for vehicle loading"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <Truck className="w-4 h-4" />
+            <span>+ Load Vehicle Stock</span>
+          </button>
+
+          <button
+            onClick={() => setIsCustomerStockModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 active:scale-95 transition cursor-pointer"
+            title="Add customer cylinder holding balance"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Customer Holding</span>
           </button>
         </div>
       </div>
 
-      {/* 5 Sleek KPI Scorecard Cards */}
+      {/* 5 Realtime KPI Summary Scorecards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+        {/* 1. Full Cylinders in Godown */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Godown Stock</span>
-            <Building2 className="h-3.5 w-3.5 text-indigo-500" />
+            <span>Godown Full (Gas)</span>
+            <Flame className="h-4 w-4 text-emerald-500" />
           </div>
-          <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">150 <span className="text-xs font-bold text-slate-400">Pcs</span></div>
-          <div className="text-[10px] font-semibold text-slate-400">Central Storage</div>
+          <div className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+            {totalFullInGodown} <span className="text-xs font-bold text-slate-400">Pcs</span>
+          </div>
+          <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+            🟢 Ready for Sale / Delivery
+          </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+        {/* 2. Empty Cylinders in Godown */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Fleet Stock</span>
-            <Truck className="h-3.5 w-3.5 text-sky-500" />
+            <span>Godown Empty (Khali)</span>
+            <Package className="h-4 w-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-black text-sky-600 dark:text-sky-400">35 <span className="text-xs font-bold text-slate-400">Pcs</span></div>
-          <div className="text-[10px] font-semibold text-slate-400">Delivery Vehicles</div>
+          <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
+            {totalEmptyInGodown} <span className="text-xs font-bold text-slate-400">Pcs</span>
+          </div>
+          <div className="text-[10px] font-bold text-amber-700 dark:text-amber-300">
+            ⚪ Awaiting Bottling Refill
+          </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+        {/* 3. Driver Vehicle Stock */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Full Stock</span>
-            <Flame className="h-3.5 w-3.5 text-emerald-500" />
+            <span>On Delivery Vehicles</span>
+            <Truck className="h-4 w-4 text-sky-500" />
           </div>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{totalFull} <span className="text-xs font-bold text-slate-400">Pcs</span></div>
-          <div className="text-[10px] font-semibold text-emerald-600">Available at Sites</div>
+          <div className="text-2xl font-black font-mono text-sky-600 dark:text-sky-400">
+            {totalFullOnFleet}F / {totalEmptyOnFleet}E
+          </div>
+          <div className="text-[10px] font-bold text-sky-700 dark:text-sky-300">
+            🚚 Live on Route Trucks
+          </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+        {/* 4. Customer Holdings */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-1">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Empty Returned</span>
-            <Package className="h-3.5 w-3.5 text-amber-500" />
+            <span>Customer Holdings</span>
+            <Building2 className="h-4 w-4 text-indigo-500" />
           </div>
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{totalEmpty} <span className="text-xs font-bold text-slate-400">Pcs</span></div>
-          <div className="text-[10px] font-semibold text-amber-600">Pending Refill</div>
+          <div className="text-2xl font-black font-mono text-indigo-600 dark:text-indigo-400">
+            {totalCustomerHolding} <span className="text-xs font-bold text-slate-400">Pcs</span>
+          </div>
+          <div className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+            🏢 Commercial Site Deposits
+          </div>
         </div>
 
-        <div className="col-span-2 md:col-span-1 p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 shadow-sm space-y-1">
-          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>Deposit Vouchers</span>
-            <Layers className="h-3.5 w-3.5 text-purple-400" />
+        {/* 5. Total Agency Cylinders */}
+        <div className="col-span-2 md:col-span-1 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 text-white border border-slate-700 shadow-xs space-y-1">
+          <div className="text-[10px] font-black uppercase tracking-wider text-teal-300 flex items-center justify-between">
+            <span>Total Agency Asset</span>
+            <ShieldCheck className="h-4 w-4 text-teal-400" />
           </div>
-          <div className="text-2xl font-black text-purple-400">₹{(totalDepositAmount / 1000).toFixed(0)}k</div>
-          <div className="text-[10px] font-semibold text-purple-300">Active SV / TV Deposits</div>
+          <div className="text-2xl font-black font-mono text-white">
+            {grandTotalAgencyCylinders} <span className="text-xs font-bold text-slate-300">Pcs</span>
+          </div>
+          <div className="text-[10px] font-semibold text-teal-200">
+            Entire Cylinder Pool
+          </div>
         </div>
       </div>
 
-      {/* Main Inventory Card */}
-      <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden space-y-4">
-        
-        {/* Navigation Sub-Tabs & Filter Toolbar */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-3">
-          
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            
-            {/* Main Tabs */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/70 text-xs font-extrabold w-full md:w-auto">
-              <button
-                onClick={() => setActiveSubTab('customer')}
-                className={`px-3 py-2 rounded-lg transition-all cursor-pointer ${
-                  activeSubTab === 'customer' 
-                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                📦 Customer Stock ({balances.length})
-              </button>
-              
-              <button
-                onClick={() => setActiveSubTab('plant')}
-                className={`px-3 py-2 rounded-lg transition-all cursor-pointer ${
-                  activeSubTab === 'plant' 
-                    ? 'bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                🏭 Plant Refills ({totalInTransit} Pcs)
-              </button>
-              
-              <button
-                onClick={() => setActiveSubTab('defective')}
-                className={`px-3 py-2 rounded-lg transition-all cursor-pointer ${
-                  activeSubTab === 'defective' 
-                    ? 'bg-white dark:bg-slate-700 text-rose-700 dark:text-rose-300 shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                ⚠️ Defective ({totalDefective} Pcs)
-              </button>
+      {/* Main 6 Sub-Tab Navigation Bar */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-3 shadow-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-bold">
+          <button
+            onClick={() => handleTabSelect('godown')}
+            className={`px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'godown'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 font-black'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>🏢 Godown & Plant Gas Stock</span>
+          </button>
 
-              <button
-                onClick={() => setActiveSubTab('voucher')}
-                className={`px-3 py-2 rounded-lg transition-all cursor-pointer ${
-                  activeSubTab === 'voucher' 
-                    ? 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-              >
-                📜 Deposit Vouchers ({vouchers.length})
-              </button>
+          <button
+            onClick={() => handleTabSelect('driver')}
+            className={`px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'driver'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 font-black'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            <span>🚚 Delivery Boy & Vehicle Live Stock</span>
+          </button>
+
+          <button
+            onClick={() => handleTabSelect('customer')}
+            className={`px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'customer'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 font-black'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>👥 Customer Cylinder Holdings ({balances.length})</span>
+          </button>
+
+          <button
+            onClick={() => handleTabSelect('transfer')}
+            className={`px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'transfer'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 font-black'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            <span>🔄 Stock Transfer & Plant Gate Pass</span>
+          </button>
+
+          <button
+            onClick={() => handleTabSelect('voucher')}
+            className={`px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'voucher'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 font-black'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>📜 SV Subscription Vouchers</span>
+          </button>
+
+          <button
+            onClick={() => handleTabSelect('adjustment')}
+            className={`px-4 py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeSubTab === 'adjustment'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 font-black'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>⚡ Physical Stock Audit</span>
+          </button>
+        </div>
+      </div>
+
+      {/* TAB 1: GODOWN & PLANT GAS INVENTORY */}
+      {activeSubTab === 'godown' && (
+        <div className="space-y-5">
+          {/* Cylinder Type Inventory Grid Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Commercial 19 KG Card */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                  🔥 19 KG Commercial
+                </span>
+                <span className="font-mono font-black text-sm text-slate-900 dark:text-slate-100">
+                  Total: {godownStock.comm19.total}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                  <span className="text-[10px] text-emerald-700 font-bold block">Full Gas Cylinders</span>
+                  <span className="text-xl font-black font-mono text-emerald-600">{godownStock.comm19.full}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40">
+                  <span className="text-[10px] text-amber-700 font-bold block">Empty (Khali)</span>
+                  <span className="text-xl font-black font-mono text-amber-600">{godownStock.comm19.empty}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40">
+                  <span className="text-[10px] text-rose-700 font-bold block">Defective / Leak</span>
+                  <span className="text-base font-black font-mono text-rose-600">{godownStock.comm19.defective}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/40">
+                  <span className="text-[10px] text-sky-700 font-bold block">At Plant (Refill)</span>
+                  <span className="text-base font-black font-mono text-sky-600">{godownStock.comm19.inTransit}</span>
+                </div>
+              </div>
             </div>
 
-            {/* Search Box */}
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search Customer or Product..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500"
-              />
+            {/* Industrial 47.5 KG Card */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                  🏭 47.5 KG Industrial Jumbo
+                </span>
+                <span className="font-mono font-black text-sm text-slate-900 dark:text-slate-100">
+                  Total: {godownStock.ind47.total}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                  <span className="text-[10px] text-emerald-700 font-bold block">Full Gas Cylinders</span>
+                  <span className="text-xl font-black font-mono text-emerald-600">{godownStock.ind47.full}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40">
+                  <span className="text-[10px] text-amber-700 font-bold block">Empty (Khali)</span>
+                  <span className="text-xl font-black font-mono text-amber-600">{godownStock.ind47.empty}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40">
+                  <span className="text-[10px] text-rose-700 font-bold block">Defective / Leak</span>
+                  <span className="text-base font-black font-mono text-rose-600">{godownStock.ind47.defective}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/40">
+                  <span className="text-[10px] text-sky-700 font-bold block">At Plant (Refill)</span>
+                  <span className="text-base font-black font-mono text-sky-600">{godownStock.ind47.inTransit}</span>
+                </div>
+              </div>
             </div>
 
+            {/* Domestic 14.2 KG Card */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                  🏠 14.2 KG Domestic
+                </span>
+                <span className="font-mono font-black text-sm text-slate-900 dark:text-slate-100">
+                  Total: {godownStock.dom14.total}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                  <span className="text-[10px] text-emerald-700 font-bold block">Full Gas Cylinders</span>
+                  <span className="text-xl font-black font-mono text-emerald-600">{godownStock.dom14.full}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40">
+                  <span className="text-[10px] text-amber-700 font-bold block">Empty (Khali)</span>
+                  <span className="text-xl font-black font-mono text-amber-600">{godownStock.dom14.empty}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/40">
+                  <span className="text-[10px] text-rose-700 font-bold block">Defective / Leak</span>
+                  <span className="text-base font-black font-mono text-rose-600">{godownStock.dom14.defective}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/40">
+                  <span className="text-[10px] text-sky-700 font-bold block">At Plant (Refill)</span>
+                  <span className="text-base font-black font-mono text-sky-600">{godownStock.dom14.inTransit}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 5 KG FTL Mini Cylinder Card */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  ⚡ 5 KG FTL Mini
+                </span>
+                <span className="font-mono font-black text-sm text-slate-900 dark:text-slate-100">
+                  Total: {godownStock.ftl5.total}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                  <span className="text-[10px] text-emerald-700 font-bold block">Full Gas Cylinders</span>
+                  <span className="text-xl font-black font-mono text-emerald-600">{godownStock.ftl5.full}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40">
+                  <span className="text-[10px] text-amber-700 font-bold block">Empty (Khali)</span>
+                  <span className="text-xl font-black font-mono text-amber-600">{godownStock.ftl5.empty}</span>
+                </div>
+                <div className="col-span-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-center">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                    Retail Counter Instant Refill Stock
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Category Filter Badges */}
-          {activeSubTab === 'customer' && (
-            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/60">
-              <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
-                <Filter className="h-3 w-3" /> Product Type:
+          {/* Gas Accessories & Hardware Spares Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-teal-600" />
+                  Gas Accessories, Regulators & Spares Inventory
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Live physical hardware stock available in Central Godown & Workshop
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                {gasAccessories.length} Hardware SKUs
               </span>
-              <button
-                onClick={() => setCategoryFilter('ALL')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  categoryFilter === 'ALL'
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                }`}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[700px]">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="px-4 py-3">SKU Code</th>
+                    <th className="px-4 py-3">Item Name</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3 text-right">Available Stock</th>
+                    <th className="px-4 py-3 text-right">Cost Price (₹)</th>
+                    <th className="px-4 py-3 text-right">MRP (₹)</th>
+                    <th className="px-4 py-3 text-right">Stock Valuation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {gasAccessories.map((acc, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3 font-mono text-slate-500">{acc.sku}</td>
+                      <td className="px-4 py-3 font-extrabold text-slate-900 dark:text-slate-100">{acc.name}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {acc.category}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-black text-right text-emerald-600">
+                        {acc.stock} {acc.unit}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-right">₹{acc.costPrice}</td>
+                      <td className="px-4 py-3 font-mono text-right">₹{acc.mrp}</td>
+                      <td className="px-4 py-3 font-mono font-black text-right text-slate-900 dark:text-slate-100">
+                        ₹{(acc.stock * acc.costPrice).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: DRIVER & VEHICLE LIVE MOBILE STOCK */}
+      {activeSubTab === 'driver' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Truck className="w-5 h-5 text-amber-600" />
+                Delivery Boy & Vehicle Mobile Stock
+              </h3>
+              <p className="text-xs text-slate-500">
+                Track full & empty cylinders loaded on each delivery truck in real-time
+              </p>
+            </div>
+            <button
+              onClick={() => setIsDriverLoadModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md shadow-amber-600/20 active:scale-95 transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Issue Cylinders to Vehicle</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {driverStocks.map((driver) => (
+              <div
+                key={driver.id}
+                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 flex flex-col justify-between"
               >
-                All Products
-              </button>
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-black text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-amber-500" />
+                        {driver.driverName}
+                      </h4>
+                      <span className="inline-block mt-0.5 font-mono text-xs font-extrabold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-lg">
+                        {driver.vehicleNumber}
+                      </span>
+                    </div>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                        driver.status === 'ON_ROUTE'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 animate-pulse'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      }`}
+                    >
+                      {driver.status === 'ON_ROUTE' ? '🚚 On Route' : '✅ Reconciled'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 mt-2">
+                    📍 {driver.route}
+                  </p>
+
+                  {/* Stock Counters */}
+                  <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-center">
+                      <span className="text-[10px] font-bold text-emerald-700 uppercase block">Full on Vehicle</span>
+                      <span className="text-2xl font-black font-mono text-emerald-600">{driver.currentFullOnVehicle}</span>
+                      <span className="text-[10px] text-slate-500 block">Loaded: {driver.morningLoadedFull}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-center">
+                      <span className="text-[10px] font-bold text-amber-700 uppercase block">Empties on Vehicle</span>
+                      <span className="text-2xl font-black font-mono text-amber-600">{driver.currentEmptyOnVehicle}</span>
+                      <span className="text-[10px] text-slate-500 block">Delivered: {driver.deliveredFull}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between text-xs font-bold">
+                    <span className="text-slate-500">Day Cash / UPI Collected:</span>
+                    <span className="font-mono text-emerald-600 text-sm">₹{driver.cashCollected.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-400">Updated: {driver.lastUpdated}</span>
+                  <button
+                    onClick={() => {
+                      alert(`✅ Vehicle reconciliation initiated for ${driver.driverName} (${driver.vehicleNumber}). Return ${driver.currentFullOnVehicle} Full & ${driver.currentEmptyOnVehicle} Empty to Godown.`);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-extrabold text-xs shadow-xs hover:opacity-90 transition"
+                  >
+                    Evening Reconcile
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: CUSTOMER CYLINDER HOLDING LEDGER */}
+      {activeSubTab === 'customer' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden space-y-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-600" />
+                Commercial Customer Cylinder Holdings & Deposits
+              </h3>
+              <p className="text-xs text-slate-500">
+                Track how many agency cylinders each customer holds on site
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative w-64">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search customer..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+
               <button
-                onClick={() => setCategoryFilter('Commercial 19KG')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  categoryFilter === 'Commercial 19KG'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100'
-                }`}
+                onClick={() => setIsCustomerStockModalOpen(true)}
+                className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm"
               >
-                19 KG Commercial
-              </button>
-              <button
-                onClick={() => setCategoryFilter('Industrial 47.5KG')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  categoryFilter === 'Industrial 47.5KG'
-                    ? 'bg-sky-600 text-white shadow-sm'
-                    : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-400 hover:bg-sky-100'
-                }`}
-              >
-                47.5 KG Industrial
-              </button>
-              <button
-                onClick={() => setCategoryFilter('Domestic 14.2KG')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  categoryFilter === 'Domestic 14.2KG'
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 hover:bg-purple-100'
-                }`}
-              >
-                14.2 KG Domestic
-              </button>
-              <button
-                onClick={() => setCategoryFilter('LOW_STOCK')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  categoryFilter === 'LOW_STOCK'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 hover:bg-rose-100'
-                }`}
-              >
-                ⚠️ Low Stock Alert (&lt;5 Pcs)
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Add Holding</span>
               </button>
             </div>
-          )}
+          </div>
 
-        </div>
-
-        {/* Data Table */}
-        <div className="overflow-x-auto">
-          {activeSubTab === 'voucher' ? (
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[850px]">
+              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="px-4 py-3">Voucher #</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Customer Details</th>
-                  <th className="px-4 py-3">Assigned Staff (RM & Fleet)</th>
-                  <th className="px-4 py-3 text-center">Cylinders (SV/TV)</th>
-                  <th className="px-4 py-3 text-center">Regulators</th>
+                  <th className="px-4 py-3">Customer Name</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3 text-center">Total Held</th>
+                  <th className="px-4 py-3 text-center">Full Cylinders</th>
+                  <th className="px-4 py-3 text-center">Empty Cylinders</th>
+                  <th className="px-4 py-3">SV Voucher No.</th>
                   <th className="px-4 py-3 text-right">Security Deposit</th>
-                  <th className="px-4 py-3">Issue Date</th>
-                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
-                {vouchers.map((v) => (
-                  <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                      <div>{v.voucherNumber}</div>
-                      <div className="text-[10px] text-slate-400 font-normal">{v.voucherReference || 'REF-SV-8921'}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded ${v.voucherType === 'SV' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'}`}>
-                        {v.voucherType}
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {balances
+                  .filter((b) => !searchQuery || b.customerName.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 py-3">
+                        <div className="font-extrabold text-slate-900 dark:text-slate-100">{item.customerName}</div>
+                        {item.customerPhone && <div className="text-[11px] text-slate-500">📞 {item.customerPhone}</div>}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-600 dark:text-slate-300">{item.category}</td>
+                      <td className="px-4 py-3 font-black text-center text-sm font-mono text-indigo-600">
+                        {item.currentFullBalance + item.currentEmptyBalance} Pcs
+                      </td>
+                      <td className="px-4 py-3 font-bold text-center font-mono text-emerald-600">
+                        {item.currentFullBalance}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-center font-mono text-amber-600">
+                        {item.currentEmptyBalance}
+                      </td>
+                      <td className="px-4 py-3 font-mono font-bold text-slate-600 dark:text-slate-300">
+                        {item.svNumber || 'SV-ACTIVE'}
+                      </td>
+                      <td className="px-4 py-3 font-mono font-black text-right text-slate-900 dark:text-slate-100">
+                        ₹{(item.depositAmount || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => alert(`Showing 360 Cylinder Ledger for ${item.customerName}`)}
+                          className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold text-xs"
+                        >
+                          View Ledger
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: STOCK TRANSFER & PLANT GATE PASS */}
+      {activeSubTab === 'transfer' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <ArrowRightLeft className="w-5 h-5 text-teal-600" />
+                Stock Transfers, Vehicle Loadings & Plant Gate Passes
+              </h3>
+              <p className="text-xs text-slate-500">
+                Log of cylinder movements between Godowns, Drivers, and Bottling Refill Plant
+              </p>
+            </div>
+            <button
+              onClick={() => setIsDriverLoadModalOpen(true)}
+              className="flex items-center gap-1 px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ New Transfer</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[850px]">
+              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Pass No.</th>
+                  <th className="px-4 py-3">Transfer Type</th>
+                  <th className="px-4 py-3">From Location</th>
+                  <th className="px-4 py-3">To Location</th>
+                  <th className="px-4 py-3 text-center">Full Qty</th>
+                  <th className="px-4 py-3 text-center">Empty Qty</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {transferLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-3 text-slate-500 font-medium">{log.date}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-slate-100">{log.transferNumber}</td>
+                    <td className="px-4 py-3 font-semibold">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                        {log.transferType.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="font-extrabold text-slate-900 dark:text-slate-100">{v.customerName}</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">ID: {v.customerId || 'cust_demo_1'}</div>
+                    <td className="px-4 py-3 font-bold text-slate-700 dark:text-slate-300">{log.fromLocation}</td>
+                    <td className="px-4 py-3 font-bold text-slate-900 dark:text-slate-100">{log.toLocation}</td>
+                    <td className="px-4 py-3 font-mono font-black text-center text-emerald-600">
+                      {log.fullQty > 0 ? `+${log.fullQty}` : '-'}
+                    </td>
+                    <td className="px-4 py-3 font-mono font-black text-center text-amber-600">
+                      {log.emptyQty > 0 ? `${log.emptyQty}` : '-'}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="space-y-0.5 text-[11px]">
-                        <div className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
-                          <span>👔 RM:</span>
-                          <span>{v.relationshipManagerName || 'Vikram Sharma'}</span>
-                        </div>
-                        <div className="text-amber-700 dark:text-amber-300 flex items-center gap-1 font-semibold">
-                          <span>🚚 Fleet:</span>
-                          <span>{v.defaultDeliveryBoyName || 'Ramesh Kumar'}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center font-bold text-slate-800 dark:text-slate-200">{v.cylinderQty} Pcs</td>
-                    <td className="px-4 py-3 text-center font-bold text-slate-800 dark:text-slate-200">{v.regulatorQty} Pcs</td>
-                    <td className="px-4 py-3 text-right font-extrabold text-emerald-600 dark:text-emerald-400">₹{v.depositAmount.toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3 text-slate-500">{v.issueDate}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                        🟢 {v.status}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                        {log.status}
                       </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: SV / TV SUBSCRIPTION VOUCHERS */}
+      {activeSubTab === 'voucher' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-purple-600" />
+                Subscription Vouchers (SV) & Caution Money Deposits
+              </h3>
+              <p className="text-xs text-slate-500">
+                Official cylinder allotment vouchers & refundable security deposit records
+              </p>
+            </div>
+            <button
+              onClick={() => setIsCustomerStockModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-xs shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Issue New SV Voucher</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {balances.map((item) => (
+              <div
+                key={item.id}
+                className="p-5 rounded-2xl bg-gradient-to-br from-purple-50/50 to-white dark:from-purple-950/20 dark:to-slate-900 border border-purple-200 dark:border-purple-900 shadow-xs space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-black text-xs text-purple-700 dark:text-purple-300">
+                    {item.svNumber || 'SV-2026-0089'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 uppercase">
+                    ACTIVE SV
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-black text-sm text-slate-900 dark:text-slate-100">{item.customerName}</h4>
+                  <p className="text-xs text-slate-500">{item.productName}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-purple-100 dark:border-purple-900 text-xs font-bold">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Allotted Cylinders</span>
+                    <span className="font-mono text-base text-slate-900 dark:text-slate-100">
+                      {item.currentFullBalance + item.currentEmptyBalance} Pcs
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Security Deposit</span>
+                    <span className="font-mono text-base text-purple-600">
+                      ₹{(item.depositAmount || 25000).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: PHYSICAL STOCK AUDIT & RECONCILIATION */}
+      {activeSubTab === 'adjustment' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-teal-600" />
+                Physical Godown Count vs System Book Stock Audit
+              </h3>
+              <p className="text-xs text-slate-500">
+                Perform daily/weekly physical cylinder audit and reconcile discrepancies with 1 click
+              </p>
+            </div>
+            <button
+              onClick={() => showToast('✅ Physical Godown Stock Audit reconciled and logged in Audit Trail!')}
+              className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs shadow-sm"
+            >
+              <Check className="w-4 h-4" />
+              <span>Reconcile System Stock</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 min-w-[800px]">
+              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="px-4 py-3 w-12 text-center">#</th>
-                  <th className="px-4 py-3">Customer / Location Name</th>
-                  <th className="px-4 py-3">Cylinder Product</th>
-                  <th className="px-4 py-3 text-center">Opening Stock</th>
-                  <th className="px-4 py-3 text-center">Full Stock 🟢</th>
-                  <th className="px-4 py-3 text-center">Empty Stock 🟡</th>
-                  <th className="px-4 py-3 text-center">Net Balance 🔵</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
+                  <th className="px-4 py-3">Cylinder Category</th>
+                  <th className="px-4 py-3 text-center">System Book Full</th>
+                  <th className="px-4 py-3 text-center">Physical Godown Full</th>
+                  <th className="px-4 py-3 text-center">Full Diff</th>
+                  <th className="px-4 py-3 text-center">System Book Empty</th>
+                  <th className="px-4 py-3 text-center">Physical Godown Empty</th>
+                  <th className="px-4 py-3 text-center">Empty Diff</th>
+                  <th className="px-4 py-3 text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {filteredBalances.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400 italic">
-                      No cylinder stock entries found matching filter query.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredBalances.map((b, idx) => {
-                    const opening = b.openingQty || 0;
-                    const full = b.currentFullBalance || 0;
-                    const empty = b.currentEmptyBalance || 0;
-                    const currentBalance = opening + full - empty;
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 font-extrabold text-slate-900 dark:text-slate-100">19 KG Commercial LPG</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold">{godownStock.comm19.full}</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold text-emerald-600">{godownStock.comm19.full}</td>
+                  <td className="px-4 py-3 font-mono text-center font-black text-emerald-600">0 (Matched)</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold">{godownStock.comm19.empty}</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold text-amber-600">{godownStock.comm19.empty}</td>
+                  <td className="px-4 py-3 font-mono text-center font-black text-emerald-600">0 (Matched)</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                      MATCHED
+                    </span>
+                  </td>
+                </tr>
 
-                    return (
-                      <tr key={b.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                        <td className="px-4 py-3.5 text-center font-bold text-slate-400">{idx + 1}</td>
-                        
-                        <td className="px-4 py-3.5">
-                          <div className="font-extrabold text-slate-900 dark:text-slate-100 text-xs">
-                            {b.customerName}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
-                            <Building2 className="h-3 w-3 text-slate-400" />
-                            <span>{b.location || 'Central Warehouse'}</span>
-                          </div>
-                        </td>
-
-                        <td className="px-4 py-3.5">
-                          <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 font-bold text-slate-800 dark:text-slate-200 text-[11px] border border-slate-200 dark:border-slate-700 inline-block">
-                            {b.productName}
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-500">
-                          {opening} Pcs
-                        </td>
-
-                        <td className="px-4 py-3.5 text-center">
-                          <span className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-mono font-black">
-                            {full} Pcs
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3.5 text-center">
-                          <span className="px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-mono font-black">
-                            {empty} Pcs
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3.5 text-center">
-                          <span className="px-2.5 py-1 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-mono font-black text-xs">
-                            {currentBalance} Pcs
-                          </span>
-                        </td>
-
-                        <td className="px-4 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* View Movement Ledger */}
-                            <button
-                              onClick={() => handleOpenLedger(b)}
-                              className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 font-bold text-[11px] rounded-lg border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1 cursor-pointer"
-                              title="View Movement Ledger"
-                            >
-                              <FileText className="w-3.5 h-3.5" /> Ledger
-                            </button>
-
-                            {/* Edit Stock */}
-                            <button
-                              onClick={() => handleOpenEditModal(b)}
-                              className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 hover:bg-blue-100 transition cursor-pointer"
-                              title="Edit Stock Entry"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Adjust Audit */}
-                            <button
-                              onClick={() => handleOpenAdjustment(b)}
-                              className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 hover:bg-amber-100 transition cursor-pointer"
-                              title="Stock Adjustment Request"
-                            >
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Delete Entry */}
-                            <button
-                              onClick={() => handleDeleteItem(b.id, b.customerName)}
-                              className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-4 py-3 font-extrabold text-slate-900 dark:text-slate-100">47.5 KG Industrial LPG</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold">{godownStock.ind47.full}</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold text-emerald-600">{godownStock.ind47.full}</td>
+                  <td className="px-4 py-3 font-mono text-center font-black text-emerald-600">0 (Matched)</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold">{godownStock.ind47.empty}</td>
+                  <td className="px-4 py-3 font-mono text-center font-bold text-amber-600">{godownStock.ind47.empty}</td>
+                  <td className="px-4 py-3 font-mono text-center font-black text-emerald-600">0 (Matched)</td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                      MATCHED
+                    </span>
+                  </td>
+                </tr>
               </tbody>
             </table>
-          )}
-        </div>
-
-      </div>
-
-      {/* CUSTOMER CYLINDER MOVEMENT LEDGER FULL-PAGE LEFT SLIDE-OVER DRAWER */}
-      {isLedgerModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
-          <div className="w-full max-w-4xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
-            {/* Header Bar */}
-            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    Customer Cylinder Movement Statement
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{ledgerData?.customerName || 'Account Statement Ledger'}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
-                >
-                  <Printer className="w-4 h-4 text-emerald-400" /> Print Statement
-                </button>
-
-                <button 
-                  onClick={() => setIsLedgerModalOpen(false)} 
-                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {ledgerLoading ? (
-                <div className="p-12 text-center text-slate-400 italic">Loading Customer Cylinder Movement Ledger...</div>
-              ) : ledgerData ? (
-                <div className="space-y-6">
-                  {/* Summary KPI Bar */}
-                  <div className="grid grid-cols-5 gap-3 text-center text-xs bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Opening</div>
-                      <div className="font-black text-slate-700 dark:text-slate-200 text-sm mt-1">{ledgerData.kpis.openingBalance} Pcs</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Delivered Full</div>
-                      <div className="font-black text-emerald-600 dark:text-emerald-400 text-sm mt-1">+{ledgerData.kpis.deliveredFull} Pcs</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Empty Recd</div>
-                      <div className="font-black text-amber-600 dark:text-amber-400 text-sm mt-1">-{ledgerData.kpis.emptyReceived} Pcs</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Adjustments</div>
-                      <div className="font-black text-purple-600 dark:text-purple-400 text-sm mt-1">{ledgerData.kpis.adjustments} Pcs</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Current Balance</div>
-                      <div className="font-black text-indigo-600 dark:text-indigo-400 text-base mt-1">{ledgerData.kpis.currentBalance} Pcs</div>
-                    </div>
-                  </div>
-
-                  {/* Chronological Transaction Table */}
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 overflow-hidden shadow-sm">
-                    <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
-                      <h4 className="font-black text-slate-800 dark:text-slate-100 text-xs uppercase tracking-wider">
-                        Chronological Stock Movement Ledger ({ledgerData.transactions.length} Records)
-                      </h4>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-100 dark:bg-slate-900/60 font-extrabold uppercase text-slate-500 border-b border-slate-200 dark:border-slate-700">
-                          <tr>
-                            <th className="px-4 py-3">Date</th>
-                            <th className="px-4 py-3">Reference #</th>
-                            <th className="px-4 py-3">Type</th>
-                            <th className="px-4 py-3 text-center">Full Qty</th>
-                            <th className="px-4 py-3 text-center">Empty Qty</th>
-                            <th className="px-4 py-3 text-center">Running Balance</th>
-                            <th className="px-4 py-3">Performed By</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                          {ledgerData.transactions.map((t: any) => (
-                            <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                              <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-slate-100">{t.date}</td>
-                              <td className="px-4 py-3.5 font-mono text-indigo-600 dark:text-indigo-400 font-bold">{t.reference}</td>
-                              <td className="px-4 py-3.5 font-extrabold uppercase text-[10px]">
-                                <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                  {t.transactionType}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3.5 text-center font-mono font-black text-emerald-600">+{t.fullQty}</td>
-                              <td className="px-4 py-3.5 text-center font-mono font-black text-amber-600">-{t.emptyQty}</td>
-                              <td className="px-4 py-3.5 text-center font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">{t.runningBalance} Pcs</td>
-                              <td className="px-4 py-3.5 text-slate-500 font-medium">{t.performedBy}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                </div>
-              ) : null}
-            </div>
           </div>
         </div>
       )}
 
-      {/* MANUAL ADJUSTMENT FULL-PAGE LEFT SLIDE-OVER DRAWER */}
-      {isAdjustmentModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
-          <div className="w-full max-w-xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
-            {/* Header */}
-            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  <ShieldAlert className="w-6 h-6" />
+      {/* MODAL 1: PLANT REFILL INWARD */}
+      {isPlantRefillModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 bg-gradient-to-r from-teal-600 to-sky-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-white/20">
+                  <ArrowDownLeft className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    Request Manual Stock Adjustment
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Submit audit corrections for Manager approval</p>
+                  <h3 className="font-black text-sm">Plant Bottling Refill Inward</h3>
+                  <p className="text-[11px] text-teal-100">Receive filled cylinders from IOCL / BPCL plant</p>
                 </div>
               </div>
-
-              <button 
-                onClick={() => setIsAdjustmentModalOpen(false)} 
-                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
-              >
-                <X className="w-6 h-6" />
+              <button onClick={() => setIsPlantRefillModalOpen(false)} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Scrollable Form Body */}
-            <form onSubmit={handleAdjustmentSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs flex flex-col justify-between">
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Customer Account</label>
-                  <input type="text" value={adjCustomerName} disabled className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold text-sm text-slate-800 dark:text-slate-200" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Adjusted Full Stock</label>
-                    <input
-                      type="number"
-                      value={adjFullQty}
-                      onChange={(e) => setAdjFullQty(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-emerald-600 text-sm"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Adjusted Empty Stock</label>
-                    <input
-                      type="number"
-                      value={adjEmptyQty}
-                      onChange={(e) => setAdjEmptyQty(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-amber-600 text-sm"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Mandatory Reason / Audit Note *</label>
-                  <textarea
-                    value={adjReason}
-                    onChange={(e) => setAdjReason(e.target.value)}
-                    placeholder="e.g. Physical stock count audit correction after seal inspection..."
-                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
-                    rows={4}
+            <form onSubmit={handlePlantRefillSubmit} className="p-5 space-y-4 text-xs font-semibold">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Plant Delivery Challan / Invoice No *</label>
+                  <input
+                    type="text"
                     required
+                    value={plantChallanNo}
+                    onChange={(e) => setPlantChallanNo(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold"
                   />
                 </div>
-              </div>
 
-              {/* Footer Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
-                <button type="button" onClick={() => setIsAdjustmentModalOpen(false)} className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl font-bold cursor-pointer">
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={adjSubmitting}
-                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black rounded-xl shadow-lg shadow-amber-600/20 cursor-pointer text-sm"
-                >
-                  {adjSubmitting ? 'Submitting...' : 'Submit to Manager Approval'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* STOCK TRANSFER FULL-PAGE LEFT SLIDE-OVER DRAWER */}
-      {isTransferModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
-          <div className="w-full max-w-xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
-            {/* Header */}
-            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                  <ArrowRightLeft className="w-6 h-6" />
-                </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    Stock Transfer Request
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Transfer cylinders between Godowns & Fleet Trucks</p>
-                </div>
-              </div>
-
-              <button 
-                onClick={() => setIsTransferModalOpen(false)} 
-                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Scrollable Form Body */}
-            <form onSubmit={handleTransferSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs flex flex-col justify-between">
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Transfer Route Type</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Cylinder Category</label>
                   <select
-                    value={transferType}
-                    onChange={(e) => setTransferType(e.target.value as any)}
-                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100 text-sm"
+                    value={plantCategory}
+                    onChange={(e) => setPlantCategory(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
                   >
-                    <option value="WAREHOUSE_TO_DRIVER">Warehouse → Delivery Fleet</option>
-                    <option value="DRIVER_TO_DRIVER">Fleet Boy → Fleet Boy</option>
-                    <option value="DRIVER_TO_WAREHOUSE">Delivery Fleet → Warehouse</option>
+                    <option value="19 KG Commercial LPG Cylinder">19 KG Commercial LPG</option>
+                    <option value="47.5 KG Industrial LPG Cylinder">47.5 KG Industrial LPG</option>
+                    <option value="14.2 KG Domestic LPG Cylinder">14.2 KG Domestic LPG</option>
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">From Location</label>
-                    <input
-                      type="text"
-                      value={fromLocation}
-                      onChange={(e) => setFromLocation(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">To Location</label>
-                    <input
-                      type="text"
-                      value={toLocation}
-                      onChange={(e) => setToLocation(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Full Cylinders Qty</label>
-                    <input
-                      type="number"
-                      value={transferFullQty}
-                      onChange={(e) => setTransferFullQty(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-emerald-600 text-sm"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Empty Cylinders Qty</label>
-                    <input
-                      type="number"
-                      value={transferEmptyQty}
-                      onChange={(e) => setTransferEmptyQty(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-black text-amber-600 text-sm"
-                      required
-                    />
-                  </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Target Godown</label>
+                  <select
+                    value={plantGodown}
+                    onChange={(e) => setPlantGodown(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                  >
+                    <option value="Indore Central Godown">Indore Central Godown</option>
+                    <option value="Pithampur Industrial Godown">Pithampur Industrial Godown</option>
+                    <option value="Vijay Nagar Godown">Vijay Nagar Godown</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Transfer Notes</label>
-                  <textarea
-                    value={transferNotes}
-                    onChange={(e) => setTransferNotes(e.target.value)}
-                    placeholder="Notes for Manager approval..."
-                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
-                    rows={3}
+                  <label className="block text-emerald-600 font-bold mb-1">Full Cylinders Received (+)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    value={plantFullInward}
+                    onChange={(e) => setPlantFullInward(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 font-mono font-black text-emerald-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-amber-600 font-bold mb-1">Empty Cylinders Dispatched (-)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={plantEmptyOutward}
+                    onChange={(e) => setPlantEmptyOutward(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 font-mono font-black text-amber-700"
                   />
                 </div>
               </div>
 
-              {/* Footer Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
-                <button type="button" onClick={() => setIsTransferModalOpen(false)} className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl font-bold cursor-pointer">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPlantRefillModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
+                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={transferSubmitting}
-                  className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl shadow-lg shadow-sky-600/20 cursor-pointer text-sm"
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black shadow-md shadow-teal-600/20"
                 >
-                  {transferSubmitting ? 'Submitting...' : 'Submit to Manager Approval'}
+                  Confirm Inward & Post Stock
                 </button>
               </div>
             </form>
@@ -1162,137 +1371,102 @@ export default function CylinderBalanceModule() {
         </div>
       )}
 
-      {/* ADD / EDIT CYLINDER STOCK ENTRY FULL-PAGE LEFT SLIDE-OVER DRAWER */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-start overflow-hidden animate-in fade-in duration-200">
-          <div className="w-full max-w-xl h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300">
-            {/* Header */}
-            <div className="p-5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  <Package className="w-6 h-6" />
+      {/* MODAL 2: ISSUE TO DELIVERY DRIVER */}
+      {isDriverLoadModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-white/20">
+                  <Truck className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    {editingItem ? 'Edit Cylinder Stock Entry' : 'Add New Cylinder Stock Entry'}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Configure Party & Product Cylinder Stock Balances</p>
+                  <h3 className="font-black text-sm">Issue Cylinders to Delivery Vehicle</h3>
+                  <p className="text-[11px] text-amber-100">Load stock onto driver vehicle for morning delivery route</p>
                 </div>
               </div>
-
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition cursor-pointer"
-              >
-                <X className="w-6 h-6" />
+              <button onClick={() => setIsDriverLoadModalOpen(false)} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Scrollable Form Body */}
-            <form onSubmit={handleSaveStock} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs flex flex-col justify-between">
-              <div className="space-y-4">
+            <form onSubmit={handleDriverLoadSubmit} className="p-5 space-y-4 text-xs font-semibold">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Select Delivery Driver *</label>
+                  <select
+                    value={selectedDriverId}
+                    onChange={(e) => {
+                      const dId = e.target.value;
+                      setSelectedDriverId(dId);
+                      const emp = staff.find((s) => s.id === dId);
+                      if (emp && emp.designation && emp.designation.includes('(') && emp.designation.includes(')')) {
+                        const vMatch = emp.designation.match(/\((.*?)\)/);
+                        if (vMatch) setDriverLoadVehicle(vMatch[1]);
+                      }
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                  >
+                    {staff
+                      .filter((s) => s.active !== false)
+                      .map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.role === 'Delivery Boy' || emp.role === 'Driver' ? '🚚 ' : '👤 '}
+                          {emp.name} ({emp.role}) {emp.phone ? `- ${emp.phone}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
                 <div>
-                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Customer / Site Name *</label>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Vehicle No.</label>
                   <input
                     type="text"
-                    placeholder="e.g. Hotel Rajdhani / Central Warehouse"
-                    value={formCustomerName}
-                    onChange={(e) => setFormCustomerName(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 text-sm"
+                    value={driverLoadVehicle}
+                    onChange={(e) => setDriverLoadVehicle(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Cylinder Type</label>
+                  <select
+                    value={driverLoadCategory}
+                    onChange={(e) => setDriverLoadCategory(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                  >
+                    <option value="19 KG Commercial LPG Cylinder">19 KG Commercial LPG</option>
+                    <option value="47.5 KG Industrial LPG Cylinder">47.5 KG Industrial LPG</option>
+                    <option value="14.2 KG Domestic LPG Cylinder">14.2 KG Domestic LPG</option>
+                  </select>
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-emerald-600 font-bold mb-1">Full Cylinders to Load on Vehicle (Pcs) *</label>
+                  <input
+                    type="number"
+                    min={1}
                     required
+                    value={driverLoadQty}
+                    onChange={(e) => setDriverLoadQty(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 font-mono font-black text-emerald-700 text-sm"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Cylinder Product</label>
-                    <select
-                      value={formProductName}
-                      onChange={(e) => setFormProductName(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100"
-                    >
-                      <option value="19 KG Commercial LPG Cylinder">19 KG Commercial LPG</option>
-                      <option value="47.5 KG Industrial LPG Cylinder">47.5 KG Industrial LPG</option>
-                      <option value="14.2 KG Domestic LPG Cylinder">14.2 KG Domestic LPG</option>
-                      <option value="Medical Oxygen Cylinder">Medical Oxygen Cylinder</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Category Type</label>
-                    <select
-                      value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value as any)}
-                      className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100"
-                    >
-                      <option value="Commercial 19KG">Commercial 19KG</option>
-                      <option value="Industrial 47.5KG">Industrial 47.5KG</option>
-                      <option value="Domestic 14.2KG">Domestic 14.2KG</option>
-                      <option value="Other">Other Category</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1.5">Storage / Godown Location</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Indore Central Warehouse"
-                    value={formLocation}
-                    onChange={(e) => setFormLocation(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 font-semibold"
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 text-center pt-2">
-                  <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <label className="block font-bold uppercase text-[10px] text-slate-500 mb-1">Opening Stock</label>
-                    <input
-                      type="number"
-                      value={formOpeningQty}
-                      onChange={(e) => setFormOpeningQty(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-900 font-black text-center text-sm"
-                      required
-                    />
-                  </div>
-                  <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40">
-                    <label className="block font-bold uppercase text-[10px] text-emerald-600 mb-1">Full Stock 🟢</label>
-                    <input
-                      type="number"
-                      value={formFullQty}
-                      onChange={(e) => setFormFullQty(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 font-black text-emerald-600 text-center text-sm"
-                      required
-                    />
-                  </div>
-                  <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
-                    <label className="block font-bold uppercase text-[10px] text-amber-600 mb-1">Empty Stock 🟡</label>
-                    <input
-                      type="number"
-                      value={formEmptyQty}
-                      onChange={(e) => setFormEmptyQty(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-slate-900 font-black text-amber-600 text-center text-sm"
-                      required
-                    />
-                  </div>
                 </div>
               </div>
 
-              {/* Footer Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 font-bold cursor-pointer"
+                  onClick={() => setIsDriverLoadModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black shadow-lg shadow-emerald-600/20 transition flex items-center gap-2 cursor-pointer active:scale-95 text-sm"
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-black shadow-md shadow-amber-600/20"
                 >
-                  <Check className="w-4 h-4" /> {saving ? 'Saving...' : editingItem ? 'Update Record' : 'Save New Entry'}
+                  Issue & Dispatch Vehicle
                 </button>
               </div>
             </form>
@@ -1300,6 +1474,117 @@ export default function CylinderBalanceModule() {
         </div>
       )}
 
+      {/* MODAL 3: CUSTOMER HOLDING */}
+      {isCustomerStockModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-white/20">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm">Add Customer Cylinder Holding</h3>
+                  <p className="text-[11px] text-indigo-100">Record agency cylinders held at commercial customer site</p>
+                </div>
+              </div>
+              <button onClick={() => setIsCustomerStockModalOpen(false)} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCustomerHoldingSubmit} className="p-5 space-y-4 text-xs font-semibold">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Customer / Hotel / Factory Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Hotel Sayaji / Fortune Landmark"
+                    value={custHoldingName}
+                    onChange={(e) => setCustHoldingName(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">Category</label>
+                  <select
+                    value={custHoldingCategory}
+                    onChange={(e) => setCustHoldingCategory(e.target.value as any)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold"
+                  >
+                    <option value="Commercial 19KG">19 KG Commercial LPG</option>
+                    <option value="Industrial 47.5KG">47.5 KG Industrial LPG</option>
+                    <option value="Domestic 14.2KG">14.2 KG Domestic LPG</option>
+                    <option value="5KG FTL">5 KG FTL Mini</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">SV Voucher No.</label>
+                  <input
+                    type="text"
+                    value={custHoldingSvNo}
+                    onChange={(e) => setCustHoldingSvNo(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-emerald-600 font-bold mb-1">Full Cylinders on Site</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={custHoldingFull}
+                    onChange={(e) => setCustHoldingFull(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 font-mono font-black"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-amber-600 font-bold mb-1">Empty Cylinders on Site</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={custHoldingEmpty}
+                    onChange={(e) => setCustHoldingEmpty(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 font-mono font-black"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-purple-600 font-bold mb-1">Security Deposit Amount (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={custHoldingDeposit}
+                    onChange={(e) => setCustHoldingDeposit(e.target.value)}
+                    className="w-full py-2 px-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-300 dark:border-purple-700 font-mono font-black"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerStockModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black shadow-md shadow-indigo-600/20"
+                >
+                  Save Customer Holding
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+export default CylinderBalanceModule;

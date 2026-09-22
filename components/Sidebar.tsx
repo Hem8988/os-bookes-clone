@@ -35,6 +35,7 @@ interface SidebarProps {
   unpaidCount: number;
   activeMastersSubTab?: string;
   activeInventorySubTab?: string;
+  activeCylinderSubTab?: string;
   activeAccountSubTab?: string;
   reportsSubTab?: string;
   pendingRequestsCount?: number;
@@ -43,6 +44,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
+  activeInventorySubTab = 'so',
+  activeCylinderSubTab = 'godown',
   pendingRequestsCount = 0,
 }) => {
   const [openSection, setOpenSection] = useState<string>('orders');
@@ -97,9 +100,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           {openSection === 'customers' && (
             <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('customers')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'customers' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Customers</button>
-              <button onClick={() => setActiveTab('vendors')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'vendors' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Vendors (Suppliers)</button>
-              <button onClick={() => setActiveTab('cylinder-inventory')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Cylinder Ledger</button>
+              <button onClick={() => setActiveTab('customers')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'customers' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Customers List</button>
+              <button onClick={() => setActiveTab('vendors')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'vendors' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Vendors (LPG Plants)</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'customer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'customer' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Customer Cylinder Holding</button>
             </div>
           )}
         </div>
@@ -118,9 +121,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           {openSection === 'orders' && (
             <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('inventory-hub', 'so')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Orders</button>
-              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'approval-queue' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Approval Queue</button>
-              <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'delivery-app' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Delivery Assignment</button>
+              <button onClick={() => setActiveTab('inventory-hub', 'so')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' && activeInventorySubTab === 'so' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Sale Orders (Assign Driver)</button>
+              <button onClick={() => setActiveTab('inventory-hub', 'quotation')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' && activeInventorySubTab === 'quotation' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Quotations / Estimates</button>
+              <button onClick={() => setActiveTab('inventory-hub', 'po')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' && activeInventorySubTab === 'po' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Plant Refill Orders (PO)</button>
+              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'approval-queue' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Order Approval Queue</button>
             </div>
           )}
         </div>
@@ -139,11 +143,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
           {openSection === 'inventory' && (
             <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('inventory-hub', 'stock')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Warehouse Inventory</button>
-              <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery Boy Stock</button>
-              <button onClick={() => setActiveTab('cylinder-inventory')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Cylinder Inventory</button>
-              <button onClick={() => setActiveTab('cylinder-inventory')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Stock Transfer</button>
-              <button onClick={() => setActiveTab('cylinder-inventory')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Stock Adjustment</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'godown')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'godown' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 🏢 Godown Stock (Full/Empty)</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'driver')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'driver' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 🚚 Delivery Boy Vehicle Stock</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'customer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'customer' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 👥 Customer Cylinder Holdings</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'transfer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'transfer' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 🔄 Stock Transfer & Gate Pass</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'voucher')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'voucher' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 📜 SV Vouchers & Caution Deposit</button>
+              <button onClick={() => setActiveTab('cylinder-inventory', 'adjustment')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'adjustment' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• ⚡ Physical Stock Audit</button>
             </div>
           )}
         </div>

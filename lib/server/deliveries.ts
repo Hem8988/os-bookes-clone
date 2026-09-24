@@ -321,6 +321,13 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
       salesmanName: delivery.deliveryBoyName,
       notes: `Delivery ${delivery.deliveryNumber} · Order ${order.orderNumber}`,
       createdBy: actor.name,
+      print: {
+        shipTo: order.deliveryAddress || null,
+        orderNumber: order.orderNumber,
+        deliveryNumber: delivery.deliveryNumber,
+        deliveryBoy: delivery.deliveryBoyName,
+        cylinders: delivery.items.map((i) => ({ productName: i.productName, delivered: i.deliveredQty, emptyReceived: i.emptyReceivedQty })),
+      },
     });
     await setOrderStatus(tx, order, 'INVOICED', actor.name, invoice.invoiceNumber);
     balance = (

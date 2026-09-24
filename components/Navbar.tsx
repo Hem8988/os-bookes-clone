@@ -4,16 +4,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2,
   Search,
-  Bell,
   UserCheck,
   LogOut,
   PlusCircle,
-  HelpCircle,
-  Smartphone,
   Users,
   Truck,
   Package,
-  FileText
+  FileText,
 } from 'lucide-react';
 import { Customer, Product, Invoice } from '../lib/types';
 import { useCompany } from '../lib/useCompany';
@@ -76,7 +73,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   userEmail,
   roleLabel = '',
   canInvoice = false,
-  activeTab,
   setActiveTab,
   onLogout,
   customers = [],

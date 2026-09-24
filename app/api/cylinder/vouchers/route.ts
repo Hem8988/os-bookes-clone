@@ -10,7 +10,7 @@ export const GET = handle(async (request: Request) => {
   const customerId = new URL(request.url).searchParams.get('customerId');
   const vouchers = await prisma.cylinderVoucher.findMany({
     where: { tenantId: auth.tenantId, ...(customerId ? { customerId } : {}) },
-    include: { customer: { select: { name: true, customerCode: true } } },
+    include: { customer: { select: { name: true, shortName: true, customerCode: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return ok(vouchers);

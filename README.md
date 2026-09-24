@@ -40,6 +40,17 @@ phones must be approved once in **Admin → Devices** (device binding).
 5. Cash is handed over (submission → approval), the accountant locks the day;
    only the Super Admin can re-open it (audit-flagged).
 
+## Android delivery app
+
+The delivery PWA can be packaged as an Android app (Trusted Web Activity) for
+reliable camera, GPS and fingerprint login — see [android/README.md](android/README.md).
+The interface has an English / हिंदी switch on the delivery app, customer portal and login.
+
+## Backups
+
+Schedule `npm run db:backup` daily (needs `pg_dump`). It keeps 7 daily, 4 weekly and
+12 monthly dumps in `BACKUP_DIR` and copies each to `BACKUP_S3_BUCKET` when set.
+
 ## Integrations
 
 Configure in `.env` (see `.env.example`): WhatsApp Cloud API webhook

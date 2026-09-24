@@ -4,7 +4,7 @@ import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
-import { requestTransfer, TransferType } from '@/lib/server/stock';
+import { editTransfer, requestTransfer, TransferType } from '@/lib/server/stock';
 
 export const GET = handle(async (request: Request) => {
   const auth = await requireAuth(request);
@@ -12,7 +12,24 @@ export const GET = handle(async (request: Request) => {
   if (auth.role === 'DELIVERY_BOY') where.OR = [{ fromId: auth.userId }, { toId: auth.userId }];
   else if (!can(auth.role, 'inventory.view')) throw forbidden();
   const transfers = await prisma.stockTransfer.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' }, take: 200 });
-  return ok(transfers);
+  // Who decided and what they wrote (approve note / reject reason / quantity edits).
+  const approvals = await prisma.approvalRequest.findMany({
+    where: { tenantId: auth.tenantId, type: 'STOCK_TRANSFER', referenceId: { in: transfers.map((t) => t.id) } },
+    select: { referenceId: true, decidedByName: true, decidedAt: true, decisionNote: true, logs: { where: { action: 'EDITED' }, select: { actorName: true, note: true, createdAt: true }, orderBy: { createdAt: 'asc' } } },
+  });
+  const byTransfer = new Map(approvals.map((a) => [a.referenceId, a]));
+  return ok(
+    transfers.map((t) => {
+      const a = byTransfer.get(t.id);
+      return {
+        ...t,
+        decidedBy: a?.decidedByName ?? t.approvedBy ?? null,
+        decidedAt: a?.decidedAt ?? t.approvedAt ?? null,
+        decisionNote: a?.decisionNote ?? t.rejectionReason ?? null,
+        edits: a?.logs ?? [],
+      };
+    })
+  );
 });
 
 export const POST = handle(async (request: Request) => {
@@ -35,4 +52,14 @@ export const POST = handle(async (request: Request) => {
   );
   effects.schedule();
   return ok(transfer, `Transfer ${transfer.transferNumber} sent for approval.`);
+});
+
+/** Approver edits the quantities of a pending transfer before approving it. */
+export const PATCH = handle(async (request: Request) => {
+  const auth = await requireAuth(request, 'approvals.view', { write: true });
+  const body = await readJson(request);
+  const id = str(body.id, 'Transfer', { required: true });
+  const items = Array.isArray(body.items) ? (body.items as { productId: string; fullQty?: number; emptyQty?: number }[]) : [];
+  const transfer = await transaction((tx) => editTransfer(tx, auth, id, items, optStr(body.note)));
+  return ok(transfer, 'Transfer quantities updated.');
 });

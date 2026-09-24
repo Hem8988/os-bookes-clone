@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { MessageSquare, RefreshCw, Send } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, dateTime, useToast } from './ui';
 
 // WhatsApp centre (SRS §13): channel status, notification templates, a bot
@@ -15,23 +16,12 @@ type Tab = 'templates' | 'simulator' | 'log';
 
 export default function WhatsAppCenter() {
   const [tab, setTab] = useState<Tab>('templates');
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [channels, setChannels] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<Template | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const data = await api<{ templates: Template[]; channels: Record<string, boolean> }>('/api/settings/templates');
-      setTemplates(data.templates);
-      setChannels(data.channels);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const templatesQ = useApiData<{ templates: Template[]; channels: Record<string, boolean> }>('/api/settings/templates', (m) => showToast(m, 'error'));
+  const templates = templatesQ.data?.templates ?? [];
+  const channels = templatesQ.data?.channels ?? {};
+  const load = templatesQ.reload;
 
   const save = async () => {
     if (!editing) return;
@@ -146,11 +136,9 @@ function Simulator() {
 }
 
 function MessageLog() {
-  const [rows, setRows] = useState<LogRow[]>([]);
-  const load = useCallback(() => api<LogRow[]>('/api/whatsapp/simulate').then(setRows).catch(() => {}), []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const logQ = useApiData<LogRow[]>('/api/whatsapp/simulate');
+  const rows = logQ.data ?? [];
+  const load = logQ.reload;
   return (
     <Card title="Latest 200 messages" actions={<Button size="sm" tone="ghost" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" /></Button>}>
       <table className="w-full text-xs">

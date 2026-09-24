@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRightLeft, Factory, PackagePlus, RefreshCw, SlidersHorizontal, Warehouse as WarehouseIcon } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, useToast } from './ui';
 
@@ -23,32 +24,19 @@ type Tab = 'overview' | 'transfers' | 'movements' | 'warehouses';
 export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab }) {
   const { can } = useSession();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [data, setData] = useState<Overview | null>(null);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [movements, setMovements] = useState<Movement[]>([]);
   const [modal, setModal] = useState<'plant' | 'transfer' | 'adjust' | 'warehouse' | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const [overview, t, m] = await Promise.all([
-        api<Overview>('/api/cylinder/inventory'),
-        api<Transfer[]>('/api/cylinder/transfers'),
-        api<Movement[]>('/api/cylinder/ledger?limit=300'),
-      ]);
-      setData(overview);
-      setTransfers(t);
-      setMovements(m);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => setTab(initialTab), [initialTab]);
+  const overviewQ = useApiData<Overview>('/api/cylinder/inventory', (m) => showToast(m, 'error'));
+  const transfersQ = useApiData<Transfer[]>('/api/cylinder/transfers', (m) => showToast(m, 'error'));
+  const movementsQ = useApiData<Movement[]>('/api/cylinder/ledger?limit=300', (m) => showToast(m, 'error'));
+  const data = overviewQ.data ?? null;
+  const transfers = transfersQ.data ?? [];
+  const movements = movementsQ.data ?? [];
+  const load = () => {
+    overviewQ.reload();
+    transfersQ.reload();
+    movementsQ.reload();
+  };
 
   const totals = (rows: StockRow[]) => rows.reduce((a, r) => ({ full: a.full + r.fullQty, empty: a.empty + r.emptyQty }), { full: 0, empty: 0 });
   const done = (msg: string) => {

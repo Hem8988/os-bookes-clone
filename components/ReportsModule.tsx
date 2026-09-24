@@ -1,9 +1,10 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any -- each report returns a different JSON shape */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
+import { inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
 import { Button, Card, Empty, Stat, cx, inputClass, today, useToast } from './ui';
 
@@ -40,23 +41,12 @@ export default function ReportsModule({ initialReport = 'sales' }: { initialRepo
     return d.toISOString().slice(0, 10);
   });
   const [to, setTo] = useState(today());
-  const [data, setData] = useState<any>(null);
   const [toast, showToast] = useToast();
   const allowed = REPORTS.filter((r) => session && r.roles.includes(session.user.role));
 
-  useEffect(() => setReport(initialReport), [initialReport]);
-
-  const load = useCallback(async () => {
-    setData(null);
-    try {
-      setData(await api(`/api/reports?type=${report}&from=${from}&to=${to}`));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [report, from, to, showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const reportQ = useApiData<any>(`/api/reports?type=${report}&from=${from}&to=${to}`, (m) => showToast(m, 'error'));
+  const data = reportQ.data ?? null;
+  const load = reportQ.reload;
 
   const rows: Record<string, unknown>[] =
     report === 'sales' ? data?.byDay || [] : report === 'collection' ? data?.payments || [] : report === 'outstanding' ? data?.rows || [] : report === 'inventory' ? data?.balances || [] : report === 'cylinder-balance' ? data || [] : report === 'delivery-performance' ? data?.rows || [] : data?.closings || [];

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Save, Plus } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { ROLE_LABELS, Role } from '../lib/permissions';
 import { CompanyProfile, OperationsPolicy, SecurityPolicy } from '../lib/settings';
 import { refreshCompany } from '../lib/useCompany';
@@ -31,12 +32,12 @@ export function SettingsModule() {
 }
 
 function SettingForm<T>({ settingKey, render }: { settingKey: string; render: (value: T, set: (v: T) => void) => React.ReactNode }) {
-  const [value, setValue] = useState<T | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, showToast] = useToast();
-  useEffect(() => {
-    api<T>(`/api/settings/${settingKey}`).then(setValue).catch((e) => showToast(errorMessage(e), 'error'));
-  }, [settingKey, showToast]);
+  const saved = useApiData<T>(`/api/settings/${settingKey}`, (m) => showToast(m, 'error'));
+  // Local edits sit on top of the saved value until the next save.
+  const [draft, setValue] = useState<T | null>(null);
+  const value = draft ?? saved.data ?? null;
   const save = async () => {
     setBusy(true);
     try {
@@ -58,6 +59,57 @@ function SettingForm<T>({ settingKey, render }: { settingKey: string; render: (v
   );
 }
 
+/** Shrink an uploaded image (logo / signature) and store it as a PNG data URL. */
+async function imageDataUrl(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 480 / bitmap.width, 240 / bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
+function ImagePicker({ label, hint, value, onChange }: { label: string; hint: string; value: string; onChange: (v: string) => void }) {
+  const [error, setError] = useState('');
+  const pick = async (file: File | undefined) => {
+    setError('');
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setError('Choose an image file (PNG or JPG).');
+    try {
+      const url = await imageDataUrl(file);
+      if (url.length > 400_000) return setError('Image is too large even after resizing — use a simpler image.');
+      onChange(url);
+    } catch {
+      setError('Could not read this image.');
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="h-20 w-40 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {value ? <img src={value} alt={label} className="max-h-full max-w-full object-contain" /> : <span className="text-[11px] text-slate-400 font-semibold">None</span>}
+      </div>
+      <div className="space-y-1">
+        <div className="text-xs font-bold text-slate-700">{label}</div>
+        <div className="flex gap-2">
+          <label className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold cursor-pointer">
+            {value ? 'Change' : 'Upload'}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
+          </label>
+          {value && (
+            <button type="button" onClick={() => onChange('')} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600">
+              Remove
+            </button>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-500">{hint}</p>
+        {error && <p className="text-[11px] font-semibold text-rose-600">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 function CompanyFields({ value, onChange }: { value: CompanyProfile; onChange: (v: CompanyProfile) => void }) {
   const f = (key: keyof CompanyProfile, label: string, hint?: string) => (
     <Field label={label} hint={hint}>
@@ -65,17 +117,37 @@ function CompanyFields({ value, onChange }: { value: CompanyProfile; onChange: (
     </Field>
   );
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {f('name', 'Business name (shown everywhere)')}
-      {f('legalName', 'Legal name on invoices')}
-      {f('gstin', 'GSTIN')}
-      {f('stateCode', 'State code', 'Two digits, e.g. 07 — decides CGST/SGST vs IGST')}
-      {f('address', 'Address')}
-      {f('phone', 'Phone')}
-      {f('supportPhone', 'Support number (sent to customers)')}
-      {f('email', 'Email')}
-      {f('upiId', 'UPI ID', 'Used for pay-by-QR on invoices')}
-      {f('invoicePrefix', 'Invoice prefix', 'Invoice numbers look like INV/26-27/00001')}
+    <div className="space-y-5">
+      <div className="grid md:grid-cols-2 gap-4">
+        <ImagePicker label="Company logo" hint="Printed on invoices. PNG with a transparent background looks best. Click Save after choosing." value={value.logo} onChange={(logo) => onChange({ ...value, logo })} />
+        <ImagePicker label="Signature / stamp" hint="Printed above the authorised signatory on invoices." value={value.signature} onChange={(signature) => onChange({ ...value, signature })} />
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {f('name', 'Business name (shown everywhere)')}
+        {f('legalName', 'Legal name on invoices', 'e.g. M/S. PRAMUKH INDANE')}
+        {f('gstin', 'GSTIN')}
+        {f('pan', 'PAN')}
+        {f('stateCode', 'State code', 'Two digits, e.g. 27 — decides CGST/SGST vs IGST')}
+        {f('address', 'Address')}
+        {f('phone', 'Phone')}
+        {f('supportPhone', 'Support number (sent to customers)')}
+        {f('email', 'Email')}
+        {f('upiId', 'UPI ID', 'Used for pay-by-QR on invoices')}
+        {f('invoicePrefix', 'Invoice prefix', 'Invoice numbers look like INV/26-27/00001')}
+        {f('signatoryTitle', 'Signatory title', 'e.g. PROPRIETOR, PARTNER, DIRECTOR')}
+      </div>
+      <div>
+        <div className="text-xs font-black text-slate-900 mb-2">Bank details (printed on invoices)</div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {f('bankName', 'Bank name')}
+          {f('bankAccountNo', 'Account number')}
+          {f('bankIfsc', 'IFSC')}
+          {f('bankBranch', 'Branch')}
+        </div>
+      </div>
+      <Field label="Invoice terms" hint="One per line; printed at the bottom of every invoice.">
+        <textarea rows={4} value={value.invoiceTerms} onChange={(e) => onChange({ ...value, invoiceTerms: e.target.value })} className={inputClass} />
+      </Field>
     </div>
   );
 }
@@ -172,22 +244,12 @@ function OperationsFields({ value, onChange }: { value: OperationsPolicy; onChan
 interface IpRule { id: string; ipAddress: string; label: string; kind: string; expiresAt: string | null; active: boolean; createdBy: string; createdAt: string }
 
 function IpRules() {
-  const [rules, setRules] = useState<IpRule[]>([]);
-  const [yourIp, setYourIp] = useState('');
   const [form, setForm] = useState<{ ipAddress: string; label: string; kind: 'OFFICE' | 'HOME'; validDays: number } | null>(null);
   const [toast, showToast] = useToast();
-  const load = useCallback(async () => {
-    try {
-      const data = await api<{ rules: IpRule[]; yourIp: string }>('/api/settings/ip-rules');
-      setRules(data.rules);
-      setYourIp(data.yourIp);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const rulesQ = useApiData<{ rules: IpRule[]; yourIp: string }>('/api/settings/ip-rules', (m) => showToast(m, 'error'));
+  const rules = rulesQ.data?.rules ?? [];
+  const yourIp = rulesQ.data?.yourIp ?? '';
+  const load = rulesQ.reload;
   const save = async () => {
     try {
       await api('/api/settings/ip-rules', { body: form });

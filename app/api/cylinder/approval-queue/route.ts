@@ -3,6 +3,7 @@ import type { Prisma } from '@/lib/generated/prisma/client';
 import { requireAuth } from '@/lib/server/auth';
 import { decideApproval } from '@/lib/server/approvalDecision';
 import { badRequest, handle, ok, optStr, readJson, str } from '@/lib/server/http';
+import { withShortNames } from '@/lib/server/shortNames';
 
 /**
  * Central approval queue (SRS §8). Each role sees what it may decide; the
@@ -21,7 +22,7 @@ export const GET = handle(async (request: Request) => {
 
   // Attach the referenced records so the reviewer sees everything at once.
   const ids = (t: string) => items.filter((i) => i.referenceType === t && i.referenceId).map((i) => i.referenceId!);
-  const [orders, deliveries, payments, cash, transfers, invoices, devices] = await Promise.all([
+  const [rawOrders, rawDeliveries, rawPayments, cash, transfers, invoices, devices] = await Promise.all([
     prisma.order.findMany({ where: { id: { in: ids('ORDER') } }, include: { items: true, customer: { select: { balance: true, creditLimit: true, phone: true } } } }),
     prisma.delivery.findMany({ where: { id: { in: ids('DELIVERY') } }, include: { items: true, order: { include: { items: true } } } }),
     prisma.payment.findMany({ where: { id: { in: ids('PAYMENT') } } }),
@@ -30,7 +31,11 @@ export const GET = handle(async (request: Request) => {
     prisma.invoice.findMany({ where: { id: { in: ids('INVOICE') } }, include: { items: true } }),
     prisma.userDevice.findMany({ where: { id: { in: ids('DEVICE') } }, include: { user: { select: { name: true, mobile: true } } } }),
   ]);
-  const byId = new Map<string, unknown>([...orders, ...deliveries, ...payments, ...cash, ...transfers, ...invoices, ...devices].map((r) => [r.id, r]));
+  const [orders, deliveries, payments] = await Promise.all([withShortNames(auth.tenantId, rawOrders), withShortNames(auth.tenantId, rawDeliveries), withShortNames(auth.tenantId, rawPayments)]);
+  // Invoice raised when a delivery was verified, so the reviewer can open / print it.
+  const deliveryInvoices = deliveries.length ? await prisma.invoice.findMany({ where: { tenantId: auth.tenantId, deliveryId: { in: deliveries.map((d) => d.id) } }, include: { items: true } }) : [];
+  const withInvoice = deliveries.map((d) => ({ ...d, invoice: deliveryInvoices.find((i) => i.deliveryId === d.id) ?? null }));
+  const byId = new Map<string, unknown>([...orders, ...withInvoice, ...payments, ...cash, ...transfers, ...invoices, ...devices].map((r) => [r.id, r]));
   return ok(items.map((i) => ({ ...i, reference: i.referenceId ? byId.get(i.referenceId) ?? null : null })));
 });
 

@@ -53,7 +53,7 @@ export const BankQrBarcodeModal: React.FC<BankQrBarcodeModalProps> = ({ bank, on
     : (bank?.ifscCode && bank.ifscCode !== 'N/A' ? bank.ifscCode : bank?.id || 'BANK-001');
 
   // NPCI Standard UPI Deep Linking URL Format
-  const upiPaymentUrl = `upi://pay?pa=${encodeURIComponent(liveUpiId.trim())}&pn=${encodeURIComponent(bank?.accountName || 'OS-BOOKS Merchant')}${customAmount ? `&am=${encodeURIComponent(customAmount.trim())}` : ''}&cu=INR&tn=${encodeURIComponent('Payment to ' + (bank?.accountName || 'Store'))}`;
+  const upiPaymentUrl = `upi://pay?pa=${encodeURIComponent(liveUpiId.trim())}&pn=${encodeURIComponent(bank?.accountName || 'Merchant')}${customAmount ? `&am=${encodeURIComponent(customAmount.trim())}` : ''}&cu=INR&tn=${encodeURIComponent('Payment to ' + (bank?.accountName || 'Store'))}`;
 
   useEffect(() => {
     if (bank && barcodeSvgRef.current && barcodeValue) {
@@ -100,7 +100,7 @@ export const BankQrBarcodeModal: React.FC<BankQrBarcodeModalProps> = ({ bank, on
 ${upiPaymentUrl}
 
 Scan QR code or click link above to pay directly via PhonePe, Google Pay, Paytm, or BHIM.
-Thank you! - OS-BOOKS GST ERP`;
+Thank you!`;
   };
 
   const handleShareWhatsApp = () => {

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { KeyRound, RefreshCw, ShieldAlert, Smartphone, UserPlus } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { ROLE_LABELS, ROLES, Role } from '../lib/permissions';
 import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
 
@@ -16,7 +17,6 @@ type Tab = 'users' | 'devices' | 'audit';
 
 export function AdminModule({ initialTab = 'users' }: { initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab);
-  useEffect(() => setTab(initialTab), [initialTab]);
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -34,21 +34,12 @@ export function AdminModule({ initialTab = 'users' }: { initialTab?: Tab }) {
 }
 
 function UsersPanel() {
-  const [users, setUsers] = useState<UserRow[]>([]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      setUsers(await api<UserRow[]>('/api/users/roles'));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const usersQ = useApiData<UserRow[]>('/api/users/roles', (m) => showToast(m, 'error'));
+  const users = usersQ.data ?? [];
+  const load = usersQ.reload;
 
   return (
     <Card title="Users & roles" actions={<Button size="sm" onClick={() => setCreating(true)}><UserPlus className="h-3.5 w-3.5" /> Add user</Button>}>
@@ -180,18 +171,10 @@ function EditUserModal({ user, onClose, onDone, onError }: { user: UserRow; onCl
 }
 
 function DevicesPanel() {
-  const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [toast, showToast] = useToast();
-  const load = useCallback(async () => {
-    try {
-      setDevices(await api<DeviceRow[]>('/api/users/devices'));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const devicesQ = useApiData<DeviceRow[]>('/api/users/devices', (m) => showToast(m, 'error'));
+  const devices = devicesQ.data ?? [];
+  const load = devicesQ.reload;
   const act = async (deviceId: string, action: string) => {
     try {
       await api('/api/users/devices', { body: { deviceId, action } });

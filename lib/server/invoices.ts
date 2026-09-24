@@ -5,6 +5,7 @@ import { isInterState, splitGst } from './pricing';
 import { nextInvoiceNumber } from './sequence';
 import { getSetting } from './settings';
 import { PAYMENT_TERMS } from '@/lib/settings';
+import { stateLabel } from '@/lib/gst';
 
 export interface InvoiceLineInput {
   productId: string;
@@ -15,6 +16,36 @@ export interface InvoiceLineInput {
   /** GST-inclusive rate per unit. */
   unitPrice: number;
   taxRate: number;
+}
+
+/** Print details frozen on the invoice (buyer address, place of supply, references). */
+export interface InvoicePrintExtra {
+  billTo: { address: string; city: string | null; state: string | null; stateCode: string | null; pincode: string | null; email: string | null };
+  shipTo: string | null;
+  placeOfSupply: string;
+  orderNumber?: string;
+  deliveryNumber?: string;
+  deliveryBoy?: string;
+  cylinders?: { productName: string; delivered: number; emptyReceived: number }[];
+  /** Typed in by the office from the print screen; challanNumber overrides deliveryNumber. */
+  grnNumber?: string;
+  vehicleNumber?: string;
+  challanNumber?: string;
+  poNumber?: string;
+}
+
+/** Print references the office can fill in by hand. */
+export const INVOICE_REF_FIELDS = ['grnNumber', 'vehicleNumber', 'challanNumber', 'poNumber'] as const;
+
+export function invoicePrintExtra(
+  customer: Pick<Customer, 'address' | 'city' | 'state' | 'stateCode' | 'pincode' | 'email' | 'gstin'>,
+  more: Omit<InvoicePrintExtra, 'billTo' | 'placeOfSupply'> = { shipTo: null }
+): InvoicePrintExtra {
+  return {
+    billTo: { address: customer.address, city: customer.city, state: customer.state, stateCode: customer.stateCode, pincode: customer.pincode, email: customer.email },
+    placeOfSupply: stateLabel(customer.stateCode, customer.gstin, customer.state),
+    ...more,
+  };
 }
 
 export function dueDateFor(customer: Pick<Customer, 'paymentTerms' | 'creditDays'>, date: string) {
@@ -38,6 +69,7 @@ export async function createInvoiceFromLines(
     salesmanName?: string;
     notes?: string;
     createdBy: string;
+    print?: Omit<InvoicePrintExtra, 'billTo' | 'placeOfSupply'>;
   }
 ) {
   const company = await getSetting(input.tenantId, 'company');
@@ -92,6 +124,7 @@ export async function createInvoiceFromLines(
       isIgst: igst,
       notes: input.notes,
       createdBy: input.createdBy,
+      extra: { print: invoicePrintExtra(input.customer, input.print) } as object,
       items: { create: items },
     },
     include: { items: true },

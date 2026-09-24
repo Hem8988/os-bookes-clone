@@ -1,4 +1,5 @@
 import type { Tx } from '@/lib/db';
+import { canDecide } from '@/lib/permissions';
 import { createApproval } from './approvals';
 import { audit, Actor } from './audit';
 import type { Effects } from './effects';
@@ -108,6 +109,39 @@ export async function approveTransfer(tx: Tx, actor: Actor, transferId: string) 
   });
   await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: 'APPROVED', approvedBy: actor.name, approvedAt: new Date() } });
   await audit(tx, actor, { action: 'STOCK_TRANSFER_APPROVED', entityType: 'StockTransfer', entityId: transfer.id, reference: transfer.transferNumber });
+}
+
+/**
+ * Approver corrects the quantities of a pending transfer before deciding it
+ * (e.g. a boy asked for empties from the godown by mistake). Old and new lines
+ * go to the audit log and the change shows in the approval history.
+ */
+export async function editTransfer(tx: Tx, actor: Actor, transferId: string, items: { productId: string; fullQty?: number; emptyQty?: number }[], note: string | null) {
+  if (!canDecide(actor.role, 'STOCK_TRANSFER')) throw forbidden('Only an approver can change a transfer.');
+  const transfer = await tx.stockTransfer.findFirst({ where: { id: transferId, tenantId: actor.tenantId }, include: { items: true } });
+  if (!transfer) throw notFound('Transfer not found.');
+  if (transfer.status !== 'PENDING_APPROVAL') throw conflict('Transfer is already processed.');
+  const lines = await productLines(tx, actor.tenantId, items);
+
+  await tx.stockTransferItem.deleteMany({ where: { transferId: transfer.id } });
+  await tx.stockTransfer.update({ where: { id: transfer.id }, data: { items: { create: lines } } });
+
+  const summary = lines.map((l) => `${l.productName}: ${l.fullQty} full / ${l.emptyQty} empty`).join(', ');
+  const request = await tx.approvalRequest.findFirst({ where: { tenantId: actor.tenantId, type: 'STOCK_TRANSFER', referenceId: transfer.id, status: 'PENDING' } });
+  if (request) {
+    await tx.approvalRequest.update({ where: { id: request.id }, data: { summary } });
+    await tx.approvalLog.create({ data: { requestId: request.id, action: 'EDITED', actorName: actor.name, actorRole: actor.role, note: note ? `${summary} — ${note}` : summary } });
+  }
+  await audit(tx, actor, {
+    action: 'STOCK_TRANSFER_EDITED',
+    entityType: 'StockTransfer',
+    entityId: transfer.id,
+    reference: transfer.transferNumber,
+    details: note || undefined,
+    oldValue: transfer.items.map((i) => ({ productName: i.productName, fullQty: i.fullQty, emptyQty: i.emptyQty })),
+    newValue: lines.map((l) => ({ productName: l.productName, fullQty: l.fullQty, emptyQty: l.emptyQty })),
+  });
+  return tx.stockTransfer.findFirst({ where: { id: transfer.id }, include: { items: true } });
 }
 
 export async function rejectTransfer(tx: Tx, actor: Actor, transferId: string, reason: string) {

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
+import { inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { Customer } from '../lib/types';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
 import { Card, Empty, cx, inputClass, useToast } from './ui';
@@ -14,25 +15,13 @@ interface Entry { id: string; date: string; voucherNumber: string; entryType: st
 
 export default function LedgersModule({ initialTab = 'customers' }: { initialTab?: 'customers' | 'CASH' | 'BANK' }) {
   const [tab, setTab] = useState(initialTab);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<Customer | null>(null);
-  const [book, setBook] = useState<Entry[]>([]);
   const [toast, showToast] = useToast();
-
-  useEffect(() => setTab(initialTab), [initialTab]);
-
-  const load = useCallback(async () => {
-    try {
-      if (tab === 'customers') setCustomers(await api<Customer[]>('/api/customers'));
-      else setBook((await api<{ entries: Entry[] }>(`/api/financial/ledger?type=${tab}`)).entries);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [tab, showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const customersQ = useApiData<Customer[]>(tab === 'customers' ? '/api/customers' : null, (m) => showToast(m, 'error'));
+  const bookQ = useApiData<{ entries: Entry[] }>(tab !== 'customers' ? `/api/financial/ledger?type=${tab}` : null, (m) => showToast(m, 'error'));
+  const customers = useMemo(() => customersQ.data ?? [], [customersQ.data]);
+  const book = bookQ.data?.entries ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

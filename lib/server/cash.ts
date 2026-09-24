@@ -1,4 +1,5 @@
 import type { Tx } from '@/lib/db';
+import { ROLE_HOME, type Role } from '@/lib/permissions';
 import { createApproval } from './approvals';
 import { audit, Actor } from './audit';
 import { assertDayOpen } from './dayLocks';
@@ -18,7 +19,7 @@ export async function submitCash(tx: Tx, actor: Actor, input: { amount: number; 
   const date = businessDate();
   await assertDayOpen(tx, actor.tenantId, date);
 
-  const receiver = await tx.user.findFirst({ where: { id: input.receiverId, tenantId: actor.tenantId, role: { in: ['ACCOUNTANT', 'SUPER_ADMIN'] }, status: 'ACTIVE' } });
+  const receiver = await tx.user.findFirst({ where: { id: input.receiverId, tenantId: actor.tenantId, ...CASH_RECEIVER, NOT: { id: actor.userId } } });
   if (!receiver) throw badRequest('Select who is receiving the cash.');
 
   const { available } = await availableToSubmit(tx, actor.tenantId, actor.userId, actor.name);
@@ -52,9 +53,14 @@ export async function submitCash(tx: Tx, actor: Actor, input: { amount: number; 
     },
     effects
   );
-  effects.add('notify receiver', () => notifyUsers(actor.tenantId, [receiver.id], { title: 'Cash submission to confirm', body: `${actor.name} submitted ₹${amount.toLocaleString('en-IN')}`, link: '/accountant' }));
+  effects.add('notify receiver', () =>
+    notifyUsers(actor.tenantId, [receiver.id], { title: 'Cash submission to confirm', body: `${actor.name} submitted ₹${amount.toLocaleString('en-IN')}`, link: ROLE_HOME[receiver.role as Role] || '/' })
+  );
   return submission;
 }
+
+/** Anyone active in the company can receive a delivery boy's cash (not customers). */
+export const CASH_RECEIVER = { status: 'ACTIVE', role: { not: 'CUSTOMER' } } as const;
 
 export async function approveCash(tx: Tx, actor: Actor, submissionId: string) {
   const submission = await tx.cashSubmission.findFirst({ where: { id: submissionId, tenantId: actor.tenantId } });
@@ -64,10 +70,20 @@ export async function approveCash(tx: Tx, actor: Actor, submissionId: string) {
 
   const boyWallet = await getWallet(tx, actor.tenantId, 'DELIVERY_BOY', submission.deliveryBoyId, submission.deliveryBoyName);
   if (boyWallet.balance + 0.001 < submission.amount) throw conflict(`${submission.deliveryBoyName}'s wallet has only ₹${boyWallet.balance}.`);
-  const companyWallet = await getWallet(tx, actor.tenantId, 'COMPANY', COMPANY_WALLET.ownerId, COMPANY_WALLET.ownerName);
-
   const common = { referenceType: 'CASH_SUBMISSION', referenceId: submission.id, performedBy: actor.name };
   await postWallet(tx, boyWallet.id, { ...common, type: 'SUBMISSION', amount: -submission.amount, notes: `Handed to ${submission.receiverName} (${submission.submissionNumber})` });
+
+  // Handed to another delivery boy: the cash stays in the field, now in his wallet.
+  const receiver = await tx.user.findFirst({ where: { id: submission.receiverId, tenantId: actor.tenantId }, select: { role: true } });
+  if (receiver?.role === 'DELIVERY_BOY') {
+    const toWallet = await getWallet(tx, actor.tenantId, 'DELIVERY_BOY', submission.receiverId, submission.receiverName);
+    await postWallet(tx, toWallet.id, { ...common, type: 'RECEIPT', amount: submission.amount, notes: `Received from ${submission.deliveryBoyName} (${submission.submissionNumber})` });
+    await tx.cashSubmission.update({ where: { id: submission.id }, data: { status: 'APPROVED', verifiedBy: actor.name, verifiedAt: new Date() } });
+    await audit(tx, actor, { action: 'CASH_SUBMISSION_APPROVED', entityType: 'CashSubmission', entityId: submission.id, reference: submission.submissionNumber, newValue: { amount: submission.amount, toDeliveryBoy: submission.receiverName } });
+    return;
+  }
+
+  const companyWallet = await getWallet(tx, actor.tenantId, 'COMPANY', COMPANY_WALLET.ownerId, COMPANY_WALLET.ownerName);
   await postWallet(tx, companyWallet.id, { ...common, type: 'RECEIPT', amount: submission.amount, notes: `From ${submission.deliveryBoyName} (${submission.submissionNumber})` });
   await postBookEntry(tx, {
     tenantId: actor.tenantId,

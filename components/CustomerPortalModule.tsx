@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LogOut, Plus, Printer, RefreshCw } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
+import { useT } from '../lib/i18n';
+import { useApiData } from '../lib/useApiData';
 import { logout, useSession } from '../lib/auth';
+import { LanguageToggle } from './LanguageToggle';
 import { PrintInvoiceModal, InvoiceView } from './PrintInvoiceModal';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, today, useToast } from './ui';
 
@@ -19,29 +22,22 @@ interface Portal {
 }
 
 export function CustomerPortalModule() {
+  const { t } = useT();
   const { session } = useSession();
-  const [data, setData] = useState<Portal | null>(null);
   const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'statement'>('orders');
   const [ordering, setOrdering] = useState(false);
   const [printing, setPrinting] = useState<InvoiceView | null>(null);
   const [toast, showToast] = useToast();
 
   const customerId = session?.user.customerId;
-  const load = useCallback(async () => {
-    if (!customerId) return;
-    try {
-      const d = await api<Portal>(`/api/customers/${customerId}/360`);
-      setData(d);
-      const invoiceId = new URLSearchParams(window.location.search).get('invoice');
-      if (invoiceId) setPrinting(d.invoices.find((i) => i.id === invoiceId) || null);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [customerId, showToast]);
+  const portalQ = useApiData<Portal>(customerId ? `/api/customers/${customerId}/360` : null, (m) => showToast(m, 'error'));
+  const data = portalQ.data ?? null;
+  const load = portalQ.reload;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Invoice link from WhatsApp (?invoice=<id>) opens that invoice once.
+  const [deepLinkId, setDeepLinkId] = useState<string | null>(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('invoice')));
+  const deepLinked = deepLinkId ? data?.invoices.find((i) => i.id === deepLinkId) || null : null;
+  const shownInvoice = printing ?? deepLinked;
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -51,29 +47,32 @@ export function CustomerPortalModule() {
           <div className="text-sm font-black">{data?.customer.name || session?.user.name}</div>
           <div className="text-[11px] text-emerald-300">{session?.company.name} · {data?.customer.customerCode}</div>
         </div>
-        <button onClick={() => void logout()} className="p-2 rounded-lg hover:bg-slate-800"><LogOut className="h-4 w-4" /></button>
+        <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <button onClick={() => void logout()} className="p-2 rounded-lg hover:bg-slate-800"><LogOut className="h-4 w-4" /></button>
+        </div>
       </header>
       <main className="max-w-4xl mx-auto p-4 space-y-4">
         {!data ? (
-          <Empty>Loading…</Empty>
+          <Empty>{t('Loading…')}</Empty>
         ) : (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <Stat label="Outstanding" value={inr(data.customer.balance)} tone={data.customer.balance > 0 ? 'text-rose-600' : 'text-emerald-600'} />
-              <Stat label="Credit limit" value={data.customer.creditLimit ? inr(data.customer.creditLimit) : '—'} />
+              <Stat label={t('Outstanding')} value={inr(data.customer.balance)} tone={data.customer.balance > 0 ? 'text-rose-600' : 'text-emerald-600'} />
+              <Stat label={t('Credit limit')} value={data.customer.creditLimit ? inr(data.customer.creditLimit) : '—'} />
               {data.customer.cylinderBalances.map((c) => <Stat key={c.productName} label={`${c.productName} with you`} value={c.currentBalance} />)}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-2">
-                {(['orders', 'invoices', 'payments', 'statement'] as const).map((t) => (
-                  <button key={t} onClick={() => setTab(t)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold capitalize', tab === t ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
-                    {t}
+                {(['orders', 'invoices', 'payments', 'statement'] as const).map((tabKey) => (
+                  <button key={tabKey} onClick={() => setTab(tabKey)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold capitalize', tab === tabKey ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
+                    {t(tabKey)}
                   </button>
                 ))}
               </div>
               <div className="flex gap-2">
                 <Button tone="ghost" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button>
-                <Button onClick={() => setOrdering(true)}><Plus className="h-4 w-4" /> New order</Button>
+                <Button onClick={() => setOrdering(true)}><Plus className="h-4 w-4" />{t('New order')}</Button>
               </div>
             </div>
             {tab === 'orders' && (
@@ -135,12 +134,19 @@ export function CustomerPortalModule() {
         )}
       </main>
       {ordering && data && <NewOrder defaultProductIds={data.customer.defaultProductIds} onClose={() => setOrdering(false)} onDone={(m) => { showToast(m); setOrdering(false); void load(); }} onError={(m) => showToast(m, 'error')} />}
-      <PrintInvoiceModal invoice={printing} onClose={() => setPrinting(null)} />
+      <PrintInvoiceModal
+        invoice={shownInvoice}
+        onClose={() => {
+          setPrinting(null);
+          setDeepLinkId(null);
+        }}
+      />
     </div>
   );
 }
 
 function NewOrder({ defaultProductIds, onClose, onDone, onError }: { defaultProductIds: string[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+  const { t } = useT();
   const [products, setProducts] = useState<{ id: string; name: string; salePrice: number }[]>([]);
   const [qty, setQty] = useState<Record<string, string>>({});
   const [date, setDate] = useState(today());
@@ -164,13 +170,13 @@ function NewOrder({ defaultProductIds, onClose, onDone, onError }: { defaultProd
     }
   };
   return (
-    <Modal open title="New order" onClose={onClose} footer={<Button busy={busy} disabled={!Object.values(qty).some((q) => Number(q) > 0)} onClick={submit}>Place order</Button>}>
+    <Modal open title="New order" onClose={onClose} footer={<Button busy={busy} disabled={!Object.values(qty).some((q) => Number(q) > 0)} onClick={submit}>{t('Place order')}</Button>}>
       {products.map((p) => (
         <Field key={p.id} label={p.name}>
           <input type="number" min={0} value={qty[p.id] || ''} onChange={(e) => setQty({ ...qty, [p.id]: e.target.value })} className={inputClass} placeholder="Quantity" />
         </Field>
       ))}
-      <Field label="Delivery date"><input type="date" min={today()} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} /></Field>
+      <Field label={t('Delivery date')}><input type="date" min={today()} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} /></Field>
       <p className="text-[11px] text-slate-500">Your order goes to the office for approval; you will get WhatsApp updates at every step.</p>
     </Modal>
   );

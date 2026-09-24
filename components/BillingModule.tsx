@@ -147,7 +147,7 @@ export const BillingModule: React.FC<BillingModuleProps> = ({
   const handleSaveInvoice = (andPrint = false) => {
     const newInv: Invoice = {
       id: `inv-${Date.now()}`,
-      invoiceNumber: `OS-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      invoiceNumber: 'NEW',
       date: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       customerId: selectedCustomer.id,
@@ -368,7 +368,7 @@ export const BillingModule: React.FC<BillingModuleProps> = ({
             />
           </div>
           <div className="text-[11px] text-slate-500 mt-2">
-            GSTIN: 23AAACO8991F1Z2 | Subject to Indore Jurisdiction.
+            The invoice number is assigned by the server when you save.
           </div>
         </div>
 

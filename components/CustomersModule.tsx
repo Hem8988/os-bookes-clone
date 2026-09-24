@@ -470,6 +470,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                                 title="Click to view full Account Ledger"
                               >
                                 {c.name}
+                                {c.shortName && c.shortName !== c.name && <span className="ml-1 text-xs font-bold text-teal-600"> · {c.shortName}</span>}
                               </button>
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
@@ -547,7 +548,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1 font-bold text-slate-800 dark:text-slate-200">
                               <MapPin className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                              <span>{c.city || 'Indore'}</span>
+                              <span>{c.city || '—'}</span>
                             </div>
                             {(c.area || c.route) && (
                               <div className="text-[11px] text-slate-500 font-medium">
@@ -693,6 +694,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                         className="font-extrabold text-base text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 hover:underline cursor-pointer transition"
                       >
                         {c.name}
+                        {c.shortName && c.shortName !== c.name && <span className="ml-1 text-xs font-bold text-teal-600"> · {c.shortName}</span>}
                       </h3>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-mono font-black text-[10px] border border-teal-200 dark:border-teal-800">
@@ -706,7 +708,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
                         <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                        {c.address || c.city}, {c.state || 'Indore'}
+                        {c.address || c.city}, {c.state || ''}
                       </div>
                     </div>
                     <span

@@ -2,6 +2,7 @@ import { prisma, transaction } from '@/lib/db';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
+import { withShortNames } from '@/lib/server/shortNames';
 import { PaymentMode, submitDelivery } from '@/lib/server/deliveries';
 import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
@@ -22,7 +23,7 @@ export const GET = handle(async (request: Request) => {
   if (boy && auth.role !== 'DELIVERY_BOY') where.deliveryBoyId = boy;
 
   const deliveries = await prisma.delivery.findMany({ where, include: { items: true }, orderBy: { submittedAt: 'desc' }, take: 300 });
-  return ok(deliveries);
+  return ok(await withShortNames(auth.tenantId, deliveries));
 });
 
 /** Delivery boy submits a delivery (online or from the offline sync queue). */

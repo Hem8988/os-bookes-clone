@@ -1,46 +1,38 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FileBadge, Search } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
-import { Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, today, useToast } from './ui';
+import { Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 
 // Customer cylinder holdings (Opening + Delivered − Empty ± Adjustment) and
 // caution-deposit vouchers (SV / TV).
 
-interface HoldingRow { id: string; productName: string; currentBalance: number; deliveredQtyTotal: number; emptyReceivedTotal: number; customer: { name: string; customerCode: string; phone: string; area: string | null }; customerId: string }
+interface HoldingRow { id: string; productName: string; currentBalance: number; deliveredQtyTotal: number; emptyReceivedTotal: number; customer: { name: string; shortName: string | null; customerCode: string; phone: string; area: string | null }; customerId: string }
 interface HistoryRow { id: string; date: string; type: string; productName: string; change: number; balance: number; reference: string | null; reason: string | null; by: string }
-interface Voucher { id: string; voucherNumber: string; voucherType: string; customerId: string; customer: { name: string; customerCode: string }; productName: string | null; cylinderQty: number; regulatorQty: number; depositAmount: number; issueDate: string; status: string; notes: string | null }
+interface Voucher { id: string; voucherNumber: string; voucherType: string; customerId: string; customer: { name: string; shortName: string | null; customerCode: string }; productName: string | null; cylinderQty: number; regulatorQty: number; depositAmount: number; issueDate: string; status: string; notes: string | null }
 
 export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { initialSubTab?: string }) {
   const { can } = useSession();
   const [tab, setTab] = useState(initialSubTab === 'voucher' ? 'voucher' : 'customer');
-  const [rows, setRows] = useState<HoldingRow[]>([]);
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [search, setSearch] = useState('');
   const [history, setHistory] = useState<{ customerName: string; rows: HistoryRow[] } | null>(null);
   const [voucherForm, setVoucherForm] = useState<Partial<Voucher> & { productId?: string } | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const [holdings, v] = await Promise.all([api<HoldingRow[]>('/api/reports?type=cylinder-balance'), api<Voucher[]>('/api/cylinder/vouchers')]);
-      setRows(holdings);
-      setVouchers(v);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useEffect(() => setTab(initialSubTab === 'voucher' ? 'voucher' : 'customer'), [initialSubTab]);
+  const rowsQ = useApiData<HoldingRow[]>('/api/reports?type=cylinder-balance', (m) => showToast(m, 'error'));
+  const vouchersQ = useApiData<Voucher[]>('/api/cylinder/vouchers', (m) => showToast(m, 'error'));
+  const rows = useMemo(() => rowsQ.data ?? [], [rowsQ.data]);
+  const vouchers = vouchersQ.data ?? [];
+  const load = () => {
+    rowsQ.reload();
+    vouchersQ.reload();
+  };
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return q ? rows.filter((r) => r.customer.name.toLowerCase().includes(q) || r.customer.phone.includes(q) || r.customer.customerCode.toLowerCase().includes(q)) : rows;
+    return q ? rows.filter((r) => r.customer.name.toLowerCase().includes(q) || (r.customer.shortName || '').toLowerCase().includes(q) || r.customer.phone.includes(q) || r.customer.customerCode.toLowerCase().includes(q)) : rows;
   }, [rows, search]);
 
   const openHistory = async (customerId: string, customerName: string) => {
@@ -93,12 +85,12 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
-                    <td className="p-2"><strong>{r.customer.name}</strong><div className="text-[10px] text-slate-400">{r.customer.customerCode} · {r.customer.area || r.customer.phone}</div></td>
+                    <td className="p-2"><PartyName short={r.customer.shortName} legal={r.customer.name} /><div className="text-[10px] text-slate-400">{r.customer.customerCode} · {r.customer.area || r.customer.phone}</div></td>
                     <td className="p-2">{r.productName}</td>
                     <td className="p-2 text-right">{r.deliveredQtyTotal}</td>
                     <td className="p-2 text-right">{r.emptyReceivedTotal}</td>
                     <td className="p-2 text-right font-black">{r.currentBalance}</td>
-                    <td className="p-2 text-right"><Button size="sm" tone="ghost" onClick={() => openHistory(r.customerId, r.customer.name)}>History</Button></td>
+                    <td className="p-2 text-right"><Button size="sm" tone="ghost" onClick={() => openHistory(r.customerId, partyLabel(r.customer.shortName, r.customer.name))}>History</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -126,7 +118,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
                 {vouchers.map((v) => (
                   <tr key={v.id} className="border-t border-slate-100">
                     <td className="p-2 font-mono font-bold">{v.voucherNumber}<div className="text-[10px] text-slate-400">{v.issueDate}</div></td>
-                    <td className="p-2">{v.customer.name}</td>
+                    <td className="p-2"><PartyName short={v.customer.shortName} legal={v.customer.name} /></td>
                     <td className="p-2">{v.productName || '—'}</td>
                     <td className="p-2 text-right">{v.cylinderQty} / {v.regulatorQty}</td>
                     <td className="p-2 text-right font-mono">{inr(v.depositAmount)}</td>

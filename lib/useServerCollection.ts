@@ -23,23 +23,31 @@ export function useServerCollection<T extends Identified>(name: string, enabled 
     setItemsState(list);
   }, []);
 
-  const reload = useCallback(async () => {
-    if (!enabled) return;
-    try {
-      const data = await api<T[]>(`/api/collections/${name}`);
-      synced.current = data;
-      show(data);
-      setError(null);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [name, enabled, show]);
+  // reload() bumps a counter; the effect fetches and only sets state in callbacks.
+  const [tick, setTick] = useState(0);
+  const reload = useCallback(async () => setTick((n) => n + 1), []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!enabled) return;
+    let alive = true;
+    api<T[]>(`/api/collections/${name}`).then(
+      (data) => {
+        if (!alive) return;
+        synced.current = data;
+        show(data);
+        setError(null);
+        setLoading(false);
+      },
+      (e) => {
+        if (!alive) return;
+        setError(errorMessage(e));
+        setLoading(false);
+      }
+    );
+    return () => {
+      alive = false;
+    };
+  }, [name, enabled, tick, show]);
 
   const create = useCallback(
     async (item: T) => {

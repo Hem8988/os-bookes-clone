@@ -180,9 +180,9 @@ export default function Workspace() {
       case 'delivery-board':
         return <DeliveryGpsTrackingModule />;
       case 'inventory':
-        return <InventoryModule initialTab={(sub as 'overview' | 'transfers' | 'movements' | 'warehouses') || 'overview'} />;
+        return <InventoryModule key={sub || 'overview'} initialTab={(sub as 'overview' | 'transfers' | 'movements' | 'warehouses') || 'overview'} />;
       case 'cylinders':
-        return <CylinderBalanceModule initialSubTab={sub} />;
+        return <CylinderBalanceModule key={sub || 'customer'} initialSubTab={sub} />;
       case 'customers':
       case 'vendors':
         return (
@@ -206,16 +206,26 @@ export default function Workspace() {
         return <CashWalletModule />;
       case 'day-closing':
         return <DayClosingModule />;
-      case 'billing':
-        return <BillingModule customers={activeCustomers} products={products.items.filter((p) => p.active !== false)} onAddInvoice={addInvoice} onOpenInvoiceModal={() => {}} />;
+      case 'billing': {
+        // The billing form picks its first product/customer when it mounts, so wait for both lists.
+        const billable = products.items.filter((p) => p.active !== false);
+        if (products.loading || customers.loading) return <div className="py-16 text-center text-xs font-semibold text-slate-400">Loading products and customers…</div>;
+        if (!billable.length || !activeCustomers.length)
+          return (
+            <div className="py-16 text-center text-sm font-semibold text-slate-500">
+              {!billable.length ? 'Add an active product in Masters → Products first.' : 'Add an active customer first.'}
+            </div>
+          );
+        return <BillingModule key={`${billable.length}-${activeCustomers.length}`} customers={activeCustomers} products={billable} onAddInvoice={addInvoice} onOpenInvoiceModal={() => {}} />;
+      }
       case 'gst':
         return <GstReportsModule invoices={invoices.items.filter((i) => (i.status as string) !== 'Cancelled')} />;
       case 'reports':
-        return <ReportsModule initialReport={sub || 'sales'} />;
+        return <ReportsModule key={sub || 'sales'} initialReport={sub || 'sales'} />;
       case 'whatsapp':
         return <WhatsAppCenter />;
       case 'admin':
-        return <AdminModule initialTab={(sub as 'users' | 'devices' | 'audit') || 'users'} />;
+        return <AdminModule key={sub || 'users'} initialTab={(sub as 'users' | 'devices' | 'audit') || 'users'} />;
       case 'settings':
         return <SettingsModule />;
       case 'documents': {

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { X, Printer, MessageSquare, Phone, MapPin, RefreshCw } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
+import { inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useCompany } from '../lib/useCompany';
 import { Customer } from '../lib/types';
 
@@ -36,35 +37,19 @@ interface CustomerLedgerModalProps {
 export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({ isOpen, customer, onClose }) => {
   const company = useCompany();
   const [tab, setTab] = useState<'LEDGER' | 'CYLINDERS'>('LEDGER');
-  const [entries, setEntries] = useState<LedgerRow[]>([]);
-  const [cylinders, setCylinders] = useState<CylinderRow[]>([]);
-  const [balance, setBalance] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    if (!customer) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [ledger, cyl] = await Promise.all([
-        api<{ customer: { balance: number } | null; entries: LedgerRow[] }>(`/api/financial/ledger?customerId=${customer.id}`),
-        api<{ balances: CylinderRow[] }>(`/api/cylinder/ledger?customerId=${customer.id}`),
-      ]);
-      setEntries(ledger.entries);
-      setBalance(ledger.customer?.balance ?? 0);
-      setCylinders(cyl.balances);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
+  const customerId = isOpen && customer ? customer.id : null;
+  const ledgerQ = useApiData<{ customer: { balance: number } | null; entries: LedgerRow[] }>(customerId ? `/api/financial/ledger?customerId=${customerId}` : null);
+  const cylinderQ = useApiData<{ balances: CylinderRow[] }>(customerId ? `/api/cylinder/ledger?customerId=${customerId}` : null);
+  const entries = ledgerQ.data?.entries ?? [];
+  const balance = ledgerQ.data?.customer?.balance ?? 0;
+  const cylinders = cylinderQ.data?.balances ?? [];
+  const loading = (ledgerQ.loading && !ledgerQ.data) || (cylinderQ.loading && !cylinderQ.data);
+  const error = ledgerQ.error || cylinderQ.error || null;
+  const load = () => {
+    ledgerQ.reload();
+    cylinderQ.reload();
   };
-
-  useEffect(() => {
-    if (isOpen) void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, customer?.id]);
 
   if (!isOpen || !customer) return null;
 

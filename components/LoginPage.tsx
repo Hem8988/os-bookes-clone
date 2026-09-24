@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { ArrowRight, Fingerprint, KeyRound, Loader2, Lock, MapPin, ShieldCheck, Smartphone } from 'lucide-react';
 import { biometricSupported, deviceLabel, getDeviceId, getLocation, runBiometricStep } from '../lib/security';
 import { useCompany } from '../lib/useCompany';
+import { useT } from '../lib/i18n';
+import { LanguageToggle } from './LanguageToggle';
 
 type Step = 'PASSWORD' | 'OTP' | 'BIOMETRIC_REGISTER' | 'BIOMETRIC_VERIFY';
 
@@ -27,6 +29,7 @@ async function post(path: string, body: unknown) {
  * the server can apply the delivery-boy security policy.
  */
 export const LoginPage: React.FC = () => {
+  const { t } = useT();
   const company = useCompany();
   const [step, setStep] = useState<Step>('PASSWORD');
   const [identifier, setIdentifier] = useState('');
@@ -58,7 +61,7 @@ export const LoginPage: React.FC = () => {
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === 'LOCATION_REQUIRED') {
-        setInfo('Location check… please allow location access.');
+        setInfo(t('Location check… please allow location access.'));
         const position = await getLocation();
         if (!position) {
           setError('Location permission is required for delivery staff. Turn on GPS and allow location for this app.');
@@ -125,6 +128,7 @@ export const LoginPage: React.FC = () => {
               <h1 className="font-black text-lg leading-tight">{company.name}</h1>
               <p className="text-[11px] text-emerald-300 font-semibold">DeskShark · Cylinder Distribution ERP</p>
             </div>
+            <div className="ml-auto"><LanguageToggle /></div>
           </div>
         </div>
 
@@ -132,15 +136,15 @@ export const LoginPage: React.FC = () => {
           {step === 'PASSWORD' && (
             <form onSubmit={submitPassword} className="space-y-4">
               <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-600 uppercase">Email or mobile</span>
+                <span className="text-[11px] font-bold text-slate-600 uppercase">{t('Email or mobile')}</span>
                 <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" required className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </label>
               <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-600 uppercase">Password</span>
+                <span className="text-[11px] font-bold text-slate-600 uppercase">{t('Password')}</span>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </label>
               <button disabled={busy} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Log in
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} {t('Log in')}
               </button>
             </form>
           )}
@@ -148,15 +152,13 @@ export const LoginPage: React.FC = () => {
           {step === 'OTP' && (
             <form onSubmit={submitOtp} className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <Smartphone className="h-5 w-5 text-emerald-600" /> Enter the OTP sent on WhatsApp{maskedMobile ? ` to ${maskedMobile}` : ''}
+                <Smartphone className="h-5 w-5 text-emerald-600" /> {t('Enter the OTP sent on WhatsApp')}{maskedMobile ? ` to ${maskedMobile}` : ''}
               </div>
               <input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus required className="w-full rounded-xl border border-slate-300 px-3 py-3 text-center text-2xl tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               <button disabled={busy || otp.length !== 6} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Verify
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} {t('Verify')}
               </button>
-              <button type="button" onClick={resendOtp} className="w-full text-xs font-bold text-slate-500">
-                Resend OTP
-              </button>
+              <button type="button" onClick={resendOtp} className="w-full text-xs font-bold text-slate-500">{t('Resend OTP')}</button>
             </form>
           )}
 
@@ -168,17 +170,15 @@ export const LoginPage: React.FC = () => {
               </p>
               {!biometricSupported() && <p className="text-xs text-rose-600 font-semibold">This browser does not support biometric login. Use the DeskShark delivery app on your Android phone.</p>}
               <button onClick={runBiometric} disabled={busy || !biometricSupported()} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60">
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Continue
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {t('Continue')}
               </button>
             </div>
           )}
 
           {info && <div className="p-3 rounded-xl bg-sky-50 text-sky-800 text-xs font-semibold flex items-center gap-2"><MapPin className="h-4 w-4" />{info}</div>}
-          {error && <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold">{error}</div>}
+          {error && <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold">{t(error)}</div>}
           {step !== 'PASSWORD' && (
-            <button onClick={() => { setStep('PASSWORD'); setError(''); setOtp(''); }} className="w-full text-[11px] font-bold text-slate-400">
-              ← Start again
-            </button>
+            <button onClick={() => { setStep('PASSWORD'); setError(''); setOtp(''); }} className="w-full text-[11px] font-bold text-slate-400">{t('← Start again')}</button>
           )}
         </div>
       </div>

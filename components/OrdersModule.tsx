@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, Search, Trash2, Truck, History, AlertTriangle } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, today, useToast } from './ui';
+import { useApiData } from '../lib/useApiData';
+import { Badge, Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 
 interface OrderItem { id: string; productId: string; productName: string; orderedQty: number; unitPrice: number; totalAmount: number }
 interface Order {
@@ -11,6 +12,7 @@ interface Order {
   orderNumber: string;
   customerId: string;
   customerName: string;
+  customerShortName: string | null;
   customerPhone: string;
   source: string;
   status: string;
@@ -25,7 +27,7 @@ interface Order {
   createdAt: string;
   items: OrderItem[];
 }
-interface Customer { id: string; customerCode: string; name: string; phone: string; status: string; defaultProductIds: string[]; deliveryAddresses: { id: string; label: string; address: string; isDefault: boolean }[]; balance: number; creditLimit: number }
+interface Customer { id: string; customerCode: string; name: string; shortName?: string | null; phone: string; status: string; defaultProductIds: string[]; deliveryAddresses: { id: string; label: string; address: string; isDefault: boolean }[]; balance: number; creditLimit: number }
 interface Product { id: string; name: string; salePrice: number }
 interface Boy { id: string; name: string; mobile: string | null }
 
@@ -155,7 +157,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
                       <div className="text-[10px] text-slate-400">{o.source.replace(/_/g, ' ')}</div>
                     </td>
                     <td className="p-3">
-                      <button onClick={() => onOpenCustomer?.(o.customerId)} className="font-bold text-slate-900 hover:text-emerald-700 text-left">{o.customerName}</button>
+                      <button onClick={() => onOpenCustomer?.(o.customerId)} className="text-slate-900 hover:text-emerald-700 text-left"><PartyName short={o.customerShortName} legal={o.customerName} /></button>
                       <div className="text-[10px] text-slate-400">{o.area || o.customerPhone}</div>
                     </td>
                     <td className="p-3">{o.items.map((i) => <div key={i.id}>{i.productName} × <strong>{i.orderedQty}</strong></div>)}</td>
@@ -286,13 +288,10 @@ function CancelModal({ order, onClose, onDone, onError }: { order: Order | null;
 }
 
 function OrderHistory({ orderId, onClose }: { orderId: string | null; onClose: () => void }) {
-  const [data, setData] = useState<(Order & { statusLogs: { id: string; fromStatus: string | null; toStatus: string; actorName: string; note: string | null; createdAt: string }[]; deliveries: { id: string; deliveryNumber: string; status: string; sentBackReason: string | null }[] }) | null>(null);
-  useEffect(() => {
-    setData(null);
-    if (orderId) api<typeof data>(`/api/cylinder/orders/${orderId}`).then(setData).catch(() => {});
-  }, [orderId]);
+  type Detail = (Order & { statusLogs: { id: string; fromStatus: string | null; toStatus: string; actorName: string; note: string | null; createdAt: string }[]; deliveries: { id: string; deliveryNumber: string; status: string; sentBackReason: string | null }[] });
+  const data = useApiData<Detail>(orderId ? `/api/cylinder/orders/${orderId}` : null).data ?? null;
   return (
-    <Modal open={!!orderId} title={data ? `${data.orderNumber} · ${data.customerName}` : 'Order'} onClose={onClose} wide>
+    <Modal open={!!orderId} title={data ? `${data.orderNumber} · ${partyLabel(data.customerShortName, data.customerName)}` : 'Order'} onClose={onClose} wide>
       {!data ? (
         <Empty>Loading…</Empty>
       ) : (
@@ -347,7 +346,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
   const customer = customers.find((c) => c.id === customerId);
   const matches = useMemo(() => {
     const q = query.toLowerCase();
-    return q ? customers.filter((c) => c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.customerCode.toLowerCase().includes(q)).slice(0, 8) : [];
+    return q ? customers.filter((c) => c.name.toLowerCase().includes(q) || (c.shortName || '').toLowerCase().includes(q) || c.phone.includes(q) || c.customerCode.toLowerCase().includes(q)).slice(0, 8) : [];
   }, [customers, query]);
 
   const pickCustomer = (c: Customer) => {
@@ -399,7 +398,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
           <div className="mt-1 space-y-1">
             {matches.map((c) => (
               <button key={c.id} onClick={() => pickCustomer(c)} className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-emerald-500 text-xs">
-                <strong>{c.name}</strong> · {c.phone} <span className="text-slate-400">{c.customerCode}</span>
+                <strong>{partyLabel(c.shortName, c.name)}</strong>{c.shortName && <span className="text-slate-400"> ({c.name})</span>} · {c.phone} <span className="text-slate-400">{c.customerCode}</span>
               </button>
             ))}
           </div>
@@ -407,7 +406,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
       ) : (
         <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center text-xs">
           <div>
-            <div className="font-black">{customer.name}</div>
+            <PartyName short={customer.shortName} legal={customer.name} className="font-black" />
             <div className="text-slate-500">Outstanding {inr(customer.balance)}{customer.creditLimit ? ` / limit ${inr(customer.creditLimit)}` : ''}</div>
           </div>
           <Button tone="ghost" size="sm" onClick={() => setCustomerId('')}>Change</Button>

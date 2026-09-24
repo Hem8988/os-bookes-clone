@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, RefreshCw, XCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, MapPin, Pencil, Printer, RefreshCw, XCircle } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
+import { InvoiceView, PrintInvoiceModal } from './PrintInvoiceModal';
 import { APPROVAL_TYPES, ApprovalType } from '../lib/permissions';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
+import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, useToast } from './ui';
 
 interface ApprovalItem {
   id: string;
@@ -26,7 +28,7 @@ interface ApprovalItem {
 
 interface DeliveryLine { id: string; productId: string; productName: string; orderedQty: number; deliveredQty: number; emptyReceivedQty: number; totalAmount: number }
 interface OrderLine { id: string; productName: string; orderedQty: number; totalAmount: number }
-interface TransferLine { id: string; productName: string; fullQty: number; emptyQty: number }
+interface TransferLine { id: string; productId: string; productName: string; fullQty: number; emptyQty: number }
 
 interface Props {
   /** Restrict to these queue types (e.g. the accountant's verification tasks). */
@@ -38,32 +40,17 @@ interface Props {
 export default function ApprovalQueueModule({ types, title = 'Approval Queue' }: Props) {
   const [status, setStatus] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [items, setItems] = useState<ApprovalItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [decision, setDecision] = useState<{ action: 'APPROVE' | 'REJECT'; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Approver's correction of a pending stock transfer's quantities.
+  const [edit, setEdit] = useState<{ transferId: string; note: string; lines: { productId: string; productName: string; full: string; empty: string }[] } | null>(null);
   const [toast, showToast] = useToast();
-
   const typeKey = types?.join(',') || '';
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const qs = new URLSearchParams({ status });
-      if (typeKey) qs.set('type', typeKey);
-      const data = await api<ApprovalItem[]>(`/api/cylinder/approval-queue?${qs}`);
-      setItems(data);
-      setSelectedId((cur) => (cur && data.some((d) => d.id === cur) ? cur : data[0]?.id || null));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [status, typeKey, showToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const itemsQ = useApiData<ApprovalItem[]>(`/api/cylinder/approval-queue?${new URLSearchParams({ status, ...(typeKey ? { type: typeKey } : {}) })}`, (m) => showToast(m, 'error'));
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
+  const loading = itemsQ.loading && !itemsQ.data;
+  const load = itemsQ.reload;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -81,6 +68,34 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
       await api('/api/cylinder/approval-queue', { body: { itemId: selected.id, action: decision.action, note: decision.note.trim() || null } });
       showToast(decision.action === 'APPROVE' ? 'Approved.' : 'Rejected.');
       setDecision(null);
+      await load();
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openEdit = () => {
+    const ref = selected?.reference;
+    if (!ref) return;
+    setEdit({
+      transferId: ref.id,
+      note: '',
+      lines: ((ref.items || []) as TransferLine[]).map((i) => ({ productId: i.productId, productName: i.productName, full: String(i.fullQty), empty: String(i.emptyQty) })),
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!edit) return;
+    setBusy(true);
+    try {
+      await api('/api/cylinder/transfers', {
+        method: 'PATCH',
+        body: { id: edit.transferId, note: edit.note.trim() || null, items: edit.lines.map((l) => ({ productId: l.productId, fullQty: Number(l.full) || 0, emptyQty: Number(l.empty) || 0 })) },
+      });
+      showToast('Quantities updated. Review and approve.');
+      setEdit(null);
       await load();
     } catch (e) {
       showToast(errorMessage(e), 'error');
@@ -148,6 +163,11 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
               actions={
                 selected.status === 'PENDING' ? (
                   <>
+                    {selected.type === 'STOCK_TRANSFER' && selected.reference && (
+                      <Button tone="secondary" size="sm" onClick={openEdit}>
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                    )}
                     <Button tone="danger" size="sm" onClick={() => setDecision({ action: 'REJECT', note: '' })}>
                       <XCircle className="h-3.5 w-3.5" /> {selected.type === 'DELIVERY_VERIFICATION' ? 'Send back' : 'Reject'}
                     </Button>
@@ -160,7 +180,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
                 )
               }
             >
-              <Detail item={selected} />
+              <Detail key={selected.id} item={selected} />
               <div className="mt-4 border-t border-slate-100 pt-3 space-y-1">
                 <div className="text-[10px] font-black uppercase text-slate-400">History</div>
                 {selected.logs.map((log) => (
@@ -202,6 +222,40 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
           <textarea value={decision?.note || ''} onChange={(e) => decision && setDecision({ ...decision, note: e.target.value })} rows={3} className={inputClass} />
         </Field>
       </Modal>
+
+      <Modal
+        open={!!edit}
+        title="Edit transfer quantities"
+        onClose={() => setEdit(null)}
+        footer={
+          <>
+            <Button tone="secondary" onClick={() => setEdit(null)}>Cancel</Button>
+            <Button busy={busy} onClick={saveEdit}>Save changes</Button>
+          </>
+        }
+      >
+        {edit && (
+          <>
+            <p className="text-[11px] text-slate-500">Nothing moves until you approve. The change is recorded in the history and audit log; set a line to 0 / 0 to drop it.</p>
+            {edit.lines.map((l, idx) => (
+              <div key={l.productId} className="rounded-xl border border-slate-200 p-3 space-y-2">
+                <div className="text-xs font-black">{l.productName}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Full">
+                    <input type="number" min={0} value={l.full} onChange={(e) => setEdit({ ...edit, lines: edit.lines.map((x, i) => (i === idx ? { ...x, full: e.target.value } : x)) })} className={inputClass} />
+                  </Field>
+                  <Field label="Empty">
+                    <input type="number" min={0} value={l.empty} onChange={(e) => setEdit({ ...edit, lines: edit.lines.map((x, i) => (i === idx ? { ...x, empty: e.target.value } : x)) })} className={inputClass} />
+                  </Field>
+                </div>
+              </div>
+            ))}
+            <Field label="Note (optional)">
+              <input value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="e.g. empties not needed from godown" className={inputClass} />
+            </Field>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -226,6 +280,7 @@ const Line = ({ label, value, tone }: { label: string; value: React.ReactNode; t
 
 function Detail({ item }: { item: ApprovalItem }) {
   const ref = item.reference;
+  const [printing, setPrinting] = useState<InvoiceView | null>(null);
   if (item.type === 'DELIVERY_VERIFICATION' && ref) {
     const orderItems: { productId: string; orderedQty: number }[] = ref.order?.items || [];
     return (
@@ -285,6 +340,25 @@ function Detail({ item }: { item: ApprovalItem }) {
             {ref.remarks && <Line label="Remarks" value={ref.remarks} />}
           </div>
         </div>
+        {ref.invoice ? (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs">
+              <FileText className="h-5 w-5 text-emerald-700" />
+              <div>
+                <div className="font-black text-slate-900">{ref.invoice.invoiceNumber}</div>
+                <div className="text-slate-600">
+                  {ref.invoice.date} · {inr(ref.invoice.grandTotal)} · {ref.invoice.status}
+                </div>
+              </div>
+            </div>
+            <Button size="sm" onClick={() => setPrinting(ref.invoice)}>
+              <Printer className="h-3.5 w-3.5" /> View / Print invoice
+            </Button>
+          </div>
+        ) : (
+          item.status === 'PENDING' && <div className="text-[11px] text-slate-500">The invoice is created automatically when you approve this delivery.</div>
+        )}
+        <PrintInvoiceModal invoice={printing} onClose={() => setPrinting(null)} />
         <div className="grid grid-cols-3 gap-2">
           <Photo url={ref.deliveryProofUrl} label="Delivery proof" />
           <Photo url={ref.paymentProofUrl} label="Payment screenshot" />
@@ -298,6 +372,7 @@ function Detail({ item }: { item: ApprovalItem }) {
     const limit = ref.customer?.creditLimit ?? 0;
     return (
       <div className="space-y-2">
+        <Line label="Customer" value={partyLabel(ref.customerShortName, ref.customerName)} />
         {((ref.items || []) as OrderLine[]).map((i) => (
           <Line key={i.id} label={`${i.productName} × ${i.orderedQty}`} value={inr(i.totalAmount)} />
         ))}
@@ -313,7 +388,7 @@ function Detail({ item }: { item: ApprovalItem }) {
   if (item.type === 'PAYMENT_VERIFICATION' && ref) {
     return (
       <div className="space-y-2">
-        <Line label="Customer" value={ref.customerName} />
+        <Line label="Customer" value={partyLabel(ref.customerShortName, ref.customerName)} />
         <Line label="Amount" value={inr(ref.amount)} />
         <Line label="Mode" value={ref.mode} />
         <Line label="Payment date" value={ref.paymentDate} />
@@ -341,6 +416,11 @@ function Detail({ item }: { item: ApprovalItem }) {
       <div className="space-y-2">
         <Line label="From" value={ref.fromName} />
         <Line label="To" value={ref.toName} />
+        {ref.transferType === 'WAREHOUSE_TO_DRIVER' && ((ref.items || []) as TransferLine[]).some((i) => i.emptyQty > 0) && (
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs font-semibold flex gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> Empty cylinders are being issued from the godown to the delivery boy. Usually only full cylinders go out — use Edit to set Empty to 0.
+          </div>
+        )}
         {((ref.items || []) as TransferLine[]).map((i) => (
           <Line key={i.id} label={i.productName} value={`${i.fullQty} full / ${i.emptyQty} empty`} />
         ))}

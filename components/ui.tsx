@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 
 // Small shared building blocks for the operations screens.
@@ -19,12 +19,14 @@ export const Card: React.FC<{ title?: React.ReactNode; actions?: React.ReactNode
   </section>
 );
 
-type ButtonTone = 'primary' | 'secondary' | 'danger' | 'ghost';
+type ButtonTone = 'primary' | 'secondary' | 'danger' | 'ghost' | 'plain';
 const TONES: Record<ButtonTone, string> = {
   primary: 'bg-emerald-600 hover:bg-emerald-500 text-white',
   secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200',
   danger: 'bg-rose-600 hover:bg-rose-500 text-white',
   ghost: 'text-slate-600 hover:bg-slate-100',
+  // No colours of its own — the caller's className decides (e.g. on coloured cards).
+  plain: '',
 };
 
 export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: ButtonTone; busy?: boolean; size?: 'sm' | 'md' }> = ({
@@ -122,7 +124,21 @@ const STATUS_TONE: Record<string, keyof typeof BADGE_TONES> = {
   Cancelled: 'slate',
 };
 
-export const StatusBadge: React.FC<{ status: string }> = ({ status }) => <Badge tone={STATUS_TONE[status] || 'slate'}>{status.replace(/_/g, ' ')}</Badge>;
+export const StatusBadge: React.FC<{ status: string; label?: string }> = ({ status, label }) => <Badge tone={STATUS_TONE[status] || 'slate'}>{label ?? status.replace(/_/g, ' ')}</Badge>;
+
+/** Name staff know the party by: shop / short name, falling back to the legal name. */
+export const partyLabel = (short: string | null | undefined, legal: string) => short?.trim() || legal;
+
+/** Short name in bold with the legal name underneath when they differ. */
+export const PartyName: React.FC<{ short?: string | null; legal: string; className?: string }> = ({ short, legal, className }) => {
+  const main = partyLabel(short, legal);
+  return (
+    <span className={cx('min-w-0', className)}>
+      <span className="block font-bold truncate">{main}</span>
+      {main !== legal && <span className="block text-[10px] font-normal text-slate-400 truncate">{legal}</span>}
+    </span>
+  );
+};
 
 export const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => <div className="py-10 text-center text-xs text-slate-400 font-semibold">{children}</div>;
 
@@ -147,7 +163,9 @@ export function useToast(): [React.ReactNode, (message: string, tone?: 'ok' | 'e
       {state.message}
     </div>
   ) : null;
-  return [node, (message, tone = 'ok') => setState({ message, tone })];
+  // Stable identity so screens can safely list it in hook dependencies.
+  const show = useCallback((message: string, tone: 'ok' | 'error' = 'ok') => setState({ message, tone }), []);
+  return [node, show];
 }
 
 export const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());

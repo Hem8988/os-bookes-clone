@@ -45,3 +45,8 @@ next-env.d.ts
 
 # uploaded proof photos (local storage driver)
 /storage
+
+# Android signing keys
+/android/*.keystore
+/android/*.jks
+/backups

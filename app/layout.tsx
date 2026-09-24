@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "DeskShark — Cylinder Distribution ERP",
   description: "Orders, deliveries, cylinder inventory, cash and accounts for LPG and industrial gas distributors.",
   manifest: "/manifest.json",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/icon-192.png" },
   appleWebApp: { capable: true, title: "DeskShark", statusBarStyle: "black-translucent" },
 };
 

@@ -1,42 +1,42 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, RefreshCw } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
-import { Badge, Button, Card, Empty, StatusBadge, cx, dateTime, inputClass, today, useToast } from './ui';
+import { inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
+import { Badge, Button, Card, Empty, PartyName, StatusBadge, cx, dateTime, inputClass, today, useToast } from './ui';
 
 // Delivery operations board: who is on duty, their last known location and
 // every delivery of the selected day with its verification status.
 
 interface Location { id: string; deliveryBoyId: string; deliveryBoyName: string; latitude: number; longitude: number; accuracy: number | null; recordedAt: string }
 interface Day { id: string; deliveryBoyId: string; deliveryBoyName: string; status: string; startedAt: string; closedAt: string | null; openingCash: number; closingCash: number | null }
-interface DeliveryRow { id: string; deliveryNumber: string; customerName: string; deliveryBoyName: string; deliveredQtyTotal: number; emptyReceivedTotal: number; paymentMode: string; paymentAmount: number; invoiceAmount: number; hasVariance: boolean; status: string; submittedAt: string; latitude: number | null; longitude: number | null }
+interface DeliveryRow { id: string; deliveryNumber: string; customerName: string; customerShortName: string | null; deliveryBoyName: string; deliveredQtyTotal: number; emptyReceivedTotal: number; paymentMode: string; paymentAmount: number; invoiceAmount: number; hasVariance: boolean; status: string; submittedAt: string; latitude: number | null; longitude: number | null }
 
 export default function DeliveryGpsTrackingModule() {
   const [date, setDate] = useState(today());
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [days, setDays] = useState<Day[]>([]);
-  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
-  const [loadedAt, setLoadedAt] = useState(0);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const [l, d, del] = await Promise.all([api<Location[]>('/api/delivery/gps'), api<Day[]>(`/api/delivery/day-log?date=${date}`), api<DeliveryRow[]>(`/api/cylinder/deliveries?date=${date}`)]);
-      setLocations(l);
-      setDays(d);
-      setDeliveries(del);
-      setLoadedAt(Date.now());
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [date, showToast]);
-
+  const locationsQ = useApiData<Location[]>('/api/delivery/gps', (m) => showToast(m, 'error'));
+  const daysQ = useApiData<Day[]>(`/api/delivery/day-log?date=${date}`, (m) => showToast(m, 'error'));
+  const deliveriesQ = useApiData<DeliveryRow[]>(`/api/cylinder/deliveries?date=${date}`, (m) => showToast(m, 'error'));
+  const locations = locationsQ.data ?? [];
+  const days = daysQ.data ?? [];
+  const deliveries = deliveriesQ.data ?? [];
+  const [loadedAt, setLoadedAt] = useState(() => Date.now());
+  const load = () => {
+    locationsQ.reload();
+    daysQ.reload();
+    deliveriesQ.reload();
+    setLoadedAt(Date.now());
+  };
+  const reloadAll = useRef(load);
   useEffect(() => {
-    void load();
-    const t = window.setInterval(load, 60_000);
+    reloadAll.current = load;
+  });
+  useEffect(() => {
+    const t = window.setInterval(() => reloadAll.current(), 60_000);
     return () => window.clearInterval(t);
-  }, [load]);
+  }, []);
 
   // "Live" = location reported within 15 minutes of the last refresh.
   const fresh = (at: string) => loadedAt - new Date(at).getTime() < 15 * 60_000;
@@ -107,7 +107,7 @@ export default function DeliveryGpsTrackingModule() {
               {deliveries.map((d) => (
                 <tr key={d.id} className="border-t border-slate-100">
                   <td className="p-2 font-mono font-bold">{d.deliveryNumber}<div className="text-[10px] text-slate-400">{dateTime(d.submittedAt)}</div></td>
-                  <td className="p-2">{d.customerName}</td>
+                  <td className="p-2"><PartyName short={d.customerShortName} legal={d.customerName} /></td>
                   <td className="p-2">{d.deliveryBoyName}</td>
                   <td className="p-2 text-right">{d.deliveredQtyTotal} / {d.emptyReceivedTotal}</td>
                   <td className="p-2">{d.paymentMode} {inr(d.paymentAmount)}</td>

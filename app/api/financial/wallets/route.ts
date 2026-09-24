@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
+import { CASH_RECEIVER } from '@/lib/server/cash';
 import { forbidden, handle, ok } from '@/lib/server/http';
 import { availableToSubmit, COMPANY_WALLET, getWallet } from '@/lib/server/wallet';
 
@@ -11,7 +12,11 @@ export const GET = handle(async (request: Request) => {
   if (auth.role === 'DELIVERY_BOY') {
     const info = await availableToSubmit(prisma, auth.tenantId, auth.userId, auth.name);
     const transactions = await prisma.cashWalletTransaction.findMany({ where: { walletId: info.wallet.id }, orderBy: { createdAt: 'desc' }, take: 50 });
-    const receivers = await prisma.user.findMany({ where: { tenantId: auth.tenantId, role: { in: ['ACCOUNTANT', 'SUPER_ADMIN'] }, status: 'ACTIVE' }, select: { id: true, name: true, role: true } });
+    const receivers = await prisma.user.findMany({
+      where: { tenantId: auth.tenantId, ...CASH_RECEIVER, NOT: { id: auth.userId } },
+      select: { id: true, name: true, role: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    });
     return ok({ ...info, transactions, receivers });
   }
   if (!can(auth.role, 'wallet.viewAll')) throw forbidden();

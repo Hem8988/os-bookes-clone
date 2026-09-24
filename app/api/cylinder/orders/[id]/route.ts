@@ -3,6 +3,7 @@ import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
 import { badRequest, forbidden, handle, notFound, ok, readJson, str } from '@/lib/server/http';
+import { withShortNames } from '@/lib/server/shortNames';
 import { acceptOrder, assignOrders, cancelOrder, dispatchOrder } from '@/lib/server/orders';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -23,7 +24,8 @@ export const GET = handle(async (request: Request, ctx: Ctx) => {
   const approvals = can(auth.role, 'approvals.view')
     ? await prisma.approvalRequest.findMany({ where: { tenantId: auth.tenantId, referenceId: { in: [order.id, ...order.deliveries.map((d) => d.id)] } }, include: { logs: true }, orderBy: { createdAt: 'asc' } })
     : [];
-  return ok({ ...order, approvals });
+  const [named] = await withShortNames(auth.tenantId, [order]);
+  return ok({ ...named, approvals });
 });
 
 /**

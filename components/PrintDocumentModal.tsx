@@ -407,31 +407,19 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
                 </span>
               </div>
 
-              {/* Bank Details & UPI */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Bank Transfer Details:
-                  </span>
-                  <div>Bank: <strong>HDFC Bank Ltd</strong></div>
-                  <div>A/C No: <strong className="font-mono">50200088991122</strong></div>
-                  <div>IFSC: <strong className="font-mono">HDFC0001234</strong></div>
-                  <div>Branch: <strong>Indore Main Branch</strong></div>
+              {/* Payment details from Settings → Company */}
+              {company.upiId && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] flex items-center gap-1 font-bold text-teal-700">
+                  <QrCode className="h-3.5 w-3.5" /> Pay by UPI: {company.upiId}
                 </div>
-                <div className="text-right flex flex-col items-end justify-center">
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-1 rounded-lg">
-                    <QrCode className="h-3.5 w-3.5" /> UPI ID: pramukh@upi
-                  </div>
-                  <span className="text-[10px] text-slate-400 mt-1">Instant Bank Settlement</span>
-                </div>
-              </div>
+              )}
 
               {/* Terms & Conditions */}
               <div className="text-[10px] text-slate-500 space-y-0.5">
                 <div className="font-bold text-slate-700">Terms & Conditions:</div>
                 <p>1. Goods once sold will not be taken back or exchanged.</p>
                 <p>2. Interest @ 18% p.a. will be charged if payment is delayed beyond credit terms.</p>
-                <p>3. Subject to Indore Jurisdiction only.</p>
+                <p>3. Subject to local jurisdiction only.</p>
                 {remark && (
                   <p className="pt-1 text-slate-800 font-semibold">Special Instructions: {remark}</p>
                 )}

@@ -12,6 +12,19 @@ export interface CompanyProfile {
   email: string;
   upiId: string;
   invoicePrefix: string;
+  /** Logo as a small data: URL, printed on invoices and shown on the login screen. */
+  logo: string;
+  pan: string;
+  bankName: string;
+  bankAccountNo: string;
+  bankIfsc: string;
+  bankBranch: string;
+  /** Terms printed at the foot of every invoice, one per line. */
+  invoiceTerms: string;
+  /** Printed under the signature, e.g. PROPRIETOR / PARTNER / DIRECTOR. */
+  signatoryTitle: string;
+  /** Signature / stamp image as a small data: URL. */
+  signature: string;
 }
 
 export interface SecurityPolicy {
@@ -70,6 +83,15 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     email: '',
     upiId: '',
     invoicePrefix: 'INV',
+    logo: '',
+    pan: '',
+    bankName: '',
+    bankAccountNo: '',
+    bankIfsc: '',
+    bankBranch: '',
+    invoiceTerms: 'Terms : Interest@24% P.A. will be charged if payment is not made within 30 days.\nThis is system Generated Invoice does not require signature.\nSUBJECT TO LOCAL JURISDICTION ONLY.',
+    signatoryTitle: 'PROPRIETOR',
+    signature: '',
   },
   security: {
     sessionIdleMinutes: 30,

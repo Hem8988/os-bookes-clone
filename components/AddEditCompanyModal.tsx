@@ -24,7 +24,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [city, setCity] = useState('Indore');
+  const [city, setCity] = useState('');
   const [state, setState] = useState('Madhya Pradesh');
   const [stateCode, setStateCode] = useState('23');
   const [pincode, setPincode] = useState('452001');
@@ -39,7 +39,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
       setPhone(companyToEdit.phone || '');
       setEmail(companyToEdit.email || '');
       setAddress(companyToEdit.address || '');
-      setCity(companyToEdit.city || 'Indore');
+      setCity(companyToEdit.city || '');
       setState(companyToEdit.state || 'Madhya Pradesh');
       setStateCode(companyToEdit.stateCode || '23');
       setPincode(companyToEdit.pincode || '452001');
@@ -52,7 +52,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
       setPhone('');
       setEmail('');
       setAddress('');
-      setCity('Indore');
+      setCity('');
       setState('Madhya Pradesh');
       setStateCode('23');
       setPincode('452001');
@@ -75,10 +75,10 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
       tradeName: tradeName.trim() || companyName.trim(),
       gstin: gstin.trim().toUpperCase(),
       pan: pan.trim().toUpperCase() || (gstin.trim().length >= 10 ? gstin.trim().slice(2, 12).toUpperCase() : ''),
-      phone: phone.trim() || '+91 98260 00000',
-      email: email.trim() || 'branch@os-books.com',
+      phone: phone.trim(),
+      email: email.trim(),
       address: address.trim() || 'Commercial Center',
-      city: city.trim() || 'Indore',
+      city: city.trim(),
       state: state.trim() || 'Madhya Pradesh',
       stateCode: stateCode.trim() || '23',
       pincode: pincode.trim() || '452001',

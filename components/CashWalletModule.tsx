@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { Button, Card, Empty, Modal, Stat, StatusBadge, dateTime, useToast } from './ui';
 
 // Cash wallets (SRS §9.5): each delivery boy's cash in hand, the company
@@ -13,24 +14,16 @@ interface WalletTxn { id: string; type: string; amount: number; balanceAfter: nu
 interface Submission { id: string; submissionNumber: string; deliveryBoyName: string; receiverName: string; amount: number; date: string; status: string; verifiedBy: string | null; rejectionReason: string | null; proofUrl: string | null }
 
 export default function CashWalletModule() {
-  const [wallets, setWallets] = useState<WalletRow[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [history, setHistory] = useState<{ wallet: WalletRow; rows: WalletTxn[] } | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const [w, s] = await Promise.all([api<WalletRow[]>('/api/financial/wallets'), api<Submission[]>('/api/financial/cash-submission')]);
-      setWallets(w);
-      setSubmissions(s);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const walletsQ = useApiData<WalletRow[]>('/api/financial/wallets', (m) => showToast(m, 'error'));
+  const submissionsQ = useApiData<Submission[]>('/api/financial/cash-submission', (m) => showToast(m, 'error'));
+  const wallets = walletsQ.data ?? [];
+  const submissions = submissionsQ.data ?? [];
+  const load = () => {
+    walletsQ.reload();
+    submissionsQ.reload();
+  };
 
   const openHistory = async (wallet: WalletRow) => {
     try {

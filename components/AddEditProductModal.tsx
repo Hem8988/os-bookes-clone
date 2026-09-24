@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Product, CategoryMaster, BrandMaster, UnitMaster, ProductType } from '../lib/types';
 
@@ -48,18 +48,15 @@ const blank = (): Product => ({
   active: true,
 });
 
-export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ isOpen, productToEdit, categories, brands, units, products, onClose, onSave }) => {
-  const [form, setForm] = useState<Product>(blank());
+// The form is mounted fresh every time the modal opens, so it always starts
+// from the product being edited (or a blank one).
+export const AddEditProductModal: React.FC<AddEditProductModalProps> = (props) =>
+  props.isOpen ? <ProductForm key={props.productToEdit?.id || 'new'} {...props} /> : null;
+
+const ProductForm: React.FC<AddEditProductModalProps> = ({ productToEdit, categories, brands, units, products, onClose, onSave }) => {
+  const [form, setForm] = useState<Product>(() => (productToEdit ? { ...blank(), ...productToEdit } : blank()));
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (isOpen) {
-      setForm(productToEdit ? { ...blank(), ...productToEdit } : blank());
-      setError('');
-    }
-  }, [isOpen, productToEdit]);
-
-  if (!isOpen) return null;
   const set = <K extends keyof Product>(key: K, value: Product[K]) => setForm((f) => ({ ...f, [key]: value }));
   const categoryNames = Array.from(new Set(['LPG', 'Industrial Gas', 'Accessory', ...categories.map((c) => c.name)]));
 

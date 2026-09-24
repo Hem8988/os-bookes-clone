@@ -93,7 +93,7 @@ export const GET = handle(async (request: Request) => {
       return ok({ from, to, balances, movements: movements.map((m) => ({ type: m.transactionType, productName: m.productName, full: m._sum.fullQty || 0, empty: m._sum.emptyQty || 0 })) });
     }
     case 'cylinder-balance': {
-      const rows = await prisma.customerCylinderBalance.findMany({ where: { tenantId, currentBalance: { not: 0 } }, include: { customer: { select: { name: true, customerCode: true, phone: true, area: true } } }, orderBy: { currentBalance: 'desc' } });
+      const rows = await prisma.customerCylinderBalance.findMany({ where: { tenantId, currentBalance: { not: 0 } }, include: { customer: { select: { name: true, shortName: true, customerCode: true, phone: true, area: true } } }, orderBy: { currentBalance: 'desc' } });
       return ok(rows);
     }
     case 'delivery-performance': {

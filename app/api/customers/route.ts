@@ -19,6 +19,7 @@ export const GET = handle(async (request: Request) => {
   if (search) {
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
+      { shortName: { contains: search, mode: 'insensitive' } },
       { tradeName: { contains: search, mode: 'insensitive' } },
       { customerCode: { contains: search, mode: 'insensitive' } },
       { phone: { contains: search } },
@@ -29,7 +30,7 @@ export const GET = handle(async (request: Request) => {
   if (auth.role === 'DELIVERY_BOY') {
     const rows = await prisma.customer.findMany({
       where,
-      select: { id: true, customerCode: true, name: true, phone: true, address: true, area: true, defaultProductIds: true, deliveryAddresses: true },
+      select: { id: true, customerCode: true, name: true, shortName: true, phone: true, address: true, area: true, defaultProductIds: true, deliveryAddresses: true },
       orderBy: { name: 'asc' },
       take: 100,
     });

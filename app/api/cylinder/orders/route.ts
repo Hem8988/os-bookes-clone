@@ -6,6 +6,7 @@ import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, optStr, readJson } from '@/lib/server/http';
 import { createOrder, OrderSource } from '@/lib/server/orders';
 import { prisma } from '@/lib/db';
+import { withShortNames } from '@/lib/server/shortNames';
 
 const ACTIVE_FOR_BOY = ['ASSIGNED', 'ACCEPTED', 'OUT_FOR_DELIVERY', 'SENT_BACK', 'PENDING_VERIFICATION', 'DELIVERED'];
 
@@ -19,11 +20,23 @@ export const GET = handle(async (request: Request) => {
   const date = url.searchParams.get('date');
   if (date) where.requestedDeliveryDate = date;
   const search = url.searchParams.get('search')?.trim();
-  if (search) where.OR = [{ orderNumber: { contains: search, mode: 'insensitive' } }, { customerName: { contains: search, mode: 'insensitive' } }, { customerPhone: { contains: search } }];
+  if (search) where.OR = [{ orderNumber: { contains: search, mode: 'insensitive' } }, { customerName: { contains: search, mode: 'insensitive' } }, { customer: { shortName: { contains: search, mode: 'insensitive' } } }, { customerPhone: { contains: search } }];
 
   if (auth.role === 'DELIVERY_BOY') {
     where.assignedDeliveryBoyId = auth.userId;
-    if (!status) where.status = { in: ACTIVE_FOR_BOY };
+    if (!status) {
+      // Plus his own field orders still waiting on the office (rejections shown for 3 days).
+      const recent = new Date(Date.now() - 3 * 86_400_000);
+      where.AND = [
+        {
+          OR: [
+            { status: { in: ACTIVE_FOR_BOY } },
+            { source: 'DELIVERY_BOY', status: { in: ['PENDING_APPROVAL', 'APPROVED'] } },
+            { source: 'DELIVERY_BOY', status: 'REJECTED', updatedAt: { gte: recent } },
+          ],
+        },
+      ];
+    }
   } else if (auth.role === 'CUSTOMER') {
     where.customerId = auth.customerId || '-';
   } else {
@@ -44,7 +57,7 @@ export const GET = handle(async (request: Request) => {
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     take: Math.min(Number(url.searchParams.get('limit')) || 200, 500),
   });
-  return ok(orders);
+  return ok(await withShortNames(auth.tenantId, orders));
 });
 
 export const POST = handle(async (request: Request) => {

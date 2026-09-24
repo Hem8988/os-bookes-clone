@@ -29,6 +29,12 @@ export const PUT = handle(async (request: Request, ctx: Ctx) => {
   const auth = await requireAuth(request, 'settings.manage', { write: true });
   const before = await getSetting(auth.tenantId, key);
   const body = await readJson<SettingsMap[typeof key]>(request);
+  if (key === 'company') {
+    for (const [field, label] of [['logo', 'Logo'], ['signature', 'Signature']] as const) {
+      const image = (body as unknown as Record<string, unknown>)[field];
+      if (image && (typeof image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(image) || image.length > 400_000)) throw badRequest(`${label} must be a PNG/JPG image under 300 KB.`);
+    }
+  }
   const saved = await saveSetting(auth.tenantId, key, body, auth.name);
   await audit(prisma, auth, { action: 'SETTINGS_UPDATED', entityType: 'Setting', entityId: key, oldValue: before, newValue: saved, sensitive: key === 'security' });
   return ok(saved, 'Settings saved.');

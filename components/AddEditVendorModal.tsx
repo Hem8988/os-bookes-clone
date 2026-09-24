@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2, Lock, Eye, EyeOff, Shield, Mail } from 'lucide-react';
+import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2, Lock, Eye, EyeOff, Shield, Mail, Languages, Loader2 } from 'lucide-react';
+import { api, errorMessage } from '../lib/api';
 import { Customer, Product, PartyRate } from '../lib/types';
+import { CUSTOMER_SEGMENTS, PAYMENT_TERMS } from '../lib/settings';
 
 interface AddEditVendorModalProps {
   isOpen: boolean;
@@ -24,9 +26,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   // Party Category: Vendor (Supplier) vs Customer (Buyer)
   const [partyCategory, setPartyCategory] = useState<'Vendor' | 'Customer'>(defaultType);
 
-  // Form State matching OS-BOOKS Party Master Screenshot exactly
+  // Party master form state
   const [partyName, setPartyName] = useState('');
   const [shortName, setShortName] = useState('');
+  // English text kept while the short name shows its Hindi spelling, so the button can switch back.
+  const [shortNameEnglish, setShortNameEnglish] = useState<string | null>(null);
+  const [hindiBusy, setHindiBusy] = useState(false);
+  const [hindiError, setHindiError] = useState('');
   const [active, setActive] = useState(true);
   const [dueDays, setDueDays] = useState<number | ''>(7);
 
@@ -88,6 +94,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   // Staff Assignments (Delivery Boy & Relationship Manager)
   const [defaultDeliveryBoyName, setDefaultDeliveryBoyName] = useState('');
   const [deliveryBoys, setDeliveryBoys] = useState<{ id: string; name: string; mobile: string | null }[]>([]);
+  const [areas, setAreas] = useState<{ id: string; name: string; route: { name: string } | null }[]>([]);
+  const [routes, setRoutes] = useState<{ id: string; name: string; defaultDeliveryBoyId: string | null }[]>([]);
+  const [paymentTerms, setPaymentTerms] = useState('COD');
+  const [segment, setSegment] = useState('');
 
   // Limits & Numbers
   const [otherMobileNo, setOtherMobileNo] = useState('');
@@ -104,6 +114,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       .then((r) => r.json())
       .then((j) => setDeliveryBoys(j.data || []))
       .catch(() => {});
+    fetch('/api/areas').then((r) => r.json()).then((j) => setAreas(j.data || [])).catch(() => {});
+    fetch('/api/routes').then((r) => r.json()).then((j) => setRoutes(j.data || [])).catch(() => {});
   }, [isOpen]);
 
   useEffect(() => {
@@ -117,6 +129,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setPartyCategory(customerToEdit.type || defaultType);
       setPartyName(customerToEdit.name || '');
       setShortName(customerToEdit.shortName || '');
+      setShortNameEnglish(null);
+      setHindiError('');
       setTradeName(customerToEdit.tradeName || '');
       setContactPerson(customerToEdit.contactPerson || '');
       setStatus(customerToEdit.status || (customerToEdit.active === false ? 'INACTIVE' : 'ACTIVE'));
@@ -126,6 +140,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setWhatsappNumber(customerToEdit.whatsappNumber || customerToEdit.phone || '');
       setCity(customerToEdit.city || '');
       setAreaName(customerToEdit.area || '');
+      setPaymentTerms(customerToEdit.paymentTerms || 'COD');
+      setSegment(customerToEdit.segment || '');
       setRouteName(customerToEdit.route || '');
       setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || '');
       setDefaultDeliveryBoyName(customerToEdit.defaultDeliveryBoyName || '');
@@ -169,6 +185,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setPartyCategory(defaultType);
       setPartyName('');
       setShortName('');
+      setShortNameEnglish(null);
+      setHindiError('');
       setTradeName('');
       setContactPerson('');
       setStatus('ACTIVE');
@@ -178,6 +196,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setWhatsappNumber('');
       setCity('');
       setAreaName('');
+      setPaymentTerms('COD');
+      setSegment('');
       setRouteName('');
       setDefaultDeliveryBoyId('');
       setOpeningEmptyQty(0);
@@ -241,6 +261,28 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     setPartyRates((rows) => rows.filter((_, i) => i !== index));
   };
 
+  // Short name → Hindi spelling for the delivery app; pressing again restores the English text.
+  const toggleShortNameHindi = async () => {
+    setHindiError('');
+    if (shortNameEnglish !== null) {
+      setShortName(shortNameEnglish);
+      setShortNameEnglish(null);
+      return;
+    }
+    const english = shortName.trim();
+    if (!english) return;
+    setHindiBusy(true);
+    try {
+      const { text } = await api<{ text: string }>('/api/transliterate', { body: { text: english } });
+      setShortName(text);
+      setShortNameEnglish(english);
+    } catch (err) {
+      setHindiError(errorMessage(err));
+    } finally {
+      setHindiBusy(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!partyName.trim()) {
@@ -284,11 +326,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       openingBalance: numericOpBal,
       openingBalanceType,
       creditLimit: Number(partyLimit) || 0,
-      creditDays: Number(dueDays) || 7,
+      paymentTerms,
+      segment: segment || undefined,
+      creditDays: PAYMENT_TERMS.find((p) => p.value === paymentTerms)?.days ?? (Number(dueDays) || 0),
       type: partyCategory,
       accountGroup: partyCategory === 'Vendor' ? 'Sundry Creditors' : 'Sundry Debtors',
       active: status === 'ACTIVE',
-      dueDays: Number(dueDays) || 7,
+      dueDays: PAYMENT_TERMS.find((p) => p.value === paymentTerms)?.days ?? (Number(dueDays) || 0),
       tags: partyTags ? partyTags.split(',').map((t) => t.trim()) : [],
       isMoreInfo,
       isWholeParty,
@@ -405,13 +449,19 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
               {/* Due Days */}
               <div className="md:col-span-3 space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Due Days</label>
-                <input
-                  type="number"
-                  value={dueDays}
-                  onChange={(e) => setDueDays(e.target.value === '' ? '' : Number(e.target.value))}
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Payment terms</label>
+                <select
+                  value={paymentTerms}
+                  onChange={(e) => {
+                    setPaymentTerms(e.target.value);
+                    setDueDays(PAYMENT_TERMS.find((p) => p.value === e.target.value)?.days ?? 0);
+                  }}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
+                >
+                  {PAYMENT_TERMS.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -479,13 +529,30 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Shop / Short Name (Delivery App) *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Burger King FC Road"
-                  value={shortName}
-                  onChange={(e) => setShortName(e.target.value)}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="e.g. Burger King FC Road"
+                    value={shortName}
+                    onChange={(e) => {
+                      setShortName(e.target.value);
+                      setShortNameEnglish(null);
+                      setHindiError('');
+                    }}
+                    className="w-full pl-3 pr-24 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={hindiBusy || (!shortName.trim() && shortNameEnglish === null)}
+                    onClick={toggleShortNameHindi}
+                    title={shortNameEnglish !== null ? 'Switch back to the English name' : 'Write this name in Hindi'}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-md bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-[11px] font-black"
+                  >
+                    {hindiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
+                    {shortNameEnglish !== null ? 'English' : 'हिंदी'}
+                  </button>
+                </div>
+                {hindiError && <p className="text-[11px] font-semibold text-rose-600">{hindiError}</p>}
               </div>
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Contact Person</label>
@@ -668,6 +735,51 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
                 Staff Mapping
               </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Area</label>
+                <select
+                  value={areaName}
+                  onChange={(e) => {
+                    setAreaName(e.target.value);
+                    const area = areas.find((a) => a.name === e.target.value);
+                    if (area?.route) {
+                      setRouteName(area.route.name);
+                      const route = routes.find((r) => r.name === area.route?.name);
+                      if (route?.defaultDeliveryBoyId && !defaultDeliveryBoyId) {
+                        setDefaultDeliveryBoyId(route.defaultDeliveryBoyId);
+                        setDefaultDeliveryBoyName(deliveryBoys.find((b) => b.id === route.defaultDeliveryBoyId)?.name || '');
+                      }
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                >
+                  <option value="">—</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.name}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Route</label>
+                <select value={routeName} onChange={(e) => setRouteName(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900">
+                  <option value="">—</option>
+                  {routes.map((r) => (
+                    <option key={r.id} value={r.name}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Customer type</label>
+                <select value={segment} onChange={(e) => setSegment(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900">
+                  <option value="">—</option>
+                  {CUSTOMER_SEGMENTS.map((seg) => (
+                    <option key={seg} value={seg}>{seg}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-1 pt-1 max-w-md">

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
 import { Button, Card, Field, inputClass, Modal, StatusBadge, useToast } from './ui';
 
@@ -13,26 +14,19 @@ interface AreaRow { id: string; code: string; name: string; routeId: string | nu
 
 export default function RoutesModule() {
   const { can } = useSession();
-  const [routes, setRoutes] = useState<RouteRow[]>([]);
-  const [areas, setAreas] = useState<AreaRow[]>([]);
-  const [boys, setBoys] = useState<{ id: string; name: string }[]>([]);
   const [routeForm, setRouteForm] = useState<Partial<RouteRow> | null>(null);
   const [areaForm, setAreaForm] = useState<Partial<AreaRow> | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const [r, a, b] = await Promise.all([api<RouteRow[]>('/api/routes'), api<AreaRow[]>('/api/areas'), api<{ id: string; name: string }[]>('/api/users/roles?role=DELIVERY_BOY')]);
-      setRoutes(r);
-      setAreas(a);
-      setBoys(b);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const routesQ = useApiData<RouteRow[]>('/api/routes', (m) => showToast(m, 'error'));
+  const areasQ = useApiData<AreaRow[]>('/api/areas', (m) => showToast(m, 'error'));
+  const boysQ = useApiData<{ id: string; name: string }[]>('/api/users/roles?role=DELIVERY_BOY', (m) => showToast(m, 'error'));
+  const routes = routesQ.data ?? [];
+  const areas = areasQ.data ?? [];
+  const boys = boysQ.data ?? [];
+  const load = () => {
+    routesQ.reload();
+    areasQ.reload();
+  };
 
   const save = async (path: string, body: unknown) => {
     try {

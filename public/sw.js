@@ -2,8 +2,8 @@
 // web-push. API responses are never cached (they contain customer data and
 // must always be fresh); offline delivery entries live in IndexedDB instead.
 
-const CACHE = 'deskshark-shell-v2';
-const SHELL = ['/delivery', '/login', '/manifest.json', '/icon.svg'];
+const CACHE = 'deskshark-shell-v3';
+const SHELL = ['/delivery', '/login', '/manifest.json', '/icon.svg', '/icon-192.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).catch(() => {}));
@@ -62,7 +62,7 @@ self.addEventListener('push', (event) => {
   } catch (e) {
     /* plain text payload */
   }
-  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/icon.svg', badge: '/icon.svg', data: { link: data.link || '/' } }));
+  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/icon-192.png', badge: '/icon-192.png', data: { link: data.link || '/' } }));
 });
 
 self.addEventListener('notificationclick', (event) => {

@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { Bell, BellRing } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Bell, BellRing, Volume2, VolumeX } from 'lucide-react';
 import { api } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
+import { useT } from '../lib/i18n';
 
 interface NotificationItem {
   id: string;
@@ -34,29 +36,135 @@ export async function enablePush(): Promise<boolean> {
   return true;
 }
 
+const SOUND_KEY = 'deskshark.notifySound';
+
+// Browsers only allow audio after the user has touched the page once.
+let audioCtx: AudioContext | null = null;
+function unlockAudio() {
+  try {
+    audioCtx ??= new AudioContext();
+    if (audioCtx.state === 'suspended') void audioCtx.resume();
+  } catch {
+    /* no Web Audio */
+  }
+}
+
+/** Short two-note "ting" — no audio file needed. */
+function playChime() {
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  const start = audioCtx.currentTime;
+  [880, 1320].forEach((freq, i) => {
+    const osc = audioCtx!.createOscillator();
+    const gain = audioCtx!.createGain();
+    const at = start + i * 0.13;
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.35);
+    osc.connect(gain).connect(audioCtx!.destination);
+    osc.start(at);
+    osc.stop(at + 0.4);
+  });
+}
+
 /** In-app notifications (approvals waiting, deliveries sent back, …). */
 export const NotificationBell: React.FC<{ onNavigate?: (link: string) => void; tone?: 'light' | 'dark' }> = ({ onNavigate, tone = 'light' }) => {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<NotificationItem[]>([]);
-  const [unread, setUnread] = useState(0);
-  const [pushState, setPushState] = useState<'unknown' | 'on' | 'off'>('unknown');
-
-  const load = useCallback(async () => {
+  const [pushState, setPushState] = useState<'unknown' | 'on' | 'off'>(() =>
+    typeof Notification === 'undefined' ? 'unknown' : Notification.permission === 'granted' ? 'on' : 'off'
+  );
+  const [sound, setSound] = useState(() => {
     try {
-      const data = await api<{ items: NotificationItem[]; unread: number }>('/api/notifications', { redirectOn401: false });
-      setItems(data.items);
-      setUnread(data.unread);
+      return typeof window === 'undefined' || window.localStorage.getItem(SOUND_KEY) !== 'off';
     } catch {
-      /* offline — keep last state */
+      return true;
     }
-  }, []);
+  });
+  const [ringing, setRinging] = useState(false);
+  const feed = useApiData<{ items: NotificationItem[]; unread: number }>('/api/notifications');
+  const items = feed.data?.items;
+  const unread = feed.data?.unread ?? 0;
+  const load = feed.reload;
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(load, 60_000);
-    if (typeof Notification !== 'undefined') setPushState(Notification.permission === 'granted' ? 'on' : 'off');
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(load, 20_000);
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
   }, [load]);
+
+  // Newest notification already seen; the first load only sets the baseline.
+  const seen = useRef<string | null>(null);
+  const soundRef = useRef(sound);
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
+  const navigate = useRef(onNavigate);
+  useEffect(() => {
+    navigate.current = onNavigate;
+  }, [onNavigate]);
+
+  useEffect(() => {
+    if (!items) return;
+    const newest = items.reduce<string | null>((m, n) => (!m || n.createdAt > m ? n.createdAt : m), null);
+    if (seen.current === null) {
+      seen.current = newest ?? '';
+      return;
+    }
+    const fresh = items.filter((n) => !n.readAt && n.createdAt > (seen.current as string));
+    if (newest && newest > seen.current) seen.current = newest;
+    if (!fresh.length) return;
+
+    if (soundRef.current) playChime();
+    setRinging(true);
+    const stop = window.setTimeout(() => setRinging(false), 2500);
+    // Desktop pop-up, unless web push is set up (its service worker shows one already).
+    if (!VAPID_KEY && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      fresh.slice(0, 3).forEach((n) => {
+        const options = { body: tRef.current(n.body), tag: n.id, icon: '/icon-192.png', data: { link: n.link || '/' } };
+        try {
+          const popup = new Notification(tRef.current(n.title), options);
+          popup.onclick = () => {
+            window.focus();
+            popup.close();
+            if (n.link && navigate.current) navigate.current(n.link);
+            else if (n.link) window.location.href = n.link;
+          };
+        } catch {
+          // Android Chrome only allows pop-ups through the service worker.
+          void navigator.serviceWorker?.ready.then((reg) => reg.showNotification(tRef.current(n.title), options)).catch(() => {});
+        }
+      });
+    }
+    return () => window.clearTimeout(stop);
+  }, [items]);
+
+  const enableAlerts = async () => {
+    unlockAudio();
+    if (VAPID_KEY) return setPushState((await enablePush()) ? 'on' : 'off');
+    setPushState((await Notification.requestPermission()) === 'granted' ? 'on' : 'off');
+  };
+  const toggleSound = () => {
+    unlockAudio();
+    const next = !sound;
+    setSound(next);
+    try {
+      window.localStorage.setItem(SOUND_KEY, next ? 'on' : 'off');
+    } catch {
+      /* private mode */
+    }
+    if (next) window.setTimeout(playChime, 50);
+  };
 
   const markAll = async () => {
     await api('/api/notifications', { body: {} });
@@ -67,29 +175,32 @@ export const NotificationBell: React.FC<{ onNavigate?: (link: string) => void; t
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className={`relative p-2 rounded-full transition-colors cursor-pointer ${iconClass}`} title="Notifications">
-        {unread > 0 ? <BellRing className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+      <button onClick={() => setOpen(!open)} className={`relative p-2 rounded-full transition-colors cursor-pointer ${iconClass}`} title={t('Notifications')}>
+        {unread > 0 ? <BellRing className={`h-4 w-4 ${ringing ? 'animate-bounce text-amber-400' : ''}`} /> : <Bell className="h-4 w-4" />}
         {unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
       </button>
       {open && (
         <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl z-50 text-slate-900">
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
-            <span className="text-xs font-black">Notifications</span>
-            <div className="flex gap-2">
-              {pushState === 'off' && VAPID_KEY && (
-                <button onClick={async () => setPushState((await enablePush()) ? 'on' : 'off')} className="text-[11px] font-bold text-emerald-700">
-                  Enable push
+            <span className="text-xs font-black">{t('Notifications')}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleSound} className="p-0.5 text-slate-500 hover:text-slate-900" title={t(sound ? 'Sound on' : 'Sound off')}>
+                {sound ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+              </button>
+              {pushState === 'off' && (
+                <button onClick={enableAlerts} className="text-[11px] font-bold text-emerald-700">
+                  {t('Enable desktop alerts')}
                 </button>
               )}
               {unread > 0 && (
                 <button onClick={markAll} className="text-[11px] font-bold text-slate-500">
-                  Mark all read
+                  {t('Mark all read')}
                 </button>
               )}
             </div>
           </div>
-          {items.length === 0 && <div className="p-4 text-xs text-slate-400 text-center">No notifications.</div>}
-          {items.map((n) => (
+          {!items?.length && <div className="p-4 text-xs text-slate-400 text-center">{t('No notifications.')}</div>}
+          {items?.map((n) => (
             <button
               key={n.id}
               onClick={() => {
@@ -100,8 +211,8 @@ export const NotificationBell: React.FC<{ onNavigate?: (link: string) => void; t
               }}
               className={`w-full text-left px-3 py-2 border-b border-slate-50 hover:bg-slate-50 ${n.readAt ? 'opacity-60' : ''}`}
             >
-              <div className="text-xs font-bold">{n.title}</div>
-              <div className="text-[11px] text-slate-600">{n.body}</div>
+              <div className="text-xs font-bold">{t(n.title)}</div>
+              <div className="text-[11px] text-slate-600">{t(n.body)}</div>
               <div className="text-[10px] text-slate-400 mt-0.5">{new Date(n.createdAt).toLocaleString('en-IN')}</div>
             </button>
           ))}

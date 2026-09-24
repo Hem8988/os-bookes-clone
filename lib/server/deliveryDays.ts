@@ -4,7 +4,7 @@ import { assertDayOpen } from './dayLocks';
 import { ApiError, businessDate, conflict, round2 } from './http';
 import { stockAt } from './inventory';
 import { getSetting } from './settings';
-import { getWallet } from './wallet';
+import { availableToSubmit, getWallet } from './wallet';
 
 type StockSnapshot = { productId: string; productName: string; fullQty: number; emptyQty: number }[];
 
@@ -114,6 +114,9 @@ export async function closeDay(tx: Tx, actor: Actor) {
   if (day.status === 'CLOSED') throw conflict('Day is already closed.');
   const outForDelivery = await tx.order.count({ where: { tenantId: actor.tenantId, assignedDeliveryBoyId: actor.userId, status: 'OUT_FOR_DELIVERY' } });
   if (outForDelivery > 0) throw conflict(`${outForDelivery} order(s) are still out for delivery. Deliver them or tell the manager before closing.`);
+  // All cash in hand must be handed over (a submission awaiting confirmation counts) before closing.
+  const { available } = await availableToSubmit(tx, actor.tenantId, actor.userId, actor.name);
+  if (available > 0.009) throw new ApiError(409, `Submit your cash in hand (₹${available.toLocaleString('en-IN')}) from the Cash tab before closing the day.`, 'CASH_NOT_SUBMITTED');
 
   const summary = await daySummary(tx, actor.tenantId, actor.userId, date);
   const closed = await tx.deliveryDay.update({

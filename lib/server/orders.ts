@@ -170,6 +170,12 @@ export async function approveOrder(tx: Tx, actor: Actor, order: Order, opts: { c
     notifyCustomer(actor.tenantId, customer, 'ORDER_APPROVED', { orderNumber: order.orderNumber, deliveryDate: order.requestedDeliveryDate })
   );
 
+  // A delivery boy's own field order goes straight back to him.
+  if (order.source === 'DELIVERY_BOY' && order.assignedDeliveryBoyId) {
+    const boy = await tx.user.findFirst({ where: { id: order.assignedDeliveryBoyId, tenantId: actor.tenantId, role: 'DELIVERY_BOY', status: 'ACTIVE' } });
+    if (boy) return assignOrders(tx, actor, [order], boy.id, effects, `Assigned to ${boy.name} (his own order)`);
+  }
+
   const operations = await getSetting(actor.tenantId, 'operations');
   if (operations.autoAssignDefaultDeliveryBoy) {
     let boyId = order.assignedDeliveryBoyId || customer.defaultDeliveryBoyId;

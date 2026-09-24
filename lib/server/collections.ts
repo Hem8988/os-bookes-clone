@@ -258,7 +258,8 @@ function toRecord(cfg: FlatCollection, item: Row, forUpdate: boolean) {
 }
 
 const toClient = (row: Row) => {
-  const { extra, tenantId: _tenant, ...rest } = row;
+  const { extra, ...rest } = row;
+  delete rest.tenantId;
   return { ...((extra as Row) || {}), ...rest };
 };
 

@@ -327,7 +327,7 @@ export interface Invoice {
   notes?: string;
 }
 
-// OS-BOOKS Inventory Documents
+// Back-office documents
 export interface PurchaseOrderItem {
   id: string;
   productId: string;

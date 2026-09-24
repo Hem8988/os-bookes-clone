@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AlertTriangle, Lock, RefreshCw, Unlock } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
+import { errorMessage, inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
 import { Badge, Button, Card, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
 
@@ -25,27 +26,19 @@ interface Summary {
 export default function DayClosingModule() {
   const { can } = useSession();
   const [date, setDate] = useState(today());
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [history, setHistory] = useState<{ id: string; date: string; status: string; lockedBy: string; lockedAt: string; reopenedBy: string | null; reopenReason: string | null }[]>([]);
   const [dialog, setDialog] = useState<'lock' | 'reopen' | 'request' | null>(null);
   const [reason, setReason] = useState('');
   const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      const [s, h] = await Promise.all([api<Summary>(`/api/financial/day-lock?date=${date}`), api<typeof history>('/api/financial/day-lock?history=1')]);
-      setSummary(s);
-      setHistory(h);
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [date, showToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const summaryQ = useApiData<Summary>(`/api/financial/day-lock?date=${date}`, (m) => showToast(m, 'error'));
+  const historyQ = useApiData<{ id: string; date: string; status: string; lockedBy: string; lockedAt: string; reopenedBy: string | null; reopenReason: string | null }[]>('/api/financial/day-lock?history=1', (m) => showToast(m, 'error'));
+  const summary = summaryQ.data ?? null;
+  const history = historyQ.data ?? [];
+  const load = () => {
+    summaryQ.reload();
+    historyQ.reload();
+  };
 
   const act = async () => {
     if (!dialog) return;

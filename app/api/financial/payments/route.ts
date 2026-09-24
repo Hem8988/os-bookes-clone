@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 import { recordPayment } from '@/lib/server/payments';
+import { withShortNames } from '@/lib/server/shortNames';
 
 export const GET = handle(async (request: Request) => {
   const auth = await requireAuth(request);
@@ -23,7 +24,7 @@ export const GET = handle(async (request: Request) => {
     const to = url.searchParams.get('to');
     if (from || to) where.paymentDate = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
   }
-  return ok(await prisma.payment.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 }));
+  return ok(await withShortNames(auth.tenantId, await prisma.payment.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 })));
 });
 
 /** Late payment entry by accounts → Payment Verification queue (SRS §11.5). */

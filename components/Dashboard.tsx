@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { AlertTriangle, ClipboardCheck, RefreshCw, Truck } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
+import { inr } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { APPROVAL_TYPES, ApprovalType } from '../lib/permissions';
 import { useCompany } from '../lib/useCompany';
 import { Button, Card, Empty, Stat, StatusBadge, useToast } from './ui';
@@ -22,19 +23,10 @@ interface DashboardData {
 
 export const Dashboard: React.FC<{ onNavigate?: (tab: string, subTab?: string) => void }> = ({ onNavigate }) => {
   const company = useCompany();
-  const [data, setData] = useState<DashboardData | null>(null);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      setData(await api<DashboardData>('/api/dashboard'));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [showToast]);
+  const { data, reload: load } = useApiData<DashboardData>('/api/dashboard', (m) => showToast(m, 'error'));
 
   useEffect(() => {
-    void load();
     const t = window.setInterval(load, 120_000);
     return () => window.clearInterval(t);
   }, [load]);

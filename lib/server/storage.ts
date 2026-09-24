@@ -21,7 +21,7 @@ const SIGNATURES: { mime: string; ext: string; test: (b: Buffer) => boolean }[] 
 ];
 
 let s3: S3Client | null = null;
-const useS3 = () => process.env.STORAGE_DRIVER === 's3';
+const s3Enabled = () => process.env.STORAGE_DRIVER === 's3';
 
 function s3Client() {
   if (!s3) {
@@ -52,7 +52,7 @@ export async function storeFile(tenantId: string, data: Buffer): Promise<{ url: 
   const kind = inspectFile(data);
   const folder = tenantId.toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'default';
   const key = `${folder}/${randomUUID()}.${kind.ext}`;
-  if (useS3()) {
+  if (s3Enabled()) {
     await s3Client().send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key, Body: data, ContentType: kind.mime }));
   } else {
     const target = path.join(LOCAL_DIR, key);
@@ -66,7 +66,7 @@ export async function readStoredFile(key: string): Promise<{ data: Buffer; mime:
   if (!/^[a-z0-9-]+\/[a-f0-9-]+\.(jpg|png|webp|pdf)$/.test(key)) return null;
   const mime = SIGNATURES.find((s) => key.endsWith(`.${s.ext}`))?.mime || 'application/octet-stream';
   try {
-    if (useS3()) {
+    if (s3Enabled()) {
       const res = await s3Client().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
       const bytes = await res.Body?.transformToByteArray();
       return bytes ? { data: Buffer.from(bytes), mime } : null;

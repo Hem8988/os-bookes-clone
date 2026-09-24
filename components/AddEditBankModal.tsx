@@ -326,7 +326,7 @@ export const AddEditBankModal: React.FC<AddEditBankModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. Vijay Nagar Branch, AB Road, Indore"
+                placeholder="Branch address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"

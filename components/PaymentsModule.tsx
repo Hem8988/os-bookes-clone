@@ -1,36 +1,27 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Scale } from 'lucide-react';
 import { api, errorMessage, inr, uploadFile } from '../lib/api';
+import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
-import { Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, today, useToast } from './ui';
+import { Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, today, useToast } from './ui';
 
 // Late payment entry (SRS §11.5): accountant enters → verification queue →
 // ledger + WhatsApp confirmation. Also manual balance adjustments.
 
-interface Payment { id: string; paymentNumber: string; customerName: string; source: string; mode: string; amount: number; paymentDate: string; transactionId: string | null; chequeNumber: string | null; status: string; enteredBy: string; verifiedBy: string | null; rejectionReason: string | null }
+interface Payment { id: string; paymentNumber: string; customerName: string; customerShortName: string | null; source: string; mode: string; amount: number; paymentDate: string; transactionId: string | null; chequeNumber: string | null; status: string; enteredBy: string; verifiedBy: string | null; rejectionReason: string | null }
 interface CustomerOption { id: string; name: string; phone: string; balance: number; customerCode: string }
 
 export default function PaymentsModule() {
   const { can } = useSession();
   const [status, setStatus] = useState('');
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [entryOpen, setEntryOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [toast, showToast] = useToast();
-
-  const load = useCallback(async () => {
-    try {
-      setPayments(await api<Payment[]>(`/api/financial/payments${status ? `?status=${status}` : ''}`));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    }
-  }, [status, showToast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const paymentsQ = useApiData<Payment[]>(`/api/financial/payments${status ? `?status=${status}` : ''}`, (m) => showToast(m, 'error'));
+  const payments = paymentsQ.data ?? [];
+  const load = paymentsQ.reload;
 
   return (
     <div className="space-y-4">
@@ -77,7 +68,7 @@ export default function PaymentsModule() {
                 {payments.map((p) => (
                   <tr key={p.id}>
                     <td className="p-3 font-mono font-bold">{p.paymentNumber}<div className="text-[10px] text-slate-400">{p.paymentDate}</div></td>
-                    <td className="p-3 font-bold">{p.customerName}</td>
+                    <td className="p-3"><PartyName short={p.customerShortName} legal={p.customerName} /></td>
                     <td className="p-3">{p.mode}{p.transactionId && <div className="text-[10px] text-slate-400">{p.transactionId}</div>}{p.chequeNumber && <div className="text-[10px] text-slate-400">Chq {p.chequeNumber}</div>}</td>
                     <td className="p-3 text-right font-mono font-bold">{inr(p.amount)}</td>
                     <td className="p-3">{p.source.replace(/_/g, ' ')}<div className="text-[10px] text-slate-400">by {p.enteredBy}</div></td>

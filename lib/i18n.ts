@@ -1,12 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MR, PATTERNS_MR, STATUS_MR } from './i18n.mr';
 
 // English / Hindi interface for field users (SRS §17 Localization). The English
 // text is the key, so an untranslated string simply shows in English.
 // Placeholders like {n} are filled from t(text, { n }).
 
-export type Lang = 'en' | 'hi';
+export type Lang = 'en' | 'hi' | 'mr';
+export const LANGS: { code: Lang; label: string; locale: string }[] = [
+  { code: 'en', label: 'EN', locale: 'en-IN' },
+  { code: 'hi', label: 'हिं', locale: 'hi-IN' },
+  { code: 'mr', label: 'मर', locale: 'mr-IN' },
+];
 const KEY = 'deskshark.lang';
 const EVENT = 'deskshark:lang';
 
@@ -268,6 +274,7 @@ const HI: Record<string, string> = {
   'New device detected. The admin has been asked to approve this phone — try again after approval.': 'नया फ़ोन मिला। एडमिन से मंज़ूरी माँगी गई है — मंज़ूरी के बाद फिर कोशिश करें।',
   'This device could not be identified. Please use the DeskShark delivery app.': 'यह डिवाइस पहचाना नहीं गया। कृपया DeskShark डिलीवरी ऐप इस्तेमाल करें।',
   'Your account is not active. Contact the administrator.': 'आपका अकाउंट चालू नहीं है। एडमिन से बात करें।',
+  'Cash submission to confirm': 'कैश जमा की पुष्टि करें',
 };
 
 // Order / request statuses shown as badges.
@@ -317,11 +324,20 @@ const PATTERNS: [RegExp, string | ((...m: string[]) => string)][] = [
   [/^Cash collected on (\S+) \((.+)\)$/, '$1 पर कैश मिला ($2)'],
   [/^Reversal of (\S+) \((.+)\)$/, '$1 की वापसी ($2)'],
   [/^Handed to (.+) \((\S+)\)$/, '$1 को दिया ($2)'],
+  [/^Submit your cash in hand \((₹[\d,.]+)\) from the Cash tab before closing the day\.$/, 'दिन बंद करने से पहले कैश टैब से हाथ का कैश ($1) जमा करें।'],
+  [/^Received from (.+) \((\S+)\)$/, '$1 से मिला ($2)'],
+  [/^(.+) submitted (₹[\d,.]+)$/, '$1 ने $2 जमा किए'],
 ];
+
+const TABLES: Record<Exclude<Lang, 'en'>, { words: Record<string, string>; patterns: typeof PATTERNS; statuses: Record<string, string> }> = {
+  hi: { words: HI, patterns: PATTERNS, statuses: STATUS_HI },
+  mr: { words: MR, patterns: PATTERNS_MR, statuses: STATUS_MR },
+};
 
 function current(): Lang {
   try {
-    return window.localStorage.getItem(KEY) === 'hi' ? 'hi' : 'en';
+    const saved = window.localStorage.getItem(KEY);
+    return saved === 'hi' || saved === 'mr' ? saved : 'en';
   } catch {
     return 'en';
   }
@@ -336,10 +352,11 @@ export function setLang(lang: Lang) {
   window.dispatchEvent(new Event(EVENT));
 }
 
-function translate(text: string): string {
-  const exact = HI[text];
+function translate(text: string, lang: Exclude<Lang, 'en'>): string {
+  const { words, patterns } = TABLES[lang];
+  const exact = words[text];
   if (exact) return exact;
-  for (const [re, out] of PATTERNS) if (re.test(text)) return typeof out === 'string' ? text.replace(re, out) : text.replace(re, out as (...m: string[]) => string);
+  for (const [re, out] of patterns) if (re.test(text)) return typeof out === 'string' ? text.replace(re, out) : text.replace(re, out as (...m: string[]) => string);
   return text;
 }
 
@@ -353,10 +370,11 @@ export function useT() {
     return () => window.removeEventListener(EVENT, sync);
   }, []);
   const t = (text: string, vars?: Record<string, string | number>) => {
-    let out = lang === 'hi' ? translate(text) : text;
+    let out = lang === 'en' ? text : translate(text, lang);
     if (vars) for (const [k, v] of Object.entries(vars)) out = out.split(`{${k}}`).join(String(v));
     return out;
   };
-  const status = (value: string) => (lang === 'hi' ? STATUS_HI[value] : undefined) ?? value.replace(/_/g, ' ');
-  return { t, status, lang };
+  const status = (value: string) => (lang === 'en' ? undefined : TABLES[lang].statuses[value]) ?? value.replace(/_/g, ' ');
+  const locale = LANGS.find((l) => l.code === lang)!.locale;
+  return { t, status, lang, locale };
 }

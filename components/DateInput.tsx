@@ -21,8 +21,7 @@ const plusDays = (s: string, n: number) => {
 };
 
 export const DateInput: React.FC<{ value: string; onChange: (value: string) => void; min?: string; max?: string }> = ({ value, onChange, min, max }) => {
-  const { t, lang } = useT();
-  const locale = lang === 'hi' ? 'hi-IN' : 'en-IN';
+  const { t, locale } = useT();
   const now = today();
   const tomorrow = plusDays(now, 1);
   const [open, setOpen] = useState(false);

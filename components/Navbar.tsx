@@ -16,6 +16,8 @@ import {
   FileText
 } from 'lucide-react';
 import { Customer, Product, Invoice } from '../lib/types';
+import { useCompany } from '../lib/useCompany';
+import { NotificationBell } from './NotificationBell';
 
 const levenshteinDistance = (a: string, b: string): number => {
   const rows = a.length + 1;
@@ -58,7 +60,10 @@ const highlightMatch = (text: string, query: string) => {
 };
 
 interface NavbarProps {
+  /** Display name of the logged-in user. */
   userEmail: string;
+  roleLabel?: string;
+  canInvoice?: boolean;
   activeTab: string;
   setActiveTab: (tab: string, subTab?: string) => void;
   onLogout: () => void;
@@ -69,6 +74,8 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   userEmail,
+  roleLabel = '',
+  canInvoice = false,
   activeTab,
   setActiveTab,
   onLogout,
@@ -78,21 +85,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [authName, setAuthName] = useState<string>(typeof userEmail === 'string' ? userEmail : 'Dhananjay (Admin)');
+  const authName = userEmail;
+  const company = useCompany();
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(json => {
-        if (json.authenticated && json.user) {
-          const val = json.user.name || json.user.email;
-          if (val && typeof val === 'string') setAuthName(val);
-          else if (val) setAuthName(String(val));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -163,21 +158,22 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800">
           <Building2 className="h-4 w-4 text-emerald-600" />
-          <span className="hidden sm:inline">Active Firm:</span>
-          <span className="font-bold">PRAMUKH INDANE GAS AGENCY</span>
-          <span className="ml-1 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 font-extrabold">
-            GSTIN Active
-          </span>
+          <span className="font-bold">{company.name}</span>
+          {company.gstin && (
+            <span className="ml-1 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 font-extrabold font-mono">{company.gstin}</span>
+          )}
         </div>
 
         {/* Quick New Invoice Action */}
+        {canInvoice && (
         <button
           onClick={() => setActiveTab('billing')}
           className="hidden lg:flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-all transform active:scale-95 cursor-pointer"
         >
           <PlusCircle className="h-4 w-4" />
-          <span>New Invoice (F2)</span>
+          <span>New Invoice</span>
         </button>
+        )}
       </div>
 
       {/* Center Search Bar */}
@@ -210,7 +206,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {searchResults.customerMatches.map((c) => (
                         <button
                           key={c.id}
-                          onClick={() => goTo('masters', 'customer')}
+                          onClick={() => goTo('customers')}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
                           <Users className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -229,7 +225,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {searchResults.vendorMatches.map((v) => (
                         <button
                           key={v.id}
-                          onClick={() => goTo('masters', 'vendor')}
+                          onClick={() => goTo('vendors')}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
                           <Truck className="h-4 w-4 text-teal-600 shrink-0" />
@@ -248,7 +244,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {searchResults.productMatches.map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => goTo('inventory-hub', 'stock')}
+                          onClick={() => goTo('masters', 'product')}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
                           <Package className="h-4 w-4 text-sky-600 shrink-0" />
@@ -267,7 +263,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {searchResults.invoiceMatches.map((inv) => (
                         <button
                           key={inv.id}
-                          onClick={() => goTo('inventory-hub', 'sales')}
+                          onClick={() => goTo('documents', 'sales')}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 cursor-pointer"
                         >
                           <FileText className="h-4 w-4 text-amber-600 shrink-0" />
@@ -288,24 +284,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right section: System User & Quick Controls */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* App link indicator */}
-        <button 
-          title="Mobile POS App Synced"
-          className="hidden sm:flex items-center gap-1 text-xs text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 font-bold"
-        >
-          <Smartphone className="h-3.5 w-3.5 text-emerald-600" />
-          <span className="text-[11px]">App Synced</span>
-        </button>
-
-        {/* Notifications */}
-        <button className="relative p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer">
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
-        </button>
+        <NotificationBell
+          onNavigate={(link) => {
+            const tab = new URL(link, window.location.origin).searchParams.get('tab');
+            if (tab) setActiveTab(tab);
+          }}
+        />
 
         {/* User profile dropdown badge */}
         {(() => {
-          const displayName = typeof authName === 'string' && authName.trim() ? authName.trim() : 'Dhananjay (Admin)';
+          const displayName = typeof authName === 'string' && authName.trim() ? authName.trim() : userEmail;
           const avatarInitials = displayName.substring(0, 2).toUpperCase();
           return (
             <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
@@ -317,7 +305,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {displayName}
                   <UserCheck className="h-3 w-3 text-emerald-600" />
                 </span>
-                <span className="text-[10px] text-slate-500 font-medium">Authenticated Session</span>
+                <span className="text-[10px] text-slate-500 font-medium">{roleLabel}</span>
               </div>
               
               <button

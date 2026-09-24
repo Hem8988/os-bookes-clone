@@ -21,6 +21,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { Customer, Product } from '../lib/types';
+import { api, errorMessage, uploadFile } from '../lib/api';
 import { AddEditVendorModal } from './AddEditVendorModal';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
 import { MonthlyCustomerRateModal } from './MonthlyCustomerRateModal';
@@ -75,26 +76,49 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   const [billPhotoUrl, setBillPhotoUrl] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
+  const [billFile, setBillFile] = useState<File | null>(null);
+
   const handleBillPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsScanning(true);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBillPhotoUrl(reader.result as string);
-        setTimeout(() => setIsScanning(false), 600);
-      };
-      reader.readAsDataURL(file);
-    }
+    const file = e.target.files?.[0] || null;
+    setBillFile(file);
+    setBillPhotoUrl(file ? URL.createObjectURL(file) : null);
   };
 
-  const handleVendorBillSubmit = (e: React.FormEvent) => {
+  // Saves the plant / supplier bill as a purchase invoice with the photo attached.
+  const handleVendorBillSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`✅ Vendor Purchase Bill (${billNumber}) for ₹${Number(billAmount).toLocaleString('en-IN')} uploaded & posted to ${billUploadVendor?.name} Ledger!`);
-    setBillUploadVendor(null);
-    setBillAmount('');
-    setBillNumber('');
-    setBillPhotoUrl(null);
+    if (!billUploadVendor) return;
+    setIsScanning(true);
+    try {
+      const photoUrl = billFile ? await uploadFile(billFile) : null;
+      await api('/api/collections/purchases', {
+        body: {
+          action: 'create',
+          item: {
+            purchaseNumber: `PB-${Date.now().toString().slice(-6)}`,
+            vendorInvoiceNumber: billNumber,
+            vendorName: billUploadVendor.name,
+            vendorGstin: billUploadVendor.gstin || '',
+            date: billDate,
+            subTotal: Number(billAmount) || 0,
+            grandTotal: Number(billAmount) || 0,
+            status: 'Pending',
+            remark: billNotes,
+            billPhotoUrl: photoUrl,
+          },
+        },
+      });
+      alert(`Bill ${billNumber} saved under Purchases for ${billUploadVendor.name}.`);
+      setBillUploadVendor(null);
+      setBillAmount('');
+      setBillNumber('');
+      setBillPhotoUrl(null);
+      setBillFile(null);
+    } catch (err) {
+      alert(errorMessage(err));
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const safeCustomers = useMemo(() => (Array.isArray(customers) ? customers : []), [customers]);
@@ -170,7 +194,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   // Handle Delete Click
   const handleDeleteClick = (c: Customer) => {
     if (!onDeleteCustomer) return;
-    if (window.confirm(`Are you sure you want to delete party "${c.name}"? This action cannot be undone.`)) {
+    if (window.confirm(`Deactivate "${c.name}"? The party is marked Inactive and all its history is kept.`)) {
       onDeleteCustomer(c.id);
     }
   };
@@ -483,18 +507,21 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                             )}
 
                             <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                                ₹ Security Deposit: ₹{(c.totalDepositAmount || c.depositFeePerCylinder || 2000).toLocaleString('en-IN')} ({c.depositStatus || 'Paid'})
-                              </span>
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                                🚚 {c.defaultDeliveryBoyName || 'Ramesh Kumar'}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                👔 RM: {c.relationshipManagerName || 'Vikram Sharma'}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                📦 Cylinders: {c.assignedCylinderTypes && c.assignedCylinderTypes.length > 0 ? c.assignedCylinderTypes.map(t => t.replace('prod_', '').toUpperCase()).join(', ') : '19KG, 47.5KG, 14.2KG'}
-                              </span>
+                              {c.totalDepositAmount ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200">
+                                  Deposit ₹{c.totalDepositAmount.toLocaleString('en-IN')}{c.depositStatus ? ` (${c.depositStatus})` : ''}
+                                </span>
+                              ) : null}
+                              {c.defaultDeliveryBoyName && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200">
+                                  🚚 {c.defaultDeliveryBoyName}
+                                </span>
+                              )}
+                              {c.cylinderBalances?.some((b) => b.currentBalance) && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  📦 Holding: {c.cylinderBalances.filter((b) => b.currentBalance).map((b) => `${b.productName.split(' ').slice(0, 2).join(' ')} × ${b.currentBalance}`).join(', ')}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -828,7 +855,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                     </p>
                     {isScanning && (
                       <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-black animate-pulse">
-                        ⚡ Scanning Bill Details...
+                        Saving bill…
                       </div>
                     )}
                   </div>

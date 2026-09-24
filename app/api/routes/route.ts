@@ -1,54 +1,26 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { audit } from '@/lib/server/audit';
+import { requireAuth } from '@/lib/server/auth';
+import { badRequest, conflict, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || 'tenant_default';
+export const GET = handle(async (request: Request) => {
+  const auth = await requireAuth(request);
+  const routes = await prisma.route.findMany({ where: { tenantId: auth.tenantId }, include: { areas: true }, orderBy: { name: 'asc' } });
+  return ok(routes);
+});
 
-    const routes = await prisma.route.findMany({
-      where: { tenantId, active: true },
-      include: { areas: true },
-      orderBy: { name: 'asc' },
-    });
-
-    if (routes.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: [
-          { id: 'route_1', code: 'RT-CENTRAL', name: 'Central Commercial Route', defaultDeliveryBoyId: 'del_boy_ramesh', areas: [{ name: 'Connaught Place' }, { name: 'Karol Bagh Market' }] },
-          { id: 'route_2', code: 'RT-SOUTH', name: 'South Industrial Route', defaultDeliveryBoyId: 'del_boy_suresh', areas: [{ name: 'Okhla Industrial Area' }] },
-        ],
-      });
-    }
-
-    return NextResponse.json({ success: true, data: routes });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { code, name, defaultDeliveryBoyId, tenantId = 'tenant_default' } = body;
-
-    if (!code || !name) {
-      return NextResponse.json({ success: false, error: 'Route Code and Name are required' }, { status: 400 });
-    }
-
-    const route = await prisma.route.create({
-      data: {
-        tenantId,
-        code: code.trim().toUpperCase(),
-        name: name.trim(),
-        defaultDeliveryBoyId: defaultDeliveryBoyId || null,
-      },
-      include: { areas: true },
-    });
-
-    return NextResponse.json({ success: true, data: route });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
+/** Create or update a delivery route with its default delivery boy. */
+export const POST = handle(async (request: Request) => {
+  const auth = await requireAuth(request, 'masters.manage', { write: true });
+  const body = await readJson(request);
+  const id = optStr(body.id);
+  const code = str(body.code, 'Code', { required: true, max: 20 }).toUpperCase();
+  const clash = await prisma.route.findFirst({ where: { tenantId: auth.tenantId, code, NOT: id ? { id } : undefined } });
+  if (clash) throw conflict(`Route code ${code} already exists.`);
+  const boyId = optStr(body.defaultDeliveryBoyId);
+  if (boyId && !(await prisma.user.findFirst({ where: { id: boyId, tenantId: auth.tenantId, role: 'DELIVERY_BOY' } }))) throw badRequest('Delivery boy not found.');
+  const data = { code, name: str(body.name, 'Name', { required: true, max: 100 }), defaultDeliveryBoyId: boyId, active: body.active !== false };
+  const route = id ? await prisma.route.update({ where: { id }, data, include: { areas: true } }) : await prisma.route.create({ data: { ...data, tenantId: auth.tenantId }, include: { areas: true } });
+  await audit(prisma, auth, { action: id ? 'ROUTE_UPDATED' : 'ROUTE_CREATED', entityType: 'Route', entityId: route.id, reference: route.name });
+  return ok(route, 'Route saved.');
+});

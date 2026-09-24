@@ -31,9 +31,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [dueDays, setDueDays] = useState<number | ''>(7);
 
   // ERP Login Credentials State
-  const [loginPassword, setLoginPassword] = useState('cust123');
-  const [portalAccessEnabled, setPortalAccessEnabled] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('');
   const [city, setCity] = useState('');
   const [partyTags, setPartyTags] = useState('');
@@ -89,27 +86,33 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [openingBalanceType, setOpeningBalanceType] = useState<'Dr' | 'Cr'>('Dr');
 
   // Staff Assignments (Delivery Boy & Relationship Manager)
-  const [defaultDeliveryBoyName, setDefaultDeliveryBoyName] = useState('Ramesh Kumar');
-  const [relationshipManagerId, setRelationshipManagerId] = useState('emp_2');
-  const [relationshipManagerName, setRelationshipManagerName] = useState('Vikram Sharma');
+  const [defaultDeliveryBoyName, setDefaultDeliveryBoyName] = useState('');
+  const [deliveryBoys, setDeliveryBoys] = useState<{ id: string; name: string; mobile: string | null }[]>([]);
 
   // Limits & Numbers
   const [otherMobileNo, setOtherMobileNo] = useState('');
   const [partyLimit, setPartyLimit] = useState<number | ''>(0);
   const [interestRate, setInterestRate] = useState<number | ''>(0);
-  const [loyaltyPoints, setLoyaltyPoints] = useState<number | ''>(0);
   const [joiningDate, setJoiningDate] = useState(getTodayDateString());
 
   // Customer Authorized / Assigned LPG Cylinder Products
-  const [assignedCylinderTypes, setAssignedCylinderTypes] = useState<string[]>(['prod_19kg', 'prod_47kg', 'prod_14kg']);
+  const [assignedCylinderTypes, setAssignedCylinderTypes] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch('/api/users/roles?role=DELIVERY_BOY')
+      .then((r) => r.json())
+      .then((j) => setDeliveryBoys(j.data || []))
+      .catch(() => {});
+  }, [isOpen]);
 
   useEffect(() => {
     const today = getTodayDateString();
     if (customerToEdit) {
       setAssignedCylinderTypes(
-        Array.isArray(customerToEdit.assignedCylinderTypes) && customerToEdit.assignedCylinderTypes.length > 0
-          ? customerToEdit.assignedCylinderTypes
-          : ['prod_19kg', 'prod_47kg', 'prod_14kg']
+        customerToEdit.defaultProductIds?.length
+          ? customerToEdit.defaultProductIds
+          : customerToEdit.assignedCylinderTypes || []
       );
       setPartyCategory(customerToEdit.type || defaultType);
       setPartyName(customerToEdit.name || '');
@@ -124,10 +127,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setCity(customerToEdit.city || '');
       setAreaName(customerToEdit.area || '');
       setRouteName(customerToEdit.route || '');
-      setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || 'emp_1');
-      setDefaultDeliveryBoyName(customerToEdit.defaultDeliveryBoyName || 'Ramesh Kumar');
-      setRelationshipManagerId(customerToEdit.relationshipManagerId || 'emp_2');
-      setRelationshipManagerName(customerToEdit.relationshipManagerName || 'Vikram Sharma');
+      setDefaultDeliveryBoyId(customerToEdit.defaultDeliveryBoyId || '');
+      setDefaultDeliveryBoyName(customerToEdit.defaultDeliveryBoyName || '');
       setOpeningEmptyQty(customerToEdit.openingEmptyCylinderQty || 0);
       setInternalNotes(customerToEdit.internalNotes || '');
       setPartyTags(Array.isArray(customerToEdit.tags) ? customerToEdit.tags.join(', ') : String(customerToEdit.tags || ''));
@@ -148,15 +149,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setPinCode(customerToEdit.pincode || '');
       setGstin(customerToEdit.gstin || '');
       setGstApplicable(customerToEdit.gstApplicable || 'GST');
-      setStateName(customerToEdit.state || 'Madhya Pradesh');
+      setStateName(customerToEdit.state || '');
       setEmailAddress(customerToEdit.email || '');
-      setLoginPassword(customerToEdit.password || 'cust123');
-      setPortalAccessEnabled(customerToEdit.portalAccessEnabled !== false);
       setPartyType(customerToEdit.partyType || (customerToEdit.type === 'Vendor' ? 'vendor' : 'customer'));
       setOtherMobileNo(customerToEdit.otherMobile || '');
       setPartyLimit(customerToEdit.creditLimit !== undefined ? customerToEdit.creditLimit : 0);
       setInterestRate(customerToEdit.interestRate !== undefined ? customerToEdit.interestRate : 0);
-      setLoyaltyPoints(customerToEdit.loyaltyPoints !== undefined ? customerToEdit.loyaltyPoints : 0);
       setJoiningDate(customerToEdit.joiningDate || today);
       setDepositFeePerCylinder(customerToEdit.depositFeePerCylinder !== undefined ? customerToEdit.depositFeePerCylinder : 2000);
       setTotalDepositAmount(customerToEdit.totalDepositAmount !== undefined ? customerToEdit.totalDepositAmount : 2000);
@@ -178,7 +176,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setDueDays(7);
       setMobileNumber('');
       setWhatsappNumber('');
-      setCity('Indore');
+      setCity('');
       setAreaName('');
       setRouteName('');
       setDefaultDeliveryBoyId('');
@@ -201,15 +199,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setPinCode('452001');
       setGstin('');
       setGstApplicable('GST');
-      setStateName('Madhya Pradesh');
+      setStateName('');
       setEmailAddress('');
-      setLoginPassword('cust123');
-      setPortalAccessEnabled(true);
       setPartyType(defaultType === 'Vendor' ? 'vendor' : 'customer');
       setOtherMobileNo('');
       setPartyLimit(0);
       setInterestRate(0);
-      setLoyaltyPoints(0);
       setJoiningDate(today);
       setDepositFeePerCylinder(2000);
       setTotalDepositAmount(2000);
@@ -217,10 +212,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setSvVoucherNo(`SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       setOpeningBalance(0);
       setOpeningBalanceType(defaultType === 'Vendor' ? 'Cr' : 'Dr');
-      setDefaultDeliveryBoyId('emp_1');
-      setDefaultDeliveryBoyName('Ramesh Kumar');
-      setRelationshipManagerId('emp_2');
-      setRelationshipManagerName('Vikram Sharma');
+      setDefaultDeliveryBoyId('');
+      setDefaultDeliveryBoyName('');
     }
   }, [customerToEdit, defaultType, isOpen]);
 
@@ -265,13 +258,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       tradeName: tradeName.trim() || undefined,
       contactPerson: contactPerson.trim() || undefined,
       status,
-      phone: mobileNumber.trim() || '+91 98260 00000',
-      whatsappNumber: whatsappNumber.trim() || mobileNumber.trim() || '+91 98260 00000',
-      email: emailAddress.trim() || 'party@domain.com',
-      password: loginPassword.trim() || 'cust123',
-      portalAccessEnabled,
+      phone: mobileNumber.trim(),
+      whatsappNumber: whatsappNumber.trim() || mobileNumber.trim(),
+      email: emailAddress.trim(),
       gstin: gstin.trim().toUpperCase() || undefined,
-      address: address.trim() || 'Main Commercial Area',
+      address: address.trim(),
       deliveryAddresses: deliveryAddress.trim() || deliveryContactPerson.trim() || deliveryPhone.trim() ? [{ 
         label: 'Delivery Address', 
         address: deliveryAddress.trim(),
@@ -280,16 +271,14 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         city: deliveryCity.trim() || undefined,
         pincode: deliveryPincode.trim() || undefined
       }] : [],
-      city: city.trim() || 'Indore',
+      city: city.trim(),
       area: areaName.trim() || undefined,
       route: routeName.trim() || undefined,
-      defaultDeliveryBoyId: defaultDeliveryBoyId || 'emp_1',
-      defaultDeliveryBoyName: defaultDeliveryBoyName || 'Ramesh Kumar',
-      relationshipManagerId: relationshipManagerId || 'emp_2',
-      relationshipManagerName: relationshipManagerName || 'Vikram Sharma',
+      defaultDeliveryBoyId: defaultDeliveryBoyId || undefined,
+      defaultDeliveryBoyName: defaultDeliveryBoyName || undefined,
       openingEmptyCylinderQty: Number(openingEmptyQty) || 0,
       internalNotes: internalNotes.trim() || undefined,
-      state: stateName.trim() || 'Madhya Pradesh',
+      state: stateName.trim(),
       stateCode: '23',
       balance: finalBalance,
       openingBalance: numericOpBal,
@@ -313,13 +302,14 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       partyType,
       otherMobile: otherMobileNo,
       interestRate: Number(interestRate) || 0,
-      loyaltyPoints: Number(loyaltyPoints) || 0,
       joiningDate,
       depositFeePerCylinder: Number(depositFeePerCylinder) || 0,
       totalDepositAmount: Number(totalDepositAmount) || 0,
       depositStatus,
       svVoucherNo: svVoucherNo.trim() || undefined,
       assignedCylinderTypes,
+      // Drives the WhatsApp quick-order menu (SRS §5.2 Default Product(s)).
+      defaultProductIds: assignedCylinderTypes.filter((id) => products.some((p) => p.id === id)),
     };
 
     onSave(savedCustomer);
@@ -680,46 +670,22 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              <div className="space-y-1">
-                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
-                  Default Delivery Boy (Fleet Executive) *
-                </label>
-                <select
-                  value={defaultDeliveryBoyId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setDefaultDeliveryBoyId(id);
-                    if (id === 'emp_1') setDefaultDeliveryBoyName('Ramesh Kumar');
-                    else if (id === 'emp_3') setDefaultDeliveryBoyName('Suresh Patel');
-                    else setDefaultDeliveryBoyName('Ramesh Kumar');
-                  }}
-                  className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-extrabold text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                >
-                  <option value="emp_1">🚚 Ramesh Kumar (+91 98260 11223) - Indore North</option>
-                  <option value="emp_3">🚚 Suresh Patel (+91 98260 77889) - Indore South / Bhopal</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
-                  Relationship Manager (RM) *
-                </label>
-                <select
-                  value={relationshipManagerId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setRelationshipManagerId(id);
-                    if (id === 'emp_2') setRelationshipManagerName('Vikram Sharma');
-                    else if (id === 'emp_4') setRelationshipManagerName('Priya Verma');
-                    else setRelationshipManagerName('Vikram Sharma');
-                  }}
-                  className="w-full px-3 py-2 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-extrabold text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                >
-                  <option value="emp_2">👔 Vikram Sharma (+91 98260 44556) - Commercial Accounts Lead</option>
-                  <option value="emp_4">👔 Priya Verma (+91 98260 99000) - Key Accounts Executive</option>
-                </select>
-              </div>
+            <div className="space-y-1 pt-1 max-w-md">
+              <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Default delivery boy</label>
+              <select
+                value={defaultDeliveryBoyId}
+                onChange={(e) => {
+                  setDefaultDeliveryBoyId(e.target.value);
+                  setDefaultDeliveryBoyName(deliveryBoys.find((b) => b.id === e.target.value)?.name || '');
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              >
+                <option value="">— Route default —</option>
+                {deliveryBoys.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}{b.mobile ? ` (${b.mobile})` : ''}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-500">Approved orders are auto-assigned to this delivery boy.</p>
             </div>
           </div>
 
@@ -760,15 +726,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                     );
                   });
 
-                  const defaultCylinders = [
-                    { id: 'prod_19kg', name: '19 KG Commercial LPG Cylinder', salePrice: 1850 },
-                    { id: 'prod_47kg', name: '47.5 KG Industrial LPG Cylinder', salePrice: 4500 },
-                    { id: 'prod_14kg', name: '14.2 KG Domestic LPG Cylinder', salePrice: 853 },
-                    { id: 'prod_5kg', name: '5 KG Commercial LPG Cylinder', salePrice: 490 },
-                    { id: 'prod_19vot', name: '19 KG VOT Commercial Cylinder', salePrice: 1950 },
-                  ];
-
-                  const masterList = cylinderProductsOnly.length > 0 ? cylinderProductsOnly : defaultCylinders;
+                  const masterList = cylinderProductsOnly;
 
                   return masterList.map((prod) => {
                     const isChecked = assignedCylinderTypes.includes(prod.id) || assignedCylinderTypes.includes(prod.name);
@@ -924,71 +882,20 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             </div>
           </div>
 
-          {/* ERP CUSTOMER PORTAL LOGIN CREDENTIALS & SECURITY */}
-          {partyCategory === 'Customer' && (
-            <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3 shadow-lg my-2">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-emerald-400" />
-                <h4 className="font-extrabold text-sm text-slate-100">
-                  Customer ERP Login Credentials & Portal Access
-                </h4>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] font-bold text-slate-400 cursor-pointer">Enable Portal Login:</label>
-                <input
-                  type="checkbox"
-                  checked={portalAccessEnabled}
-                  onChange={(e) => setPortalAccessEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                  <Mail className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Customer Login Email Address</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder="e.g. customer@deskshark.com"
-                  value={emailAddress}
-                  onChange={(e) => setEmailAddress(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                  <Lock className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Portal Login Password</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Set Login Password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full px-3 py-2 pr-10 rounded-xl bg-slate-800 border border-slate-700 text-emerald-400 font-mono font-black focus:outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                    title={showPassword ? 'Hide Password' : 'Show Password'}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
+          {/* Contact email (invoices and statements are emailed here) */}
+          <div className="space-y-1 max-w-md">
+            <label className="font-bold text-slate-900 dark:text-slate-100 block">Email (for invoices)</label>
+            <input
+              type="email"
+              value={emailAddress}
+              onChange={(e) => setEmailAddress(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+            />
+            <p className="text-[10px] text-slate-500">Customer portal logins are created in Admin → Users.</p>
           </div>
-        )}
 
           {/* Row 8: Other Mobile No, Party Limit, Interest Rate/Month, Loyalty Points */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Other Mobile No</label>
               <input
@@ -1020,15 +927,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Loyalty Points</label>
-              <input
-                type="number"
-                value={loyaltyPoints}
-                onChange={(e) => setLoyaltyPoints(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
           </div>
 
           {/* Row 9: Joining Date */}

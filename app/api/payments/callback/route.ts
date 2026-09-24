@@ -1,82 +1,38 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { prisma, transaction } from '@/lib/db';
+import { verifyGatewaySignature } from '@/lib/paymentGateway';
+import { systemActor } from '@/lib/server/audit';
+import { rateLimit } from '@/lib/server/auth';
+import { Effects } from '@/lib/server/effects';
+import { ApiError, clientIp, handle, ok } from '@/lib/server/http';
+import { recordPayment } from '@/lib/server/payments';
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const {
-      invoiceNumber,
-      transactionId,
-      amount,
-      paymentMode = 'UPI',
-      customerPhone,
-      customerName,
-      status = 'SUCCESS'
-    } = body;
+/**
+ * Payment gateway webhook (V2 online payment links). The signature is
+ * verified, and the payment still goes to the accountant's verification
+ * queue before it touches the ledger (SRS §2.3).
+ */
+export const POST = handle(async (request: Request) => {
+  rateLimit(`gateway:${clientIp(request)}`, 60, 60_000);
+  const raw = await request.text();
+  if (!verifyGatewaySignature(raw, request.headers.get('x-payment-signature'))) throw new ApiError(401, 'Invalid signature.', 'BAD_SIGNATURE');
+  const body = JSON.parse(raw) as { invoiceNumber?: string; transactionId?: string; amount?: number; status?: string };
+  if (body.status !== 'SUCCESS' || !body.transactionId || !body.invoiceNumber || !(Number(body.amount) > 0)) return ok({ ignored: true });
 
-    if (!invoiceNumber || !amount || status !== 'SUCCESS') {
-      return NextResponse.json(
-        { success: false, error: 'Invalid payload or payment status not successful' },
-        { status: 400 }
-      );
-    }
+  const invoice = await prisma.invoice.findFirst({ where: { invoiceNumber: body.invoiceNumber } });
+  if (!invoice) throw new ApiError(404, 'Invoice not found.', 'NOT_FOUND');
+  const duplicate = await prisma.payment.findFirst({ where: { tenantId: invoice.tenantId, transactionId: body.transactionId } });
+  if (duplicate) return ok({ duplicate: true });
 
-    // 1. Find Invoice by Number
-    const invoice = await prisma.invoice.findFirst({
-      where: { invoiceNumber }
-    });
-
-    if (invoice) {
-      // 2. Mark Invoice as PAID
-      await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: { status: 'Paid', paymentMode }
-      });
-
-      // 3. Create Ledger Entries for Payment Realization
-      await prisma.ledgerEntry.create({
-        data: {
-          ledgerType: 'customer',
-          date: new Date().toISOString().split('T')[0],
-          voucherNumber: `REC-${transactionId || Date.now()}`,
-          accountName: invoice.customerName,
-          particulars: `UPI Payment Received for Invoice #${invoiceNumber}`,
-          debit: 0,
-          credit: Number(amount),
-          balance: Math.max(0, invoice.grandTotal - Number(amount))
-        }
-      });
-
-      await prisma.ledgerEntry.create({
-        data: {
-          ledgerType: 'payment',
-          date: new Date().toISOString().split('T')[0],
-          voucherNumber: `REC-${transactionId || Date.now()}`,
-          accountName: 'UPI Direct Gateway',
-          particulars: `Auto-reconciled settlement for Invoice #${invoiceNumber}`,
-          debit: Number(amount),
-          credit: 0,
-          balance: Number(amount)
-        }
-      });
-
-      // 4. Dispatch WhatsApp Payment Confirmation Receipt
-      const recipientPhone = customerPhone || invoice.customerPhone;
-      if (recipientPhone) {
-        await sendWhatsAppMessage(
-          recipientPhone,
-          `✅ *PAYMENT RECEIVED CONFIRMATION*\n\nNamaste *${customerName || invoice.customerName}*!\nAapki payment successfully receive ho gayi hai:\n\n📄 Invoice #: *${invoiceNumber}*\n💰 Amount Paid: *₹${amount}*\n🆔 Transaction ID: *${transactionId || 'UPI-' + Date.now()}*\n\nShukriya! — *Pramukh Indane Gas Agency*`
-        );
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Payment reconciled for invoice #${invoiceNumber}`,
-      data: { invoiceNumber, transactionId, amount, status: 'PAID' }
-    });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
+  const effects = new Effects();
+  const payment = await transaction((tx) =>
+    recordPayment(
+      tx,
+      systemActor(invoice.tenantId, 'Payment Gateway'),
+      { customerId: invoice.customerId, amount: Number(body.amount), mode: 'ONLINE', invoiceId: invoice.id, transactionId: body.transactionId, notes: 'Online payment link' },
+      'GATEWAY',
+      effects
+    )
+  );
+  effects.schedule();
+  return ok({ paymentNumber: payment.paymentNumber });
+});

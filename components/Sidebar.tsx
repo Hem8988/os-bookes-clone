@@ -1,313 +1,198 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  Receipt, 
-  FileText, 
-  Package, 
-  Users, 
-  PieChart, 
-  Settings, 
+import {
+  BarChart3,
+  Boxes,
   ChevronDown,
   ChevronRight,
+  FileText,
+  LayoutDashboard,
+  MessageSquare,
   ShieldCheck,
   Truck,
-  DollarSign,
-  Clock,
-  MessageSquare,
-  BarChart3,
-  SlidersHorizontal,
-  ArrowRightLeft,
-  Lock,
-  UserCheck,
-  CheckCircle2,
-  FileCheck,
-  Bell,
-  MapPin,
-  Route
+  Users,
+  Wallet,
+  Database,
 } from 'lucide-react';
+import type { Permission } from '../lib/permissions';
+import { initials, useCompany } from '../lib/useCompany';
+
+export interface MenuItem {
+  tab: string;
+  sub?: string;
+  label: string;
+  permission: Permission;
+}
+
+interface MenuSection {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  items: MenuItem[];
+}
+
+// Single source of truth for navigation. Each entry is shown only when the
+// logged-in role has the permission the API will enforce for that screen.
+export const MENU: MenuSection[] = [
+  {
+    key: 'ops',
+    label: 'Operations',
+    icon: Truck,
+    items: [
+      { tab: 'orders', label: 'Orders', permission: 'orders.view' },
+      { tab: 'approval-queue', label: 'Approval queue', permission: 'approvals.view' },
+      { tab: 'delivery-board', label: 'Delivery board & tracking', permission: 'tracking.view' },
+    ],
+  },
+  {
+    key: 'stock',
+    label: 'Inventory',
+    icon: Boxes,
+    items: [
+      { tab: 'inventory', sub: 'overview', label: 'Stock (godown / boys)', permission: 'inventory.view' },
+      { tab: 'inventory', sub: 'transfers', label: 'Stock transfers', permission: 'inventory.view' },
+      { tab: 'inventory', sub: 'movements', label: 'Stock movements', permission: 'inventory.view' },
+      { tab: 'cylinders', sub: 'customer', label: 'Customer cylinders', permission: 'customers.view' },
+      { tab: 'cylinders', sub: 'voucher', label: 'SV / TV vouchers', permission: 'customers.view' },
+    ],
+  },
+  {
+    key: 'parties',
+    label: 'Customers',
+    icon: Users,
+    items: [
+      { tab: 'customers', label: 'Customers', permission: 'customers.view' },
+      { tab: 'vendors', label: 'Plants / suppliers', permission: 'customers.view' },
+      { tab: 'routes', label: 'Routes & areas', permission: 'masters.view' },
+    ],
+  },
+  {
+    key: 'accounts',
+    label: 'Accounts',
+    icon: Wallet,
+    items: [
+      { tab: 'payments', label: 'Payments', permission: 'ledger.view' },
+      { tab: 'ledgers', label: 'Ledgers', permission: 'ledger.view' },
+      { tab: 'cash', label: 'Cash wallets', permission: 'wallet.viewAll' },
+      { tab: 'day-closing', label: 'Day closing', permission: 'dayclose.perform' },
+      { tab: 'billing', label: 'New invoice', permission: 'invoices.manage' },
+      { tab: 'documents', sub: 'sales', label: 'Invoices', permission: 'invoices.view' },
+      { tab: 'gst', label: 'GST reports', permission: 'invoices.view' },
+    ],
+  },
+  {
+    key: 'docs',
+    label: 'Purchases & documents',
+    icon: FileText,
+    items: [
+      { tab: 'documents', sub: 'po', label: 'Plant refill orders', permission: 'masters.view' },
+      { tab: 'documents', sub: 'purchase', label: 'Purchase bills', permission: 'masters.view' },
+      { tab: 'documents', sub: 'preturn', label: 'Purchase returns', permission: 'masters.view' },
+      { tab: 'documents', sub: 'sreturn', label: 'Sales returns', permission: 'masters.view' },
+      { tab: 'documents', sub: 'challan', label: 'Delivery challans', permission: 'masters.view' },
+      { tab: 'documents', sub: 'quotation', label: 'Quotations', permission: 'masters.view' },
+    ],
+  },
+  {
+    key: 'reports',
+    label: 'Reports',
+    icon: BarChart3,
+    items: [
+      { tab: 'reports', sub: 'sales', label: 'Sales', permission: 'reports.view' },
+      { tab: 'reports', sub: 'collection', label: 'Collection', permission: 'reports.view' },
+      { tab: 'reports', sub: 'outstanding', label: 'Outstanding', permission: 'reports.view' },
+      { tab: 'reports', sub: 'delivery-performance', label: 'Delivery performance', permission: 'reports.view' },
+    ],
+  },
+  {
+    key: 'masters',
+    label: 'Masters',
+    icon: Database,
+    items: [
+      { tab: 'masters', sub: 'product', label: 'Products', permission: 'masters.view' },
+      { tab: 'masters', sub: 'category', label: 'Categories', permission: 'masters.view' },
+      { tab: 'masters', sub: 'unit', label: 'Units', permission: 'masters.view' },
+      { tab: 'masters', sub: 'bank', label: 'Banks', permission: 'masters.view' },
+      { tab: 'masters', sub: 'payment', label: 'Payment modes', permission: 'masters.view' },
+      { tab: 'masters', sub: 'employee', label: 'Employees', permission: 'masters.view' },
+      { tab: 'masters', sub: 'expense', label: 'Expense heads', permission: 'masters.view' },
+      { tab: 'masters', sub: 'company', label: 'Branches', permission: 'masters.view' },
+    ],
+  },
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp',
+    icon: MessageSquare,
+    items: [{ tab: 'whatsapp', label: 'Bot, templates & log', permission: 'whatsapp.manage' }],
+  },
+  {
+    key: 'admin',
+    label: 'Admin',
+    icon: ShieldCheck,
+    items: [
+      { tab: 'admin', sub: 'users', label: 'Users & roles', permission: 'users.manage' },
+      { tab: 'admin', sub: 'devices', label: 'Devices', permission: 'devices.approve' },
+      { tab: 'admin', sub: 'audit', label: 'Audit log', permission: 'audit.view' },
+      { tab: 'settings', label: 'Settings', permission: 'settings.manage' },
+    ],
+  },
+];
 
 interface SidebarProps {
   activeTab: string;
-  setActiveTab: (tab: string, subTab?: string, cat?: string) => void;
-  lowStockCount: number;
-  unpaidCount: number;
-  activeMastersSubTab?: string;
-  activeInventorySubTab?: string;
-  activeCylinderSubTab?: string;
-  activeAccountSubTab?: string;
-  reportsSubTab?: string;
-  pendingRequestsCount?: number;
+  activeSub?: string;
+  can: (permission: Permission) => boolean;
+  onNavigate: (tab: string, sub?: string) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  activeTab,
-  setActiveTab,
-  activeInventorySubTab = 'so',
-  activeCylinderSubTab = 'godown',
-  pendingRequestsCount = 0,
-}) => {
-  const [openSection, setOpenSection] = useState<string>('orders');
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, activeSub, can, onNavigate }) => {
+  const company = useCompany();
+  const sections = MENU.map((s) => ({ ...s, items: s.items.filter((i) => can(i.permission)) })).filter((s) => s.items.length);
+  const current = sections.find((s) => s.items.some((i) => i.tab === activeTab))?.key;
+  const [open, setOpen] = useState<string | undefined>(current || 'ops');
 
-  const toggleSection = (sec: string) => {
-    setOpenSection(openSection === sec ? '' : sec);
-  };
-
-  const activeItemClass = 'bg-emerald-600 text-white font-bold shadow-md';
-  const inactiveItemClass = 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-semibold';
+  const itemClass = (item: MenuItem) =>
+    item.tab === activeTab && (!item.sub || item.sub === activeSub) ? 'bg-emerald-600 text-white font-bold shadow' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-semibold';
 
   return (
-    <aside className="w-64 flex-shrink-0 border-r border-slate-200 bg-white text-slate-700 h-full flex flex-col justify-between p-3 select-none overflow-y-auto shadow-sm">
-      <div className="space-y-1">
-        
-        {/* Logo Banner */}
-        <div className="flex items-center gap-3 px-3 py-3 mb-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
-          <div className="h-9 w-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-lg shadow-md">
-            PI
-          </div>
-          <div>
-            <h1 className="font-extrabold text-slate-900 text-sm tracking-wide flex items-center gap-1">
-              PRAMUKH INDANE
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            </h1>
-            <p className="text-[11px] text-emerald-700 font-bold">B2B LPG Distribution ERP</p>
-          </div>
+    <aside className="w-64 flex-shrink-0 border-r border-slate-200 bg-white text-slate-700 h-full flex flex-col p-3 select-none overflow-y-auto">
+      <div className="flex items-center gap-3 px-3 py-3 mb-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
+        <div className="h-9 w-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-sm">{initials(company.name)}</div>
+        <div className="min-w-0">
+          <h1 className="font-extrabold text-slate-900 text-sm truncate">{company.name}</h1>
+          <p className="text-[11px] text-emerald-700 font-bold">DeskShark ERP</p>
         </div>
+      </div>
 
-        {/* 1. DASHBOARD */}
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs md:text-sm transition-all cursor-pointer ${
-            activeTab === 'dashboard' ? activeItemClass : inactiveItemClass
-          }`}
-        >
-          <LayoutDashboard className="h-4 w-4" />
-          <span>Dashboard</span>
+      {can('dashboard.view') && (
+        <button onClick={() => onNavigate('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition mb-1 ${activeTab === 'dashboard' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-700 hover:bg-slate-100 font-semibold'}`}>
+          <LayoutDashboard className="h-4 w-4" /> Dashboard
         </button>
+      )}
 
-        {/* 2. CUSTOMERS SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('customers')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-emerald-600" />
-              <span>CUSTOMERS</span>
-            </div>
-            {openSection === 'customers' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'customers' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('customers')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'customers' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Customers List</button>
-              <button onClick={() => setActiveTab('vendors')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'vendors' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Vendors (LPG Plants)</button>
-              <button onClick={() => setActiveTab('cylinder-inventory', 'customer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'customer' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Customer Cylinder Holding</button>
-            </div>
-          )}
-        </div>
+      {sections.map((section) => {
+        const Icon = section.icon;
+        const isOpen = open === section.key;
+        return (
+          <div key={section.key} className="mb-1">
+            <button onClick={() => setOpen(isOpen ? undefined : section.key)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wide text-slate-500 hover:bg-slate-50">
+              <span className="flex items-center gap-2"><Icon className="h-4 w-4" /> {section.label}</span>
+              {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+            {isOpen && (
+              <div className="pl-3 mt-0.5 space-y-0.5">
+                {section.items.map((item) => (
+                  <button key={`${item.tab}:${item.sub || ''}`} onClick={() => onNavigate(item.tab, item.sub)} className={`w-full text-left px-3 py-1.5 rounded-lg text-xs transition ${itemClass(item)}`}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
-        {/* 3. ORDERS SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('orders')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-sky-600" />
-              <span>ORDERS</span>
-            </div>
-            {openSection === 'orders' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'orders' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('inventory-hub', 'so')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' && activeInventorySubTab === 'so' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Sale Orders (Assign Driver)</button>
-              <button onClick={() => setActiveTab('inventory-hub', 'quotation')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' && activeInventorySubTab === 'quotation' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Quotations / Estimates</button>
-              <button onClick={() => setActiveTab('inventory-hub', 'po')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'inventory-hub' && activeInventorySubTab === 'po' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Plant Refill Orders (PO)</button>
-              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'approval-queue' ? 'bg-sky-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Order Approval Queue</button>
-            </div>
-          )}
-        </div>
-
-        {/* 4. INVENTORY SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('inventory')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-indigo-600" />
-              <span>INVENTORY</span>
-            </div>
-            {openSection === 'inventory' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'inventory' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('cylinder-inventory', 'godown')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'godown' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 🏢 Godown Stock (Full/Empty)</button>
-              <button onClick={() => setActiveTab('cylinder-inventory', 'driver')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'driver' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 🚚 Delivery Boy Vehicle Stock</button>
-              <button onClick={() => setActiveTab('cylinder-inventory', 'customer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'customer' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 👥 Customer Cylinder Holdings</button>
-              <button onClick={() => setActiveTab('cylinder-inventory', 'transfer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'transfer' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 🔄 Stock Transfer & Gate Pass</button>
-              <button onClick={() => setActiveTab('cylinder-inventory', 'voucher')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'voucher' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• 📜 SV Vouchers & Caution Deposit</button>
-              <button onClick={() => setActiveTab('cylinder-inventory', 'adjustment')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'cylinder-inventory' && activeCylinderSubTab === 'adjustment' ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• ⚡ Physical Stock Audit</button>
-            </div>
-          )}
-        </div>
-
-        {/* 5. DELIVERY SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('delivery')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <Truck className="h-4 w-4 text-amber-600" />
-              <span>DELIVERY</span>
-            </div>
-            {openSection === 'delivery' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'delivery' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'delivery-app' ? 'bg-amber-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Delivery Management</button>
-              <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery Boy App</button>
-              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery History</button>
-              <button
-                onClick={() => setActiveTab('delivery-requests')}
-                className={`w-full text-left px-3 py-1.5 rounded cursor-pointer flex items-center justify-between ${activeTab === 'delivery-requests' ? 'bg-rose-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}
-              >
-                <span>📥 Delivery Requests</span>
-                {pendingRequestsCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black min-w-[18px] text-center">
-                    {pendingRequestsCount}
-                  </span>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 6. FINANCE SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('finance')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-emerald-600" />
-              <span>FINANCE</span>
-            </div>
-            {openSection === 'finance' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'finance' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('account-hub', 'customer-ledger')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'account-hub' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Customer Ledger</button>
-              <button onClick={() => setActiveTab('account-hub', 'payment-ledger')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Payments</button>
-              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Payment Verification</button>
-              <button onClick={() => setActiveTab('billing')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'billing' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Invoices</button>
-              <button onClick={() => setActiveTab('delivery-app')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Cash Wallet</button>
-              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Cash Submission</button>
-              <button onClick={() => setActiveTab('approval-queue')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Day Closing</button>
-            </div>
-          )}
-        </div>
-
-        {/* 7. WHATSAPP SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('whatsapp')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-emerald-600" />
-              <span>WHATSAPP</span>
-            </div>
-            {openSection === 'whatsapp' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'whatsapp' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('whatsapp-sender')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'whatsapp-sender' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Order Inbox</button>
-              <button onClick={() => setActiveTab('whatsapp-sender')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• WhatsApp Bot</button>
-              <button onClick={() => setActiveTab('whatsapp-sender')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Notifications</button>
-            </div>
-          )}
-        </div>
-
-        {/* 8. REPORTS SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('reports')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-purple-600" />
-              <span>REPORTS</span>
-            </div>
-            {openSection === 'reports' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'reports' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('reports-hub', 'sales')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'reports-hub' ? 'bg-purple-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Sales Report</button>
-              <button onClick={() => setActiveTab('reports-hub', 'collection')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Collection Report</button>
-              <button onClick={() => setActiveTab('reports-hub', 'inventory')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Inventory Report</button>
-              <button onClick={() => setActiveTab('reports-hub', 'cylinder-balance')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Cylinder Balance Report</button>
-              <button onClick={() => setActiveTab('reports-hub', 'outstanding')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Outstanding Report</button>
-              <button onClick={() => setActiveTab('reports-hub', 'delivery-performance')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery Performance Report</button>
-            </div>
-          )}
-        </div>
-
-        {/* 9. MASTERS SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('masters')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-emerald-600" />
-              <span>MASTERS</span>
-            </div>
-            {openSection === 'masters' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'masters' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('staff')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'staff' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Staff Management</button>
-              <button onClick={() => setActiveTab('masters', 'customer')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Customers</button>
-              <button onClick={() => setActiveTab('masters', 'product')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Products</button>
-              <button onClick={() => setActiveTab('masters', 'company')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Areas</button>
-              <button onClick={() => setActiveTab('masters', 'vendor')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Routes</button>
-              <button onClick={() => setActiveTab('masters', 'employee')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Delivery Boys</button>
-              <button onClick={() => setActiveTab('masters', 'payment')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Payment Modes</button>
-            </div>
-          )}
-        </div>
-
-        {/* 10. ADMIN SECTION */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50/70 overflow-hidden">
-          <button
-            onClick={() => toggleSection('admin')}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4 text-slate-500" />
-              <span>ADMIN</span>
-            </div>
-            {openSection === 'admin' ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {openSection === 'admin' && (
-            <div className="bg-white px-2 py-1 space-y-0.5 border-t border-slate-200 text-xs">
-              <button onClick={() => setActiveTab('staff')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'staff' ? 'bg-slate-700 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Staff Management</button>
-              <button onClick={() => setActiveTab('admin')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'admin' ? 'bg-slate-700 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Users & Roles</button>
-              <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer ${activeTab === 'settings' ? 'bg-slate-700 text-white font-bold' : 'hover:bg-slate-100 text-slate-700'}`}>• Settings</button>
-              <button onClick={() => setActiveTab('admin')} className={`w-full text-left px-3 py-1.5 rounded cursor-pointer hover:bg-slate-100 text-slate-700`}>• Audit Logs</button>
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* Footer Branding */}
-      <div className="pt-3 border-t border-slate-200 text-[10px] text-slate-400 font-bold text-center">
-        Pramukh Indane B2B ERP v2.0
-      </div>
     </aside>
   );
 };

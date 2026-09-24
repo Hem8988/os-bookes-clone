@@ -1,74 +1,56 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { hashPassword } from '@/lib/auth';
+import { can, ROLES, Role } from '@/lib/permissions';
+import { isValidMobile, phoneKey } from '@/lib/phone';
+import { audit } from '@/lib/server/audit';
+import { requireAuth } from '@/lib/server/auth';
+import { badRequest, conflict, forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
+import { hashPassword, validatePasswordStrength } from '@/lib/server/password';
 
-export async function GET(request: Request) {
-  try {
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobile: true,
-        role: true,
-        status: true,
-        deliveryBoyId: true,
-        lastLoginAt: true,
-        createdAt: true,
-      },
-    });
+const PUBLIC_FIELDS = { id: true, name: true, email: true, mobile: true, role: true, status: true, customerId: true, twoFactorEnabled: true, lastLoginAt: true, lastLoginIp: true, createdAt: true } as const;
 
-    return NextResponse.json({ success: true, data: users });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+/**
+ * Users. Staff can list delivery boys / accountants (for assignment and cash
+ * handover pickers); only the Super Admin sees and manages everyone.
+ */
+export const GET = handle(async (request: Request) => {
+  const auth = await requireAuth(request);
+  const role = new URL(request.url).searchParams.get('role');
+  if (can(auth.role, 'users.manage')) {
+    return ok(await prisma.user.findMany({ where: { tenantId: auth.tenantId, ...(role ? { role } : {}) }, select: PUBLIC_FIELDS, orderBy: [{ role: 'asc' }, { name: 'asc' }] }));
   }
-}
+  if (auth.role === 'CUSTOMER' || !role || !['DELIVERY_BOY', 'ACCOUNTANT'].includes(role)) throw forbidden();
+  return ok(await prisma.user.findMany({ where: { tenantId: auth.tenantId, role, status: 'ACTIVE' }, select: { id: true, name: true, mobile: true, role: true }, orderBy: { name: 'asc' } }));
+});
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { email, name, mobile, role, password = 'password123', deliveryBoyId } = body;
+/** Create a user (password is set by the admin and should be changed on first login). */
+export const POST = handle(async (request: Request) => {
+  const auth = await requireAuth(request, 'users.manage', { write: true });
+  const body = await readJson(request);
+  const role = str(body.role, 'Role', { required: true }) as Role;
+  if (!ROLES.includes(role)) throw badRequest('Invalid role.');
+  const email = str(body.email, 'Email', { required: true, max: 120 }).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest('Enter a valid email.');
+  const mobileRaw = optStr(body.mobile);
+  if (mobileRaw && !isValidMobile(mobileRaw)) throw badRequest('Enter a valid 10-digit mobile number.');
+  const mobile = mobileRaw ? phoneKey(mobileRaw) : null;
+  if (role === 'DELIVERY_BOY' && !mobile) throw badRequest('Mobile number is required for delivery boys.');
+  const password = str(body.password, 'Password', { required: true, max: 200 });
+  const weak = validatePasswordStrength(password);
+  if (weak) throw badRequest(weak);
 
-    if (!email || !name || !role) {
-      return NextResponse.json({ success: false, error: 'Name, Email/Mobile, and Role are required' }, { status: 400 });
-    }
-
-    const validRoles = ['ADMIN', 'ACCOUNTANT', 'DELIVERY_BOY', 'CUSTOMER', 'SUPER_ADMIN', 'MANAGER'];
-    if (!validRoles.includes(role)) {
-      return NextResponse.json({ success: false, error: 'Invalid role specified' }, { status: 400 });
-    }
-
-    const mapRole = (role === 'SUPER_ADMIN' || role === 'MANAGER') ? 'ADMIN' : role;
-    const hashedPassword = hashPassword(password);
-    const userEmail = email.trim().toLowerCase();
-
-    // Create or Update User Record in Database
-    const user = await prisma.user.upsert({
-      where: { email: userEmail },
-      update: {
-        name: name.trim(),
-        mobile: mobile || null,
-        role: mapRole,
-        deliveryBoyId: mapRole === 'DELIVERY_BOY' ? (deliveryBoyId || `del_boy_${Date.now()}`) : null,
-      },
-      create: {
-        name: name.trim(),
-        email: userEmail,
-        mobile: mobile || null,
-        password: hashedPassword,
-        role: mapRole,
-        status: 'ACTIVE',
-        deliveryBoyId: mapRole === 'DELIVERY_BOY' ? (deliveryBoyId || `del_boy_${Date.now()}`) : null,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: user,
-      message: `User '${user.name}' registered successfully as ${user.role}! Login email: ${user.email}`,
-    });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  let customerId: string | null = null;
+  if (role === 'CUSTOMER') {
+    customerId = str(body.customerId, 'Customer', { required: true });
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId: auth.tenantId } });
+    if (!customer) throw badRequest('Customer not found.');
   }
-}
+  if (await prisma.user.findUnique({ where: { email } })) throw conflict('A user with this email already exists.');
+  if (mobile && (await prisma.user.findUnique({ where: { mobile } }))) throw conflict('A user with this mobile already exists.');
+
+  const user = await prisma.user.create({
+    data: { tenantId: auth.tenantId, name: str(body.name, 'Name', { required: true, max: 100 }), email, mobile, role, customerId, passwordHash: hashPassword(password), twoFactorEnabled: !!body.twoFactorEnabled },
+    select: PUBLIC_FIELDS,
+  });
+  await audit(prisma, auth, { action: 'USER_CREATED', entityType: 'User', entityId: user.id, reference: `${user.name} (${role})`, sensitive: true });
+  return ok(user, `${user.name} created as ${role.replace('_', ' ').toLowerCase()}.`);
+});

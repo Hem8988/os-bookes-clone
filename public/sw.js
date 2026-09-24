@@ -1,75 +1,81 @@
-const CACHE_NAME = 'deskshark-erp-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/delivery',
-  '/manifest.json',
-  '/favicon.ico',
-];
+// DeskShark service worker: installable app shell, offline page fallback and
+// web-push. API responses are never cached (they contain customer data and
+// must always be fresh); offline delivery entries live in IndexedDB instead.
 
-// 1. Install Event: Cache Application Shell
+const CACHE = 'deskshark-shell-v2';
+const SHELL = ['/delivery', '/login', '/manifest.json', '/icon.svg'];
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Pre-caching Application Shell');
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).catch(() => {}));
   self.skipWaiting();
 });
 
-// 2. Activate Event: Clean Old Caches
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            console.log('[Service Worker] Removing old cache:', key);
-            return caches.delete(key);
-          }
-        })
-      );
-    })
-  );
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
   self.clients.claim();
 });
 
-// 3. Fetch Event: Network-First Strategy with Cache Fallback for Navigation
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
-  event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+  // Hashed build assets never change: cache-first.
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(request).then(
+        (hit) =>
+          hit ||
+          fetch(request).then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((c) => c.put(request, copy));
+            }
+            return res;
+          })
+      )
+    );
+    return;
+  }
+
+  // Pages: network first, fall back to the cached shell when offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
           }
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('/');
-          }
-        });
-      })
-  );
+          return res;
+        })
+        .catch(() => caches.match(request).then((hit) => hit || caches.match('/delivery')))
+    );
+  }
 });
 
-// 4. Background Push Notification Handler
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : { title: 'Deskshark ERP Notification', body: 'New Order / Delivery Update Available' };
+  let data = { title: 'DeskShark', body: 'You have a new update.', link: '/' };
+  try {
+    data = { ...data, ...event.data.json() };
+  } catch (e) {
+    /* plain text payload */
+  }
+  event.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: '/icon.svg', badge: '/icon.svg', data: { link: data.link || '/' } }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || '/';
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: 'https://placehold.co/192x192/10b981/ffffff.png?text=ERP',
-      badge: 'https://placehold.co/72x72/10b981/ffffff.png?text=ERP',
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const existing = windows.find((w) => 'focus' in w);
+      if (existing) {
+        existing.navigate(link);
+        return existing.focus();
+      }
+      return self.clients.openWindow(link);
     })
   );
 });

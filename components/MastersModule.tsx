@@ -48,7 +48,6 @@ import {
   ExpenseMaster,
   IncomeMaster,
   PaymentMaster,
-  BomMaster,
   NarrationMaster,
   FollowUp
 } from '../lib/types';
@@ -61,7 +60,6 @@ import { AddEditExpenseModal } from './AddEditExpenseModal';
 import { AddEditIncomeModal } from './AddEditIncomeModal';
 import { AddEditPaymentModal } from './AddEditPaymentModal';
 import { AddEditProductModal } from './AddEditProductModal';
-import { AddEditBomModal } from './AddEditBomModal';
 import { BankQrBarcodeModal } from './BankQrBarcodeModal';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { CustomerFollowUpModal } from './CustomerFollowUpModal';
@@ -80,7 +78,6 @@ interface MastersModuleProps {
   expenses: ExpenseMaster[];
   incomes: IncomeMaster[];
   payments: PaymentMaster[];
-  boms: BomMaster[];
   narrations: NarrationMaster[];
   followUps?: FollowUp[];
   onAddFollowUp?: (followUp: FollowUp) => void;
@@ -111,9 +108,6 @@ interface MastersModuleProps {
   onAddProduct?: (product: Product) => void;
   onUpdateProduct?: (product: Product) => void;
   onDeleteProduct?: (id: string) => void;
-  onAddBom?: (bom: BomMaster) => void;
-  onUpdateBom?: (bom: BomMaster) => void;
-  onDeleteBom?: (id: string) => void;
   onAddNarration?: (narration: NarrationMaster) => void;
   onUpdateNarration?: (narration: NarrationMaster) => void;
   onDeleteNarration?: (id: string) => void;
@@ -137,7 +131,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
   expenses,
   incomes,
   payments,
-  boms,
   narrations,
   followUps = [],
   onAddFollowUp,
@@ -168,9 +161,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
-  onAddBom,
-  onUpdateBom,
-  onDeleteBom,
   onAddNarration,
   onUpdateNarration,
   onDeleteNarration,
@@ -261,13 +251,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  // BOM Specific UI States
-  const [isBomModalOpen, setIsBomModalOpen] = useState(false);
-  const [editingBom, setEditingBom] = useState<BomMaster | null>(null);
-
   // Delete Alert Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState<'bank' | 'company' | 'category' | 'customer' | 'employee' | 'expense' | 'income' | 'payment' | 'product' | 'bom'>('bank');
+  const [deleteType, setDeleteType] = useState<'bank' | 'company' | 'category' | 'customer' | 'employee' | 'expense' | 'income' | 'payment' | 'product'>('bank');
   const [bankToDelete, setBankToDelete] = useState<BankMaster | null>(null);
   const [companyToDelete, setCompanyToDelete] = useState<CompanyMaster | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<CategoryMaster | null>(null);
@@ -277,7 +263,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
   const [incomeToDelete, setIncomeToDelete] = useState<IncomeMaster | null>(null);
   const [paymentToDelete, setPaymentToDelete] = useState<PaymentMaster | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-  const [bomToDelete, setBomToDelete] = useState<BomMaster | null>(null);
 
   // Bank Handlers
   const handleOpenAddBank = () => {
@@ -511,31 +496,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
     setIsDeleteModalOpen(true);
   };
 
-  // BOM Handlers
-  const handleOpenAddBom = () => {
-    setEditingBom(null);
-    setIsBomModalOpen(true);
-  };
-
-  const handleOpenEditBom = (bom: BomMaster) => {
-    setEditingBom(bom);
-    setIsBomModalOpen(true);
-  };
-
-  const handleSaveBom = (savedBom: BomMaster) => {
-    if (editingBom && onUpdateBom) {
-      onUpdateBom(savedBom);
-    } else if (onAddBom) {
-      onAddBom(savedBom);
-    }
-  };
-
-  const handleDeleteBomClick = (bom: BomMaster) => {
-    setDeleteType('bom');
-    setBomToDelete(bom);
-    setIsDeleteModalOpen(true);
-  };
-
   const handleConfirmDelete = () => {
     if (deleteType === 'bank' && bankToDelete && onDeleteBank) {
       onDeleteBank(bankToDelete.id);
@@ -564,9 +524,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
     } else if (deleteType === 'product' && productToDelete && onDeleteProduct) {
       onDeleteProduct(productToDelete.id);
       setProductToDelete(null);
-    } else if (deleteType === 'bom' && bomToDelete && onDeleteBom) {
-      onDeleteBom(bomToDelete.id);
-      setBomToDelete(null);
     }
   };
 
@@ -1904,80 +1861,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
         </div>
       )}
 
-      {/* 12. BOM MASTER (Bill of Materials) */}
-      {activeSubTab === 'bom' && (
-        <div className="space-y-4">
-          <div className="bg-teal-700 dark:bg-teal-900 text-white p-3.5 rounded-t-xl flex items-center justify-between shadow-sm">
-            <h3 className="text-base font-bold flex items-center gap-2">
-              <Boxes className="h-5 w-5 text-teal-200" />
-              BOM Master Details (Bill of Materials)
-            </h3>
-            <button
-              onClick={handleOpenAddBom}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-            >
-              <Plus className="h-4 w-4" /> + Create BOM Recipe
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {boms.map((bom) => (
-              <div key={bom.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">{bom.finishedGoodName}</h3>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${bom.active === false ? 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'}`}>
-                        {bom.active === false ? 'Inactive' : 'Active'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-500 font-mono">BOM Code: {bom.bomCode}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="text-[11px] text-slate-400">Assembly Cost:</div>
-                      <div className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">₹{bom.totalCost.toLocaleString('en-IN')}</div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleOpenEditBom(bom)} className="p-1.5 rounded bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"><Edit3 className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => handleDeleteBomClick(bom)} className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
-                  <div className="font-bold text-slate-700 dark:text-slate-300 mb-2">Raw Material Components:</div>
-                  <div className="space-y-1.5">
-                    {bom.components.map((comp, idx) => (
-                      <div key={idx} className="flex items-center justify-between font-mono">
-                        <div className="flex items-center gap-2">
-                          {comp.image ? (
-                            <img src={comp.image} alt="" className="h-6 w-6 object-cover rounded border border-slate-200 dark:border-slate-700" />
-                          ) : (
-                            <div className="h-6 w-6 flex items-center justify-center rounded bg-slate-200 dark:bg-slate-700 text-slate-400">
-                              <Package className="h-3.5 w-3.5" />
-                            </div>
-                          )}
-                          <span className="text-slate-700 dark:text-slate-300">
-                            {comp.productName} ({comp.quantity} {comp.unit})
-                            {comp.productCode && <span className="text-slate-400"> · Code: {comp.productCode}</span>}
-                          </span>
-                        </div>
-                        <span className="text-slate-700 dark:text-slate-300">₹{(comp.quantity * (comp.salePrice ?? comp.unitCost)).toLocaleString('en-IN')}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between font-mono pt-1 text-slate-500 border-t border-slate-200 dark:border-slate-700">
-                      <span>• Assembly Labor Charges</span>
-                      <span>₹{bom.laborCost.toLocaleString('en-IN')}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Add / Edit Bank Master Modal */}
       <AddEditBankModal
         isOpen={isBankModalOpen}
@@ -2068,15 +1951,6 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
         onSave={handleSaveProduct}
       />
 
-      {/* Add / Edit BOM Master Modal */}
-      <AddEditBomModal
-        isOpen={isBomModalOpen}
-        bomToEdit={editingBom}
-        products={products}
-        onClose={() => setIsBomModalOpen(false)}
-        onSave={handleSaveBom}
-      />
-
       {/* Bank QR Code & Barcode Generator Modal */}
       <BankQrBarcodeModal
         bank={qrModalBank}
@@ -2086,9 +1960,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
       {/* Delete Confirmation Alert Modal */}
       <ConfirmDeleteModal
         isOpen={isDeleteModalOpen}
-        title={`Delete ${deleteType === 'bank' ? 'Bank Master' : deleteType === 'company' ? 'Company Master' : deleteType === 'category' ? 'Category Master' : deleteType === 'employee' ? 'Employee Master' : deleteType === 'expense' ? 'Expense Master' : deleteType === 'income' ? 'Income Master' : deleteType === 'payment' ? 'Payment Master' : deleteType === 'product' ? 'Product Master' : deleteType === 'bom' ? 'BOM Master' : 'Vendor / Customer'} Record`}
-        itemName={deleteType === 'bank' ? bankToDelete?.accountName : deleteType === 'company' ? companyToDelete?.companyName : deleteType === 'category' ? categoryToDelete?.name : deleteType === 'employee' ? employeeToDelete?.name : deleteType === 'expense' ? expenseToDelete?.categoryName : deleteType === 'income' ? incomeToDelete?.sourceName : deleteType === 'payment' ? paymentToDelete?.modeName : deleteType === 'product' ? productToDelete?.name : deleteType === 'bom' ? bomToDelete?.finishedGoodName : customerToDelete?.name}
-        itemType={deleteType === 'bank' ? 'Bank Master Account' : deleteType === 'company' ? 'Company Branch' : deleteType === 'category' ? 'Category Master Record' : deleteType === 'employee' ? 'Employee Master Record' : deleteType === 'expense' ? 'Expense Master Record' : deleteType === 'income' ? 'Income Master Record' : deleteType === 'payment' ? 'Payment Master Record' : deleteType === 'product' ? 'Product Master Record' : deleteType === 'bom' ? 'BOM Master Record' : 'Vendor / Customer Account'}
+        title={`Delete ${deleteType === 'bank' ? 'Bank Master' : deleteType === 'company' ? 'Company Master' : deleteType === 'category' ? 'Category Master' : deleteType === 'employee' ? 'Employee Master' : deleteType === 'expense' ? 'Expense Master' : deleteType === 'income' ? 'Income Master' : deleteType === 'payment' ? 'Payment Master' : deleteType === 'product' ? 'Product Master' : 'Vendor / Customer'} Record`}
+        itemName={deleteType === 'bank' ? bankToDelete?.accountName : deleteType === 'company' ? companyToDelete?.companyName : deleteType === 'category' ? categoryToDelete?.name : deleteType === 'employee' ? employeeToDelete?.name : deleteType === 'expense' ? expenseToDelete?.categoryName : deleteType === 'income' ? incomeToDelete?.sourceName : deleteType === 'payment' ? paymentToDelete?.modeName : deleteType === 'product' ? productToDelete?.name : customerToDelete?.name}
+        itemType={deleteType === 'bank' ? 'Bank Master Account' : deleteType === 'company' ? 'Company Branch' : deleteType === 'category' ? 'Category Master Record' : deleteType === 'employee' ? 'Employee Master Record' : deleteType === 'expense' ? 'Expense Master Record' : deleteType === 'income' ? 'Income Master Record' : deleteType === 'payment' ? 'Payment Master Record' : deleteType === 'product' ? 'Product Master Record' : 'Vendor / Customer Account'}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
       />

@@ -16,10 +16,8 @@ import {
   PurchaseOrder,
   PurchaseInvoice,
   ReturnDocument,
-  SaleOrder,
   DeliveryChallan,
   Quotation,
-  StockAdjustment,
   Product,
   Invoice,
   Customer,
@@ -30,25 +28,20 @@ import {
 import { PurchaseOrderModule } from './PurchaseOrderModule';
 import { PurchaseOrderSummaryModule } from './PurchaseOrderSummaryModule';
 import { PurchaseInvoiceModule } from './PurchaseInvoiceModule';
-import { SaleOrderModule } from './SaleOrderModule';
-import { SaleOrderSummaryView } from './SaleOrderSummaryView';
 import { SalesInvoiceModule } from './SalesInvoiceModule';
 import { PurchaseReturnModule } from './PurchaseReturnModule';
 import { SalesReturnModule } from './SalesReturnModule';
 import { ChallanModule } from './ChallanModule';
 import { QuotationModule } from './QuotationModule';
-import { StockAdjustmentModule } from './StockAdjustmentModule';
 
 interface InventoryHubModuleProps {
   purchaseOrders: PurchaseOrder[];
   purchases: PurchaseInvoice[];
   purchaseReturns: ReturnDocument[];
-  saleOrders: SaleOrder[];
   sales: Invoice[];
   salesReturns: ReturnDocument[];
   challans: DeliveryChallan[];
   quotations: Quotation[];
-  adjustments: StockAdjustment[];
   products: Product[];
   customers: Customer[];
   banks: BankMaster[];
@@ -64,15 +57,9 @@ interface InventoryHubModuleProps {
   onUpdatePurchase: (pur: PurchaseInvoice) => void;
   onDeletePurchase: (id: string) => void;
   onUpdateProduct: (product: Product) => void;
-  onAddSO: (so: SaleOrder) => void;
-  onUpdateSO: (so: SaleOrder) => void;
-  onDeleteSO: (id: string) => void;
   onAddQuotation: (qt: Quotation) => void;
   onUpdateQuotation: (qt: Quotation) => void;
   onDeleteQuotation: (id: string) => void;
-  onAddAdjustment: (adj: StockAdjustment) => void;
-  onUpdateAdjustment: (adj: StockAdjustment) => void;
-  onDeleteAdjustment: (id: string) => void;
   onAddChallan: (ch: DeliveryChallan) => void;
   onUpdateChallan: (ch: DeliveryChallan) => void;
   onDeleteChallan: (id: string) => void;
@@ -92,12 +79,10 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
   purchaseOrders,
   purchases,
   purchaseReturns,
-  saleOrders,
   sales,
   salesReturns,
   challans,
   quotations,
-  adjustments,
   products,
   customers,
   banks,
@@ -113,15 +98,9 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
   onUpdatePurchase,
   onDeletePurchase,
   onUpdateProduct,
-  onAddSO,
-  onUpdateSO,
-  onDeleteSO,
   onAddQuotation,
   onUpdateQuotation,
   onDeleteQuotation,
-  onAddAdjustment,
-  onUpdateAdjustment,
-  onDeleteAdjustment,
   onAddChallan,
   onUpdateChallan,
   onDeleteChallan,
@@ -148,8 +127,6 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
   const [editingPO, setEditingPO] = useState<PurchaseOrder | null>(null);
   const [purchaseView, setPurchaseView] = useState<'list' | 'create'>('list');
   const [editingPurchase, setEditingPurchase] = useState<PurchaseInvoice | null>(null);
-  const [soView, setSoView] = useState<'list' | 'create'>('list');
-  const [editingSO, setEditingSO] = useState<SaleOrder | null>(null);
   const [salesView, setSalesView] = useState<'list' | 'create'>('list');
   const [editingSale, setEditingSale] = useState<Invoice | null>(null);
   const [preturnView, setPreturnView] = useState<'list' | 'create'>('list');
@@ -160,29 +137,23 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
   const [editingChallan, setEditingChallan] = useState<DeliveryChallan | null>(null);
   const [quotationView, setQuotationView] = useState<'list' | 'create'>('list');
   const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
-  const [adjustmentView, setAdjustmentView] = useState<'list' | 'create'>('list');
-  const [editingAdjustment, setEditingAdjustment] = useState<StockAdjustment | null>(null);
 
   const [printPurchase, setPrintPurchase] = useState<PurchaseInvoice | null>(null);
   const [printPReturn, setPrintPReturn] = useState<ReturnDocument | null>(null);
-  const [printSO, setPrintSO] = useState<SaleOrder | null>(null);
   const [printSale, setPrintSale] = useState<Invoice | null>(null);
   const [printSReturn, setPrintSReturn] = useState<ReturnDocument | null>(null);
   const [printChallan, setPrintChallan] = useState<DeliveryChallan | null>(null);
   const [printCInvoice, setPrintCInvoice] = useState<Invoice | null>(null);
   const [printQuotation, setPrintQuotation] = useState<Quotation | null>(null);
-  const [printAdjustment, setPrintAdjustment] = useState<StockAdjustment | null>(null);
 
   const isFullScreenEntry =
     activeSubTab === 'po' ||
     (activeSubTab === 'purchase' && purchaseView === 'create') ||
-    (activeSubTab === 'so' && soView === 'create') ||
     (activeSubTab === 'sales' && salesView === 'create') ||
     (activeSubTab === 'preturn' && preturnView === 'create') ||
     (activeSubTab === 'sreturn' && sreturnView === 'create') ||
     (activeSubTab === 'challan' && challanView === 'create') ||
-    (activeSubTab === 'quotation' && quotationView === 'create') ||
-    (activeSubTab === 'adjustment' && adjustmentView === 'create');
+    (activeSubTab === 'quotation' && quotationView === 'create');
 
   return (
     <div className="space-y-6">
@@ -218,9 +189,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           onAddPO={onAddPO}
           onUpdatePO={onUpdatePO}
           onAddPurchase={onAddPurchase}
-          onAddSO={onAddSO}
           onAddQuotation={onAddQuotation}
-          onAddAdjustment={onAddAdjustment}
           onAddPurchaseReturn={onAddPurchaseReturn}
           onAddSalesReturn={onAddSalesReturn}
           onAddInvoice={onAddInvoice}
@@ -305,9 +274,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           onUpdatePurchase={onUpdatePurchase}
           onUpdateProduct={onUpdateProduct}
           onAddPO={onAddPO}
-          onAddSO={onAddSO}
           onAddQuotation={onAddQuotation}
-          onAddAdjustment={onAddAdjustment}
           onAddPurchaseReturn={onAddPurchaseReturn}
           onAddSalesReturn={onAddSalesReturn}
           onAddInvoice={onAddInvoice}
@@ -393,53 +360,6 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
         />
       )}
 
-      {/* 4. SALE ORDER */}
-      {activeSubTab === 'so' && soView === 'list' && (
-        <SaleOrderSummaryView
-          saleOrders={saleOrders}
-          customers={customers.filter((c) => c.type === 'Customer')}
-          staff={staff}
-          onAddSO={() => {
-            setEditingSO(null);
-            setSoView('create');
-          }}
-          onEditSO={(so) => {
-            setEditingSO(so);
-            setSoView('create');
-          }}
-          onDeleteSO={onDeleteSO}
-          onPrintSO={(so) => setPrintSO(so)}
-          onUpdateSO={onUpdateSO}
-          onClose={() => setActiveSubTab('stock')}
-        />
-      )}
-
-      {activeSubTab === 'so' && soView === 'create' && (
-        <SaleOrderModule
-          customers={customers.filter((c) => c.type === 'Customer')}
-          products={products}
-          banks={banks}
-          narrations={narrations}
-          onAddNarration={onAddNarration}
-          staff={staff}
-          saleOrders={saleOrders}
-          soToEdit={editingSO}
-          onAddSO={onAddSO}
-          onUpdateSO={onUpdateSO}
-          onAddPO={onAddPO}
-          onAddPurchase={onAddPurchase}
-          onAddQuotation={onAddQuotation}
-          onAddAdjustment={onAddAdjustment}
-          onAddPurchaseReturn={onAddPurchaseReturn}
-          onAddSalesReturn={onAddSalesReturn}
-          onAddInvoice={onAddInvoice}
-          onClose={() => {
-            setEditingSO(null);
-            setSoView('list');
-          }}
-        />
-      )}
-
       {/* 5. SALES */}
       {activeSubTab === 'sales' && salesView === 'list' && (
         <GenericSummaryList
@@ -510,9 +430,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           onUpdateInvoice={onUpdateInvoice}
           onAddPO={onAddPO}
           onAddPurchase={onAddPurchase}
-          onAddSO={onAddSO}
           onAddQuotation={onAddQuotation}
-          onAddAdjustment={onAddAdjustment}
           onAddPurchaseReturn={onAddPurchaseReturn}
           onAddSalesReturn={onAddSalesReturn}
           onClose={() => {
@@ -663,9 +581,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           onUpdateChallan={onUpdateChallan}
           onAddPO={onAddPO}
           onAddPurchase={onAddPurchase}
-          onAddSO={onAddSO}
           onAddQuotation={onAddQuotation}
-          onAddAdjustment={onAddAdjustment}
           onAddPurchaseReturn={onAddPurchaseReturn}
           onAddSalesReturn={onAddSalesReturn}
           onAddInvoice={onAddInvoice}
@@ -788,80 +704,12 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           onUpdateQuotation={onUpdateQuotation}
           onAddPO={onAddPO}
           onAddPurchase={onAddPurchase}
-          onAddSO={onAddSO}
-          onAddAdjustment={onAddAdjustment}
           onAddPurchaseReturn={onAddPurchaseReturn}
           onAddSalesReturn={onAddSalesReturn}
           onAddInvoice={onAddInvoice}
           onClose={() => {
             setEditingQuotation(null);
             setQuotationView('list');
-          }}
-        />
-      )}
-
-      {/* 10. STOCK ADJUSTMENT */}
-      {activeSubTab === 'adjustment' && adjustmentView === 'list' && (
-        <GenericSummaryList
-          title="Stock Adjustment Summary"
-          items={adjustments}
-          getId={(adj) => adj.id}
-          getDate={(adj) => adj.date}
-          computeStats={(list) => {
-            const added = list.reduce((sum, adj) => sum + (adj.adjustmentType === 'Addition (+)' ? adj.qty : 0), 0);
-            const deducted = list.reduce((sum, adj) => sum + (adj.adjustmentType === 'Deduction (-)' ? adj.qty : 0), 0);
-            return [
-              { label: 'TOTAL AUDITS', value: `${list.length}` },
-              { label: 'QTY ADDED', value: `${added}`, valueClassName: 'text-emerald-400' },
-              { label: 'QTY DEDUCTED', value: `${deducted}`, valueClassName: 'text-rose-400' },
-            ];
-          }}
-          onCreateNew={() => {
-            setEditingAdjustment(null);
-            setAdjustmentView('create');
-          }}
-          onClose={() => setActiveSubTab('stock')}
-          emptyMessage="No Stock Adjustments found for the selected filters."
-          tableHeaders={['Date', 'Audit No', 'Product Name', 'Type', 'Reason', 'Qty', 'Actions']}
-          renderTableRow={(adj) => (
-            <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-              <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">{adj.date}</td>
-              <td className="px-3 py-2 font-mono text-xs">{adj.adjustCode}</td>
-              <td className="px-3 py-2 font-extrabold text-slate-900 dark:text-slate-100">{adj.productName}</td>
-              <td className="px-3 py-2">
-                <span className={`text-xs font-bold ${adj.adjustmentType.includes('+') ? 'text-emerald-600' : 'text-rose-600'}`}>{adj.adjustmentType}</span>
-              </td>
-              <td className="px-3 py-2 text-xs text-slate-500">{adj.reason}</td>
-              <td className="px-3 py-2 font-black text-slate-900 dark:text-slate-100">{adj.qty}</td>
-              <td className="px-3 py-2 text-right">
-                <div className="flex items-center justify-end gap-1.5">
-                  <button onClick={() => setPrintAdjustment(adj)} className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white shadow-sm" title="Print">
-                    <Printer className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => { setEditingAdjustment(adj); setAdjustmentView('create'); }} className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white shadow-sm" title="Edit">
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => { if (window.confirm(`Delete Stock Adjustment ${adj.adjustCode}?`)) onDeleteAdjustment(adj.id); }} className="p-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm" title="Delete">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          )}
-        />
-      )}
-
-      {activeSubTab === 'adjustment' && adjustmentView === 'create' && (
-        <StockAdjustmentModule
-          products={products}
-          adjustments={adjustments}
-          adjustmentToEdit={editingAdjustment}
-          onAddAdjustment={onAddAdjustment}
-          onUpdateAdjustment={onUpdateAdjustment}
-          onUpdateProduct={onUpdateProduct}
-          onClose={() => {
-            setEditingAdjustment(null);
-            setAdjustmentView('list');
           }}
         />
       )}
@@ -960,29 +808,6 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
         />
       )}
 
-      {printSO && (
-        <PrintDocumentModal
-          docTypeLabel="Sale Order"
-          docNumber={printSO.soNumber}
-          date={printSO.date}
-          statusLabel={printSO.status}
-          extraHeaderLines={[`Valid Until: ${printSO.validUntil}`]}
-          partyLabel="Customer"
-          partyName={printSO.customerName}
-          partyGstin={printSO.customerGstin}
-          items={printSO.items}
-          totals={[
-            { label: 'Taxable Amount', value: `₹${(printSO.taxableAmount ?? 0).toLocaleString('en-IN')}` },
-            { label: 'CGST', value: `₹${(printSO.totalCgst ?? 0).toLocaleString('en-IN')}` },
-            { label: 'SGST', value: `₹${(printSO.totalSgst ?? 0).toLocaleString('en-IN')}` },
-            { label: 'Discount', value: `₹${(printSO.discountAmount ?? 0).toLocaleString('en-IN')}` },
-            { label: 'Order Value', value: `₹${printSO.totalAmount.toLocaleString('en-IN')}`, emphasize: true },
-          ]}
-          remark={printSO.remark}
-          onClose={() => setPrintSO(null)}
-        />
-      )}
-
       {printSale && <PrintInvoiceModal invoice={printSale} onClose={() => setPrintSale(null)} />}
 
       {printSReturn && (
@@ -1047,24 +872,6 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           ]}
           remark={printQuotation.remark}
           onClose={() => setPrintQuotation(null)}
-        />
-      )}
-
-      {printAdjustment && (
-        <PrintDocumentModal
-          docTypeLabel="Stock Adjustment"
-          docNumber={printAdjustment.adjustCode}
-          date={printAdjustment.date}
-          detailRows={[
-            { label: 'Product', value: printAdjustment.productName },
-            { label: 'Adjustment Type', value: printAdjustment.adjustmentType },
-            { label: 'Quantity', value: `${printAdjustment.qty}` },
-            { label: 'Reason', value: printAdjustment.reason },
-            { label: 'Approved By', value: printAdjustment.approvedBy },
-          ]}
-          totals={[]}
-          remark={printAdjustment.remark}
-          onClose={() => setPrintAdjustment(null)}
         />
       )}
 

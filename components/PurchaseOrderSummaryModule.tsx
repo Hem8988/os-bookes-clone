@@ -288,7 +288,7 @@ export const PurchaseOrderSummaryModule: React.FC<PurchaseOrderSummaryModuleProp
 
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                      User : {po.createdBy || 'Shiv Kumar (Admin)'}
+                      User : {po.createdBy || '—'}
                     </div>
                     <div className="text-right text-sm text-slate-500 dark:text-slate-400 space-y-0.5">
                       <div>Paid : {paid.toLocaleString('en-IN')}</div>

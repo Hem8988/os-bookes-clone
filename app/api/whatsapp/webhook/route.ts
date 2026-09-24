@@ -1,57 +1,52 @@
-import { NextResponse } from 'next/server';
-import { handleIncomingWhatsAppMessage } from '@/lib/whatsapp';
+import { prisma } from '@/lib/db';
+import { rateLimit } from '@/lib/server/auth';
+import { ApiError, clientIp, handle } from '@/lib/server/http';
+import { verifyWebhookSignature } from '@/lib/server/messaging/whatsapp';
+import { handleIncomingMessage } from '@/lib/server/whatsappBot';
 
-// In-memory set for WhatsApp Message ID Deduplication
-const processedMessageIds = new Set<string>();
+const TENANT = process.env.DEFAULT_TENANT_ID || 'default';
 
+/** Meta webhook verification handshake. */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const mode = searchParams.get('hub.mode');
-  const token = searchParams.get('hub.verify_token');
-  const challenge = searchParams.get('hub.challenge');
-
-  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'deskshark_whatsapp_secret';
-
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    return new Response(challenge, { status: 200 });
+  const url = new URL(request.url);
+  const token = process.env.WHATSAPP_VERIFY_TOKEN;
+  if (token && url.searchParams.get('hub.mode') === 'subscribe' && url.searchParams.get('hub.verify_token') === token) {
+    return new Response(url.searchParams.get('hub.challenge') || '', { status: 200 });
   }
   return new Response('Forbidden', { status: 403 });
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+type InboundMessage = {
+  id: string;
+  from: string;
+  type: string;
+  text?: { body?: string };
+  interactive?: { button_reply?: { id: string }; list_reply?: { id: string } };
+  button?: { payload?: string; text?: string };
+};
 
-    // Support standard Meta Cloud API webhook & custom Deskshark simulation payloads
-    const entry = body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const message = value?.messages?.[0] || body.message;
+export const POST = handle(async (request: Request) => {
+  rateLimit(`wa-webhook:${clientIp(request)}`, 600, 60_000);
+  const raw = await request.text();
+  if (!verifyWebhookSignature(raw, request.headers.get('x-hub-signature-256'))) throw new ApiError(401, 'Invalid signature.', 'BAD_SIGNATURE');
+  const body = JSON.parse(raw) as { entry?: { changes?: { value?: { messages?: InboundMessage[] } }[] }[] };
 
-    const from = message?.from || body.from;
-    const text = message?.text?.body || message?.interactive?.button_reply?.id || body.text || '';
-    const messageId = message?.id || body.messageId || `msg_${from}_${Date.now()}`;
-
-    if (from && text) {
-      // Deduplication Check
-      if (processedMessageIds.has(messageId)) {
-        console.log(`[WhatsApp Webhook] Duplicate message skipped: ${messageId}`);
-        return NextResponse.json({ status: 'duplicate_skipped' });
-      }
-
-      processedMessageIds.add(messageId);
-      // Keep deduplication set bounded to last 1000 messages
-      if (processedMessageIds.size > 1000) {
-        const first = processedMessageIds.values().next().value;
-        if (first) processedMessageIds.delete(first);
-      }
-
-      await handleIncomingWhatsAppMessage(from, text);
+  const messages = (body.entry || []).flatMap((e) => (e.changes || []).flatMap((c) => c.value?.messages || []));
+  for (const message of messages) {
+    const text = message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || message.button?.payload || message.text?.body || '';
+    if (!message.from || !text) continue;
+    try {
+      // The unique providerId makes Meta's retries idempotent.
+      await prisma.messageLog.create({ data: { tenantId: TENANT, channel: 'WHATSAPP', direction: 'IN', recipient: message.from, body: text, providerId: message.id, status: 'RECEIVED' } });
+    } catch {
+      continue;
     }
-
-    return NextResponse.json({ status: 'success' });
-  } catch (error: any) {
-    console.error('[WhatsApp Webhook Exception]:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    try {
+      rateLimit(`wa-from:${message.from}`, 30, 60_000);
+      await handleIncomingMessage(message.from, text);
+    } catch (error) {
+      console.error('[whatsapp] failed to handle message', message.id, error);
+    }
   }
-}
+  return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+});

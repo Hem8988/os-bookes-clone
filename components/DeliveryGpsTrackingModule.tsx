@@ -1,84 +1,123 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { Navigation, MapPin, Zap, RefreshCw, Smartphone, Battery, Shield } from 'lucide-react';
+
+import React, { useCallback, useEffect, useState } from 'react';
+import { MapPin, RefreshCw } from 'lucide-react';
+import { api, errorMessage, inr } from '../lib/api';
+import { Badge, Button, Card, Empty, StatusBadge, cx, dateTime, inputClass, today, useToast } from './ui';
+
+// Delivery operations board: who is on duty, their last known location and
+// every delivery of the selected day with its verification status.
+
+interface Location { id: string; deliveryBoyId: string; deliveryBoyName: string; latitude: number; longitude: number; accuracy: number | null; recordedAt: string }
+interface Day { id: string; deliveryBoyId: string; deliveryBoyName: string; status: string; startedAt: string; closedAt: string | null; openingCash: number; closingCash: number | null }
+interface DeliveryRow { id: string; deliveryNumber: string; customerName: string; deliveryBoyName: string; deliveredQtyTotal: number; emptyReceivedTotal: number; paymentMode: string; paymentAmount: number; invoiceAmount: number; hasVariance: boolean; status: string; submittedAt: string; latitude: number | null; longitude: number | null }
 
 export default function DeliveryGpsTrackingModule() {
-  const [locations, setLocations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(today());
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [days, setDays] = useState<Day[]>([]);
+  const [deliveries, setDeliveries] = useState<DeliveryRow[]>([]);
+  const [loadedAt, setLoadedAt] = useState(0);
+  const [toast, showToast] = useToast();
 
-  const fetchGps = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/delivery/gps');
-      const json = await res.json();
-      if (json.success) setLocations(json.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      const [l, d, del] = await Promise.all([api<Location[]>('/api/delivery/gps'), api<Day[]>(`/api/delivery/day-log?date=${date}`), api<DeliveryRow[]>(`/api/cylinder/deliveries?date=${date}`)]);
+      setLocations(l);
+      setDays(d);
+      setDeliveries(del);
+      setLoadedAt(Date.now());
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
     }
-  };
+  }, [date, showToast]);
 
   useEffect(() => {
-    fetchGps();
-    const interval = setInterval(fetchGps, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    void load();
+    const t = window.setInterval(load, 60_000);
+    return () => window.clearInterval(t);
+  }, [load]);
+
+  // "Live" = location reported within 15 minutes of the last refresh.
+  const fresh = (at: string) => loadedAt - new Date(at).getTime() < 15 * 60_000;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <Navigation className="w-7 h-7 text-indigo-600" /> Phase 2: Live GPS Tracking & AI Route Optimization
-          </h1>
-          <p className="text-sm text-slate-500">Real-time delivery boy locations and AI fuel-saving route sequence</p>
-        </div>
-        <button onClick={fetchGps} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh Live Map
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Active Tracked Delivery Boys */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Active Delivery Partners</h2>
-          {locations.map(loc => (
-            <div key={loc.deliveryBoyId} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 dark:text-white">{loc.name}</span>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">ONLINE</span>
-              </div>
-              <div className="text-xs text-slate-500 flex items-center gap-4">
-                <span className="flex items-center gap-1"><Smartphone className="w-3.5 h-3.5 text-indigo-500" /> Speed: {loc.speed}</span>
-                <span className="flex items-center gap-1"><Battery className="w-3.5 h-3.5 text-emerald-500" /> Battery: {loc.battery}</span>
-              </div>
-              <div className="text-xs text-slate-400">Lat: {loc.lat}, Lng: {loc.lng}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Live Map Representation */}
-        <div className="lg:col-span-2 bg-slate-900 rounded-2xl p-6 border border-slate-800 text-white space-y-4 flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-emerald-400">
-              <MapPin className="w-5 h-5" /> Live Map Coordinates Overlay (Central Delhi Zone)
-            </div>
-            <span className="text-xs bg-emerald-950 border border-emerald-700 text-emerald-300 px-3 py-1 rounded-full font-semibold">
-              AI Route Engine Active (18.5% Fuel Saved)
-            </span>
-          </div>
-
-          <div className="h-64 bg-slate-950/80 rounded-xl border border-slate-800 p-4 relative flex items-center justify-center overflow-hidden">
-            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]"></div>
-            <div className="text-center space-y-2 z-10">
-              <Navigation className="w-12 h-12 text-indigo-400 mx-auto animate-pulse" />
-              <div className="font-bold text-slate-200 text-base">Live Route Optimizer Active</div>
-              <div className="text-xs text-slate-400">2 Delivery Partners moving on optimal route sequence</div>
-            </div>
-          </div>
+    <div className="space-y-4">
+      {toast}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-black text-slate-900">Delivery Board</h2>
+        <div className="flex gap-2">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cx(inputClass, 'w-44')} />
+          <Button tone="ghost" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button>
         </div>
       </div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card title="Delivery boys on duty">
+          {days.length === 0 ? (
+            <Empty>Nobody has started a day.</Empty>
+          ) : (
+            days.map((d) => {
+              const loc = locations.find((l) => l.deliveryBoyId === d.deliveryBoyId);
+              return (
+                <div key={d.id} className="flex justify-between items-center text-xs py-2 border-b border-slate-50">
+                  <div>
+                    <strong>{d.deliveryBoyName}</strong>
+                    <div className="text-[10px] text-slate-500">Started {dateTime(d.startedAt)}{d.closedAt ? ` · closed ${dateTime(d.closedAt)}` : ''}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {loc && (
+                      <a href={`https://maps.google.com/?q=${loc.latitude},${loc.longitude}`} target="_blank" rel="noreferrer" className={cx('flex items-center gap-1 font-bold', fresh(loc.recordedAt) ? 'text-emerald-700' : 'text-slate-400')}>
+                        <MapPin className="h-3.5 w-3.5" /> {fresh(loc.recordedAt) ? 'Live' : dateTime(loc.recordedAt)}
+                      </a>
+                    )}
+                    <StatusBadge status={d.status} />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </Card>
+        <Card title="Summary">
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>Deliveries: <strong>{deliveries.length}</strong></div>
+            <div>Cylinders: <strong>{deliveries.reduce((s, d) => s + d.deliveredQtyTotal, 0)}</strong></div>
+            <div>Empties: <strong>{deliveries.reduce((s, d) => s + d.emptyReceivedTotal, 0)}</strong></div>
+            <div>Sales: <strong>{inr(deliveries.reduce((s, d) => s + d.invoiceAmount, 0))}</strong></div>
+            <div>Waiting verification: <strong>{deliveries.filter((d) => d.status === 'PENDING_VERIFICATION').length}</strong></div>
+            <div>With variance: <strong>{deliveries.filter((d) => d.hasVariance).length}</strong></div>
+          </div>
+        </Card>
+      </div>
+      <Card title="Deliveries">
+        {deliveries.length === 0 ? (
+          <Empty>No deliveries on this date.</Empty>
+        ) : (
+          <table className="w-full text-xs">
+            <thead className="text-slate-500 text-left">
+              <tr>
+                <th className="p-2">Delivery</th>
+                <th className="p-2">Customer</th>
+                <th className="p-2">Delivery boy</th>
+                <th className="p-2 text-right">Full / Empty</th>
+                <th className="p-2">Payment</th>
+                <th className="p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.map((d) => (
+                <tr key={d.id} className="border-t border-slate-100">
+                  <td className="p-2 font-mono font-bold">{d.deliveryNumber}<div className="text-[10px] text-slate-400">{dateTime(d.submittedAt)}</div></td>
+                  <td className="p-2">{d.customerName}</td>
+                  <td className="p-2">{d.deliveryBoyName}</td>
+                  <td className="p-2 text-right">{d.deliveredQtyTotal} / {d.emptyReceivedTotal}</td>
+                  <td className="p-2">{d.paymentMode} {inr(d.paymentAmount)}</td>
+                  <td className="p-2 space-x-1"><StatusBadge status={d.status} />{d.hasVariance && <Badge tone="amber">Variance</Badge>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }

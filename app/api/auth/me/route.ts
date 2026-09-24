@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server';
-import { decodeSession } from '@/lib/auth';
+import { PERMISSIONS, Permission, can } from '@/lib/permissions';
+import { getAuth } from '@/lib/server/auth';
+import { handle } from '@/lib/server/http';
+import { getSetting } from '@/lib/server/settings';
 
-export async function GET(request: Request) {
-  try {
-    const cookieHeader = request.headers.get('cookie') || '';
-    const match = cookieHeader.match(/deskshark_session=([^;]+)/);
-    const token = match ? match[1] : null;
-
-    if (!token) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
-    }
-
-    const session = decodeSession(token);
-    if (!session) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
-    }
-
-    return NextResponse.json({ authenticated: true, user: session });
-  } catch (error: any) {
-    return NextResponse.json({ authenticated: false, error: error.message }, { status: 500 });
-  }
-}
+export const GET = handle(async (request: Request) => {
+  const auth = await getAuth(request);
+  if (!auth) return NextResponse.json({ authenticated: false }, { status: 401 });
+  const company = await getSetting(auth.tenantId, 'company');
+  const permissions = (Object.keys(PERMISSIONS) as Permission[]).filter((p) => can(auth.role, p));
+  return NextResponse.json({
+    authenticated: true,
+    user: { id: auth.userId, name: auth.name, email: auth.email, role: auth.role, customerId: auth.customerId },
+    permissions,
+    company: { name: company.name, phone: company.phone, supportPhone: company.supportPhone, gstin: company.gstin, address: company.address, upiId: company.upiId, email: company.email },
+  });
+});

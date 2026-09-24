@@ -1,16 +1,3 @@
-export interface DeliveryRequest {
-  id: string;
-  requestedAt: string;
-  deliveryBoyName: string;
-  requestType: 'EXTRA_CYLINDERS' | 'CASH_ADVANCE' | 'VEHICLE_ISSUE' | 'OTHER';
-  requestNote: string;
-  qty?: number;
-  amount?: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  adminNote?: string;
-  resolvedAt?: string;
-}
-
 export interface NarrationMaster {
   id: string;
   text: string;
@@ -113,32 +100,6 @@ export interface PaymentMaster {
   active: boolean;
 }
 
-export interface BomComponent {
-  productId: string;
-  productName: string;
-  productCode?: string;
-  quantity: number;
-  unit: string;
-  unitCost: number;
-  mrp?: number;
-  salePrice?: number;
-  wholesalePrice?: number;
-  image?: string;
-  customValues?: Record<string, number>;
-}
-
-export interface BomMaster {
-  id: string;
-  finishedGoodId: string;
-  finishedGoodName: string;
-  bomCode: string;
-  components: BomComponent[];
-  laborCost: number;
-  totalCost: number;
-  active?: boolean;
-  remark?: string;
-}
-
 export interface CompanyMaster {
   id: string;
   companyName: string;
@@ -168,49 +129,44 @@ export interface AccountMaster {
   address?: string;
 }
 
+export type ProductType = 'REFILLABLE_CYLINDER' | 'CONSUMABLE' | 'ACCESSORY';
+
 export interface Product {
   id: string;
-  name: string;
-  category: string;
-  brand?: string;
   sku: string;
-  barcode?: string;
+  name: string;
+  productHindiName?: string;
+  /** LPG | Industrial Gas | Accessory | Other */
+  category: string;
+  productType?: ProductType;
+  /** LPG | OXYGEN | NITROGEN | ARGON | CO2 | OTHER */
+  gasType?: string;
+  brand?: string;
   hsnCode: string;
   unit: string;
+  weightVolume?: number;
+  weightUnit?: string;
   purchasePrice: number;
+  /** Standard (GST-inclusive) rate per cylinder. */
   salePrice: number;
   wholesalePrice?: number;
   mrp?: number;
   taxRate: number;
+  gstApplicable?: boolean;
+  emptyDepositValue?: number;
+  /** Full cylinders across godowns — maintained by the server. */
   stock: number;
   minStockAlert: number;
-  maxStockLimit?: number;
   rackLocation?: string;
-  batchNumber?: string;
-  expiryDate?: string;
-  groupCode?: string;
-  active?: boolean;
-  gstApplicable?: boolean;
-  autoQty?: number;
-  productType?: 'Product' | 'Service';
-  gasType?: string;
-  weightVolume?: number;
-  emptyDepositValue?: number;
-  isMoreInfo?: boolean;
-  isRawMaterial?: boolean;
-  isSubItem?: boolean;
+  barcode?: string;
   image?: string;
-  size?: string;
-  colour?: string;
-  expiryMonth?: number;
-  productHindiName?: string;
   description?: string;
   termsAndCondition?: string;
   productTags?: string[];
-  rawMaterialComponents?: BomComponent[];
-  parentProductId?: string;
-  parentProductName?: string;
-  subItemConversionQty?: number;
+  autoQty?: number;
+  groupCode?: string;
+  active?: boolean;
+  isMoreInfo?: boolean;
 }
 
 export interface CustomerAddress {
@@ -261,7 +217,6 @@ export interface Customer {
   partyType?: string;
   otherMobile?: string;
   interestRate?: number;
-  loyaltyPoints?: number;
   joiningDate?: string;
   rateMode?: 'item' | 'company';
   whatsappNumber?: string;
@@ -269,11 +224,15 @@ export interface Customer {
   route?: string;
   defaultDeliveryBoyId?: string;
   defaultDeliveryBoyName?: string;
-  relationshipManagerId?: string;
-  relationshipManagerName?: string;
+  /** Products offered as quick-order buttons on WhatsApp. */
+  defaultProductIds?: string[];
+  /** COD | NET_7 | NET_15 | NET_30 */
+  paymentTerms?: string;
+  /** Hotel | Restaurant | Industrial | … */
+  segment?: string;
+  /** Cylinders currently held, per product (read-only, from the server). */
+  cylinderBalances?: { productName: string; currentBalance: number }[];
   openingEmptyCylinderQty?: number;
-  password?: string;
-  portalAccessEnabled?: boolean;
   partyRates?: PartyRate[];
   deliveryAddresses?: CustomerAddress[];
   depositFeePerCylinder?: number;
@@ -466,38 +425,6 @@ export interface ReturnDocument {
   payments?: PurchaseOrderPayment[];
 }
 
-export interface SaleOrder {
-  id: string;
-  soNumber: string;
-  customerName: string;
-  customerGstin?: string;
-  date: string;
-  validUntil: string;
-  totalAmount: number;
-  status: 'Pending' | 'Converted to Bill' | 'Expired';
-  items?: PurchaseOrderItem[];
-  paymentMode?: 'Cash' | 'Credit';
-  taxableAmount?: number;
-  totalCgst?: number;
-  totalSgst?: number;
-  discountPercent?: number;
-  discountAmount?: number;
-  discountApplyOn?: 'taxable' | 'total';
-  remark?: string;
-  createdBy?: string;
-  payments?: PurchaseOrderPayment[];
-  shippingParty?: string;
-  customerId?: string;
-  customerPhone?: string;
-  customerAddress?: string;
-  deliveryBoyId?: string;
-  deliveryBoyName?: string;
-  driverPhone?: string;
-  vehicleNumber?: string;
-  deliveryStatus?: 'Unassigned' | 'Assigned' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
-  assignedAt?: string;
-}
-
 export interface DeliveryChallan {
   id: string;
   challanNumber: string;
@@ -533,32 +460,7 @@ export interface Quotation {
   createdBy?: string;
 }
 
-export interface StockAdjustment {
-  id: string;
-  adjustCode: string;
-  date: string;
-  productId?: string;
-  productName: string;
-  adjustmentType: 'Addition (+)' | 'Deduction (-)';
-  qty: number;
-  reason: 'Damage/Breakage' | 'Physical Stock Count' | 'Sample Giveaway' | 'Expired Batch';
-  approvedBy: string;
-  remark?: string;
-}
-
 // Branch Management Documents
-export interface BranchStockTransfer {
-  id: string;
-  transferNumber: string;
-  type: 'Stock In' | 'Stock Out';
-  fromBranch: string;
-  toBranch: string;
-  date: string;
-  itemsCount: number;
-  totalQty: number;
-  status: 'Dispatched' | 'Received' | 'In Transit';
-}
-
 // Ledger Journal & Attendance Entities
 export interface LedgerEntry {
   id: string;

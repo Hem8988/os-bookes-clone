@@ -1,237 +1,130 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { validateAuthorization } from '@/lib/security';
+import { requireAuth } from '@/lib/server/auth';
+import { addDays, badRequest, businessDate, forbidden, handle, ok, round2 } from '@/lib/server/http';
 
-export async function GET(request: Request) {
-  try {
-    const auth = await validateAuthorization(request, ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT', 'DELIVERY_BOY', 'ADMIN']);
-    if (!auth.authorized) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: auth.status || 403 });
+// Reporting suite (SRS Phase 8). Scope follows the permission matrix:
+// admin → everything, manager → operations, accountant → financial,
+// delivery boy → own performance.
+
+const SCOPE: Record<string, string[]> = {
+  sales: ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'],
+  collection: ['SUPER_ADMIN', 'ACCOUNTANT'],
+  outstanding: ['SUPER_ADMIN', 'ACCOUNTANT', 'MANAGER'],
+  inventory: ['SUPER_ADMIN', 'MANAGER'],
+  'cylinder-balance': ['SUPER_ADMIN', 'MANAGER', 'ACCOUNTANT'],
+  'delivery-performance': ['SUPER_ADMIN', 'MANAGER', 'DELIVERY_BOY'],
+  accountant: ['SUPER_ADMIN', 'ACCOUNTANT'],
+};
+
+export const GET = handle(async (request: Request) => {
+  const auth = await requireAuth(request);
+  const url = new URL(request.url);
+  const type = url.searchParams.get('type') || 'sales';
+  if (!SCOPE[type]) throw badRequest('Unknown report.');
+  if (!SCOPE[type].includes(auth.role)) throw forbidden();
+  const to = url.searchParams.get('to') || businessDate();
+  const from = url.searchParams.get('from') || addDays(to, -30);
+  const tenantId = auth.tenantId;
+  const range = { gte: from, lte: to };
+
+  switch (type) {
+    case 'sales': {
+      const invoices = await prisma.invoice.findMany({ where: { tenantId, date: range, status: { not: 'Cancelled' } }, include: { items: true } });
+      const byProduct = new Map<string, { productName: string; qty: number; amount: number }>();
+      const byDay = new Map<string, { date: string; invoices: number; amount: number; tax: number }>();
+      for (const inv of invoices) {
+        const d = byDay.get(inv.date) || { date: inv.date, invoices: 0, amount: 0, tax: 0 };
+        d.invoices += 1;
+        d.amount = round2(d.amount + inv.grandTotal);
+        d.tax = round2(d.tax + inv.totalCgst + inv.totalSgst + inv.totalIgst);
+        byDay.set(inv.date, d);
+        for (const it of inv.items) {
+          const p = byProduct.get(it.productName) || { productName: it.productName, qty: 0, amount: 0 };
+          p.qty += it.quantity;
+          p.amount = round2(p.amount + it.totalAmount);
+          byProduct.set(it.productName, p);
+        }
+      }
+      return ok({ from, to, total: round2(invoices.reduce((s, i) => s + i.grandTotal, 0)), count: invoices.length, byDay: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)), byProduct: [...byProduct.values()] });
     }
-
-    const { searchParams } = new URL(request.url);
-    const reportType = searchParams.get('type') || 'management';
-    const startDate = searchParams.get('startDate') || '2026-01-01';
-    const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
-
-    // Role-Based Report Scope Checks
-    if (auth.role === 'DELIVERY_BOY' && reportType !== 'delivery') {
-      return NextResponse.json(
-        { success: false, error: '403 Forbidden: Delivery Boy role is restricted to own Delivery Performance report.' },
-        { status: 403 }
-      );
+    case 'collection': {
+      const payments = await prisma.payment.findMany({ where: { tenantId, paymentDate: range, status: 'VERIFIED' } });
+      const byMode: Record<string, number> = {};
+      payments.forEach((p) => (byMode[p.mode] = round2((byMode[p.mode] || 0) + p.amount)));
+      const credit = await prisma.delivery.findMany({ where: { tenantId, deliveryDate: range, status: 'VERIFIED' }, select: { invoiceAmount: true, paymentAmount: true } });
+      return ok({ from, to, total: round2(payments.reduce((s, p) => s + p.amount, 0)), byMode, creditGiven: round2(credit.reduce((s, d) => s + Math.max(d.invoiceAmount - d.paymentAmount, 0), 0)), payments });
     }
-
-    if (auth.role === 'ACCOUNTANT' && ['inventory', 'management'].includes(reportType)) {
-      return NextResponse.json(
-        { success: false, error: `403 Forbidden: Accountant role is restricted from ${reportType} report.` },
-        { status: 403 }
-      );
-    }
-
-    // 1. MANAGEMENT EXECUTIVE OVERVIEW
-    if (reportType === 'management') {
-      const [customers, deliveries, orders, invoices, dayLogs] = await Promise.all([
-        prisma.customer.findMany({ select: { balance: true, creditLimit: true } }),
-        prisma.cylinderDelivery.findMany({ where: { status: 'VERIFIED' } }),
-        prisma.cylinderOrder.findMany(),
-        prisma.invoice.findMany(),
-        prisma.deliveryBoyDayLog.findMany(),
-      ]);
-
-      const totalRevenue = invoices.reduce((sum: number, i: any) => sum + i.grandTotal, 0);
-      const totalOutstanding = customers.reduce((sum: number, c: any) => sum + (c.balance || 0), 0);
-      const totalDeliveredQty = deliveries.reduce((sum: number, d: any) => sum + d.deliveredQtyTotal, 0);
-      const totalEmptyQty = deliveries.reduce((sum: number, d: any) => sum + d.emptyReceivedTotal, 0);
-
-      let totalCashCollected = 0;
-      let totalOnlineCollected = 0;
-      deliveries.forEach((d: any) => {
-        if (d.paymentMode === 'CASH') totalCashCollected += d.paymentAmount;
-        if (d.paymentMode === 'ONLINE') totalOnlineCollected += d.paymentAmount;
-      });
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'management',
-        data: {
-          totalRevenue,
-          totalOutstanding,
-          totalCashCollected,
-          totalOnlineCollected,
-          totalDeliveredQty,
-          totalEmptyQty,
-          activeOrders: orders.length,
-          activeDeliveries: deliveries.length,
-          tier1WarehouseStock: 150,
-          tier2FleetStock: 35,
-          tier3CustomerStock: totalDeliveredQty,
-        },
-      });
-    }
-
-    // 2. SALES REPORT
-    if (reportType === 'sales') {
-      const invoices = await prisma.invoice.findMany({
-        orderBy: { date: 'desc' },
-        take: 50,
-      });
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'sales',
-        data: invoices.map((i: any) => ({
-          date: i.date,
-          customer: i.customerName,
-          product: '19 KG Commercial LPG Cylinder',
-          quantity: Math.round(i.grandTotal / 1850) || 10,
-          revenue: i.grandTotal,
-          invoiceNumber: i.invoiceNumber,
-          status: i.status,
-        })),
-      });
-    }
-
-    // 3. COLLECTION REPORT
-    if (reportType === 'collection') {
-      const deliveries = await prisma.cylinderDelivery.findMany({
-        orderBy: { deliveryDate: 'desc' },
-      });
-
-      let cashTotal = 0;
-      let onlineTotal = 0;
-      let chequeTotal = 0;
-      let creditTotal = 0;
-      let verifiedCount = 0;
-      let pendingCount = 0;
-
-      deliveries.forEach((d: any) => {
-        if (d.paymentMode === 'CASH') cashTotal += d.paymentAmount;
-        else if (d.paymentMode === 'ONLINE') onlineTotal += d.paymentAmount;
-        else if (d.paymentMode === 'CHEQUE') chequeTotal += d.paymentAmount;
-        else if (d.paymentMode === 'CREDIT') creditTotal += d.paymentAmount;
-
-        if (d.status === 'VERIFIED') verifiedCount++;
-        else pendingCount++;
-      });
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'collection',
-        data: {
-          summary: { cashTotal, onlineTotal, chequeTotal, creditTotal, verifiedCount, pendingCount },
-          deliveries: deliveries.map((d: any) => ({
-            deliveryNumber: d.deliveryNumber,
-            customer: d.customerName,
-            driver: d.deliveryBoyName,
-            date: d.deliveryDate,
-            mode: d.paymentMode,
-            amount: d.paymentAmount,
-            status: d.status,
-          })),
-        },
-      });
-    }
-
-    // 4. INVENTORY REPORT
-    if (reportType === 'inventory') {
-      const [txs, custInv] = await Promise.all([
-        prisma.inventoryTransaction.findMany({ orderBy: { createdAt: 'desc' }, take: 20 }),
-        prisma.customerCylinderInventory.findMany(),
-      ]);
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'inventory',
-        data: {
-          threeTier: {
-            tier1WarehouseFull: 150,
-            tier1WarehouseEmpty: 60,
-            tier2FleetFull: 35,
-            tier2FleetEmpty: 20,
-            tier3CustomerFull: custInv.reduce((sum: number, c: any) => sum + c.currentFullBalance, 0),
-            tier3CustomerEmpty: custInv.reduce((sum: number, c: any) => sum + c.currentEmptyBalance, 0),
-          },
-          transactions: txs,
-        },
-      });
-    }
-
-    // 5. CUSTOMER REPORT
-    if (reportType === 'customer') {
-      const customers = await prisma.customer.findMany({
-        take: 50,
-      });
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'customer',
-        data: customers.map((c: any) => ({
-          id: c.id,
+    case 'outstanding': {
+      const today = businessDate();
+      const customers = await prisma.customer.findMany({ where: { tenantId, type: 'Customer', balance: { gt: 0 } }, orderBy: { balance: 'desc' } });
+      const unpaid = await prisma.invoice.findMany({ where: { tenantId, status: { in: ['Unpaid', 'Partial'] } }, select: { customerId: true, dueDate: true, grandTotal: true, paidAmount: true } });
+      const lastPayments = await prisma.payment.groupBy({ by: ['customerId'], where: { tenantId, status: 'VERIFIED' }, _max: { paymentDate: true } });
+      const rows = customers.map((c) => {
+        const buckets = { current: 0, d30: 0, d60: 0, d90: 0 };
+        unpaid
+          .filter((i) => i.customerId === c.id)
+          .forEach((i) => {
+            const due = i.grandTotal - i.paidAmount;
+            const overdueDays = Math.floor((new Date(today).getTime() - new Date(i.dueDate).getTime()) / 86_400_000);
+            if (overdueDays <= 0) buckets.current += due;
+            else if (overdueDays <= 30) buckets.d30 += due;
+            else if (overdueDays <= 60) buckets.d60 += due;
+            else buckets.d90 += due;
+          });
+        return {
+          customerId: c.id,
+          customerCode: c.customerCode,
           name: c.name,
-          tradeName: c.tradeName || c.name,
           phone: c.phone,
-          outstandingBalance: c.balance || 0,
-          creditLimit: c.creditLimit || 50000,
-          status: c.status,
-          lastDelivery: '2026-08-26',
-        })),
+          outstanding: c.balance,
+          creditLimit: c.creditLimit,
+          overLimit: c.creditLimit > 0 && c.balance > c.creditLimit,
+          lastPayment: lastPayments.find((p) => p.customerId === c.id)?._max.paymentDate || null,
+          ...Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, round2(v)])),
+        };
+      });
+      return ok({ asOf: today, total: round2(rows.reduce((s, r) => s + r.outstanding, 0)), rows });
+    }
+    case 'inventory': {
+      const [balances, movements] = await Promise.all([
+        prisma.stockBalance.findMany({ where: { tenantId }, orderBy: [{ locationType: 'asc' }, { locationName: 'asc' }] }),
+        prisma.inventoryTransaction.groupBy({ by: ['transactionType', 'productName'], where: { tenantId, createdAt: { gte: new Date(`${from}T00:00:00+05:30`), lte: new Date(`${to}T23:59:59+05:30`) } }, _sum: { fullQty: true, emptyQty: true } }),
+      ]);
+      return ok({ from, to, balances, movements: movements.map((m) => ({ type: m.transactionType, productName: m.productName, full: m._sum.fullQty || 0, empty: m._sum.emptyQty || 0 })) });
+    }
+    case 'cylinder-balance': {
+      const rows = await prisma.customerCylinderBalance.findMany({ where: { tenantId, currentBalance: { not: 0 } }, include: { customer: { select: { name: true, customerCode: true, phone: true, area: true } } }, orderBy: { currentBalance: 'desc' } });
+      return ok(rows);
+    }
+    case 'delivery-performance': {
+      const where = { tenantId, deliveryDate: range, ...(auth.role === 'DELIVERY_BOY' ? { deliveryBoyId: auth.userId } : {}) };
+      const deliveries = await prisma.delivery.findMany({ where, select: { deliveryBoyId: true, deliveryBoyName: true, deliveredQtyTotal: true, emptyReceivedTotal: true, hasVariance: true, revision: true, status: true, paymentMode: true, paymentAmount: true, submittedAt: true, verifiedAt: true } });
+      const byBoy = new Map<string, { name: string; deliveries: number; cylinders: number; empties: number; variances: number; corrections: number; cash: number; avgVerifyHours: number; _verifySum: number; _verified: number }>();
+      for (const d of deliveries) {
+        const r = byBoy.get(d.deliveryBoyId) || { name: d.deliveryBoyName, deliveries: 0, cylinders: 0, empties: 0, variances: 0, corrections: 0, cash: 0, avgVerifyHours: 0, _verifySum: 0, _verified: 0 };
+        r.deliveries += 1;
+        r.cylinders += d.deliveredQtyTotal;
+        r.empties += d.emptyReceivedTotal;
+        r.variances += d.hasVariance ? 1 : 0;
+        r.corrections += d.revision > 1 ? 1 : 0;
+        if (d.paymentMode === 'CASH') r.cash = round2(r.cash + d.paymentAmount);
+        if (d.verifiedAt) {
+          r._verifySum += (d.verifiedAt.getTime() - d.submittedAt.getTime()) / 3_600_000;
+          r._verified += 1;
+        }
+        byBoy.set(d.deliveryBoyId, r);
+      }
+      return ok({
+        from,
+        to,
+        rows: [...byBoy.entries()].map(([id, { _verifySum, _verified, ...r }]) => ({ deliveryBoyId: id, ...r, avgVerifyHours: _verified ? round2(_verifySum / _verified) : null })),
       });
     }
-
-    // 6. DELIVERY PERFORMANCE REPORT
-    if (reportType === 'delivery') {
-      const deliveries = await prisma.cylinderDelivery.findMany();
-
-      let completed = 0;
-      let pending = 0;
-      let rejected = 0;
-      let varianceCount = 0;
-
-      deliveries.forEach((d: any) => {
-        if (d.status === 'VERIFIED') completed++;
-        else if (d.status === 'REJECTED') rejected++;
-        else pending++;
-
-        if (d.hasVariance) varianceCount++;
-      });
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'delivery',
-        data: {
-          totalAssigned: deliveries.length,
-          completed,
-          pending,
-          rejected,
-          varianceCount,
-          driverPerformance: [
-            { driver: 'Ramesh Kumar', assigned: 15, completed: 14, pending: 1, variance: 1, cashCollected: 30500 },
-            { driver: 'Suresh Verma', assigned: 10, completed: 10, pending: 0, variance: 0, cashCollected: 18500 },
-          ],
-        },
-      });
+    case 'accountant': {
+      const closings = await prisma.dailyClosing.findMany({ where: { tenantId, date: range }, orderBy: { date: 'desc' } });
+      const verifications = await prisma.approvalRequest.groupBy({ by: ['type', 'status'], where: { tenantId, createdAt: { gte: new Date(`${from}T00:00:00+05:30`) }, type: { in: ['DELIVERY_VERIFICATION', 'PAYMENT_VERIFICATION', 'CASH_SUBMISSION'] } }, _count: true });
+      return ok({ from, to, closings, verifications });
     }
-
-    // 7. ACCOUNTANT REPORT
-    if (reportType === 'accountant') {
-      const items = await prisma.approvalQueueItem.findMany();
-      const dayLocks = await prisma.dayLock.findMany({ orderBy: { date: 'desc' }, take: 10 });
-
-      return NextResponse.json({
-        success: true,
-        reportType: 'accountant',
-        data: {
-          pendingVerifications: items.filter((i: any) => i.status === 'PENDING').length,
-          approvedCount: items.filter((i: any) => i.status === 'APPROVED').length,
-          rejectedCount: items.filter((i: any) => i.status === 'REJECTED').length,
-          dayClosingHistory: dayLocks,
-        },
-      });
-    }
-
-    return NextResponse.json({ success: false, error: 'Invalid report type' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
-}
+  throw badRequest('Unknown report.');
+});

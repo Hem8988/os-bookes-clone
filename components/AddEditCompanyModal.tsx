@@ -128,7 +128,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               <input
                 type="text"
                 required
-                placeholder="e.g. PRAMUKH INDANE - Bhopal Depot"
+                placeholder="e.g. Main Depot"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs md:text-sm rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -142,7 +142,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. Pramukh Indane Gas"
+                placeholder="e.g. Your trade name"
                 value={tradeName}
                 onChange={(e) => setTradeName(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"

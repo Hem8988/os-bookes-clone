@@ -1,56 +1,24 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { audit } from '@/lib/server/audit';
+import { requireAuth } from '@/lib/server/auth';
+import { conflict, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || 'tenant_default';
+export const GET = handle(async (request: Request) => {
+  const auth = await requireAuth(request);
+  const areas = await prisma.area.findMany({ where: { tenantId: auth.tenantId }, include: { route: true }, orderBy: { name: 'asc' } });
+  return ok(areas);
+});
 
-    const areas = await prisma.area.findMany({
-      where: { tenantId, active: true },
-      include: { route: true },
-      orderBy: { name: 'asc' },
-    });
-
-    if (areas.length === 0) {
-      // Fallback pre-populated areas for immediate use
-      return NextResponse.json({
-        success: true,
-        data: [
-          { id: 'area_1', code: 'CP-01', name: 'Connaught Place', routeId: 'route_1', route: { name: 'Central Commercial Route' } },
-          { id: 'area_2', code: 'OKH-02', name: 'Okhla Industrial Area Phase 1', routeId: 'route_2', route: { name: 'South Industrial Route' } },
-          { id: 'area_3', code: 'KB-03', name: 'Karol Bagh Market', routeId: 'route_1', route: { name: 'Central Commercial Route' } },
-        ],
-      });
-    }
-
-    return NextResponse.json({ success: true, data: areas });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { code, name, routeId, tenantId = 'tenant_default' } = body;
-
-    if (!code || !name) {
-      return NextResponse.json({ success: false, error: 'Area Code and Name are required' }, { status: 400 });
-    }
-
-    const area = await prisma.area.create({
-      data: {
-        tenantId,
-        code: code.trim().toUpperCase(),
-        name: name.trim(),
-        routeId: routeId || null,
-      },
-      include: { route: true },
-    });
-
-    return NextResponse.json({ success: true, data: area });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
+/** Create or update an area (drives route / delivery boy assignment). */
+export const POST = handle(async (request: Request) => {
+  const auth = await requireAuth(request, 'masters.manage', { write: true });
+  const body = await readJson(request);
+  const id = optStr(body.id);
+  const code = str(body.code, 'Code', { required: true, max: 20 }).toUpperCase();
+  const clash = await prisma.area.findFirst({ where: { tenantId: auth.tenantId, code, NOT: id ? { id } : undefined } });
+  if (clash) throw conflict(`Area code ${code} already exists.`);
+  const data = { code, name: str(body.name, 'Name', { required: true, max: 100 }), routeId: optStr(body.routeId), active: body.active !== false };
+  const area = id ? await prisma.area.update({ where: { id }, data, include: { route: true } }) : await prisma.area.create({ data: { ...data, tenantId: auth.tenantId }, include: { route: true } });
+  await audit(prisma, auth, { action: id ? 'AREA_UPDATED' : 'AREA_CREATED', entityType: 'Area', entityId: area.id, reference: area.name });
+  return ok(area, 'Area saved.');
+});

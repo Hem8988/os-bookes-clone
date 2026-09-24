@@ -244,7 +244,7 @@ export const SalesReturnModule: React.FC<SalesReturnModuleProps> = ({
       discountPercent,
       discountAmount: parseFloat(totals.discountAmount.toFixed(2)),
       remark,
-      createdBy: returnToEdit?.createdBy || 'Shiv Kumar (Admin)',
+      createdBy: returnToEdit?.createdBy || '',
       payments: returnToEdit?.payments,
     };
 

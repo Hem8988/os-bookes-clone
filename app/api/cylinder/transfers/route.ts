@@ -1,91 +1,38 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma, transaction } from '@/lib/db';
+import type { Prisma } from '@/lib/generated/prisma/client';
+import { can } from '@/lib/permissions';
+import { requireAuth } from '@/lib/server/auth';
+import { Effects } from '@/lib/server/effects';
+import { forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
+import { requestTransfer, TransferType } from '@/lib/server/stock';
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || 'tenant_default';
+export const GET = handle(async (request: Request) => {
+  const auth = await requireAuth(request);
+  const where: Prisma.StockTransferWhereInput = { tenantId: auth.tenantId };
+  if (auth.role === 'DELIVERY_BOY') where.OR = [{ fromId: auth.userId }, { toId: auth.userId }];
+  else if (!can(auth.role, 'inventory.view')) throw forbidden();
+  const transfers = await prisma.stockTransfer.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' }, take: 200 });
+  return ok(transfers);
+});
 
-    const transfers = await prisma.stockTransfer.findMany({
-      where: { tenantId },
-      include: { items: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return NextResponse.json({ success: true, data: transfers });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const {
-      transferType, // 'WAREHOUSE_TO_DRIVER' | 'DRIVER_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE'
-      fromLocationType,
-      fromLocationId,
-      toLocationType,
-      toLocationId,
-      notes,
-      items = [],
-      performedBy = 'Manager',
-      tenantId = 'tenant_default',
-    } = body;
-
-    if (!transferType || !fromLocationId || !toLocationId || items.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required fields: transferType, fromLocationId, toLocationId, items' },
-        { status: 400 }
-      );
-    }
-
-    const transferCount = await prisma.stockTransfer.count();
-    const transferNumber = `ST-${String(transferCount + 1).padStart(5, '0')}`;
-
-    // Create Stock Transfer Request in PENDING_APPROVAL status
-    const transfer = await prisma.stockTransfer.create({
-      data: {
-        transferNumber,
-        tenantId,
-        transferType,
-        fromLocationType: fromLocationType || 'WAREHOUSE',
-        fromLocationId,
-        toLocationType: toLocationType || 'DELIVERY_BOY',
-        toLocationId,
-        notes: notes || null,
-        status: 'PENDING_APPROVAL',
-        items: {
-          create: items.map((i: any) => ({
-            productId: i.productId,
-            productName: i.productName,
-            fullQty: Number(i.fullQty || 0),
-            emptyQty: Number(i.emptyQty || 0),
-          })),
-        },
+export const POST = handle(async (request: Request) => {
+  const auth = await requireAuth(request, 'stock.transfer.request', { write: true });
+  const body = await readJson(request);
+  const effects = new Effects();
+  const transfer = await transaction((tx) =>
+    requestTransfer(
+      tx,
+      auth,
+      {
+        transferType: str(body.transferType, 'Transfer type', { required: true }) as TransferType,
+        fromId: str(body.fromId, 'From', { required: true }),
+        toId: str(body.toId, 'To', { required: true }),
+        items: Array.isArray(body.items) ? (body.items as { productId: string; fullQty?: number; emptyQty?: number }[]) : [],
+        notes: optStr(body.notes),
       },
-      include: { items: true },
-    });
-
-    // Create Approval Queue Item for Manager / Admin
-    await prisma.approvalQueueItem.create({
-      data: {
-        tenantId,
-        requestType: 'STOCK_TRANSFER',
-        referenceId: transfer.id,
-        requestedBy: performedBy,
-        assignedTo: 'MANAGER',
-        payload: transfer,
-        notes: `Stock Transfer ${transferNumber} (${transferType}): ${items.map((i: any) => `${i.productName}: ${i.fullQty} Full / ${i.emptyQty} Empty`).join(', ')}`,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: transfer,
-      message: 'Stock Transfer submitted for Manager Approval!',
-    });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
+      effects
+    )
+  );
+  effects.schedule();
+  return ok(transfer, `Transfer ${transfer.transferNumber} sent for approval.`);
+});

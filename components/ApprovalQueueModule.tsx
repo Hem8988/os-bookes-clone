@@ -1,901 +1,368 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, FileText, Check, AlertCircle, DollarSign, CreditCard, ShieldCheck, Printer, Plus, AlertTriangle, Eye, Lock, Unlock, RefreshCw } from 'lucide-react';
-import { PrintInvoiceModal } from './PrintInvoiceModal';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, MapPin, RefreshCw, XCircle } from 'lucide-react';
+import { api, errorMessage, inr } from '../lib/api';
+import { APPROVAL_TYPES, ApprovalType } from '../lib/permissions';
+import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
 
-export default function ApprovalQueueModule() {
-  const [items, setItems] = useState<any[]>([]);
+interface ApprovalItem {
+  id: string;
+  type: ApprovalType;
+  title: string;
+  summary: string | null;
+  status: string;
+  requestedByName: string;
+  decidedByName: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  dueAt: string | null;
+  payload: Record<string, unknown> | null;
+  // The referenced record differs per queue type (order, delivery, payment…).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  reference: Record<string, any> | null;
+  logs: { id: string; action: string; actorName: string; note: string | null; createdAt: string }[];
+}
+
+interface DeliveryLine { id: string; productId: string; productName: string; orderedQty: number; deliveredQty: number; emptyReceivedQty: number; totalAmount: number }
+interface OrderLine { id: string; productName: string; orderedQty: number; totalAmount: number }
+interface TransferLine { id: string; productName: string; fullQty: number; emptyQty: number }
+
+interface Props {
+  /** Restrict to these queue types (e.g. the accountant's verification tasks). */
+  types?: ApprovalType[];
+  title?: string;
+}
+
+/** Central approval queue (SRS §8): view → approve / reject with reason. */
+export default function ApprovalQueueModule({ types, title = 'Approval Queue' }: Props) {
+  const [status, setStatus] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [items, setItems] = useState<ApprovalItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ACCOUNTANT' | 'MANAGER' | 'ADMIN'>('ACCOUNTANT');
+  const [decision, setDecision] = useState<{ action: 'APPROVE' | 'REJECT'; note: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, showToast] = useToast();
 
-  // Day Lock & Reconciliation State
-  const [isDayLocked, setIsDayLocked] = useState(false);
-  const [reconciliation, setReconciliation] = useState<any>({
-    expectedCash: 30500,
-    actualCash: 30500,
-    cashDifference: 0,
-    hasCashMismatch: false,
-    expectedStock: 14,
-    actualStock: 14,
-    stockDifference: 0,
-    hasStockMismatch: false,
-  });
-
-  // Reopen Day Modal State
-  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
-  const [reopenUserRole, setReopenUserRole] = useState<'SUPER_ADMIN' | 'ACCOUNTANT'>('SUPER_ADMIN');
-  const [reopenReason, setReopenReason] = useState('');
-  const [reopenSubmitting, setReopenSubmitting] = useState(false);
-
-  // Rejection Modal State
-  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [rejectItemId, setRejectItemId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
-
-  // Print Invoice Modal Integration
-  const [isPrintInvoiceOpen, setIsPrintInvoiceOpen] = useState(false);
-  const [selectedInvoiceData, setSelectedInvoiceData] = useState<any>(null);
-
-  // Late Payment Entry Modal State
-  const [isLatePaymentModalOpen, setIsLatePaymentModalOpen] = useState(false);
-  const [lateCustomerName, setLateCustomerName] = useState('Hotel Rajdhani');
-  const [lateAmount, setLateAmount] = useState('12500');
-  const [latePaymentMode, setLatePaymentMode] = useState<'CASH' | 'ONLINE' | 'CHEQUE'>('ONLINE');
-  const [lateTransactionId, setLateTransactionId] = useState('UPI-2026-881924');
-  const [lateSubmitting, setLateSubmitting] = useState(false);
-
-  const fetchDayLock = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/financial/day-lock?date=${today}`);
-      const json = await res.json();
-      if (json.success && json.data) {
-        setIsDayLocked(json.data.isLocked);
-        if (json.data.reconciliation) {
-          setReconciliation(json.data.reconciliation);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching day lock:', err);
-    }
-  };
-
-  const fetchQueue = async () => {
+  const typeKey = types?.join(',') || '';
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/cylinder/approval-queue?assignedTo=${activeTab}`);
-      const json = await res.json();
-      if (json.success && json.data.length > 0) {
-        setItems(json.data);
-      } else {
-        if (activeTab === 'MANAGER') {
-          setItems([
-            {
-              id: 'item_mgr_1',
-              requestType: 'ORDER_APPROVAL',
-              referenceId: 'CYL-ORD-00042',
-              requestedBy: 'WhatsApp (Hotel Rajdhani)',
-              notes: 'New Order Approval (5 Pcs 19 KG Commercial LPG)',
-              payload: {
-                customerName: 'Hotel Rajdhani',
-                orderNumber: 'CYL-ORD-00042',
-                deliveryDate: '2026-08-26',
-                productName: '19 KG Commercial LPG Cylinder',
-                orderedQty: 5,
-                deliveredQty: 5,
-                emptyReceivedQty: 0,
-                paymentMode: 'CREDIT',
-                paymentAmount: 9250,
-                deliveryProofPhotoUrl: 'https://placehold.co/400x300?text=WhatsApp+Order+Req',
-              },
-              createdAt: '2026-08-26 10:15',
-            },
-          ]);
-        } else if (activeTab === 'ADMIN') {
-          setItems([
-            {
-              id: 'item_adm_cyl_kg_1',
-              requestType: 'CYLINDER_KG_APPROVAL',
-              referenceId: 'CYL-REQ-2026-0091',
-              requestedBy: 'Hotel Rajdhani (Customer Portal)',
-              notes: 'Customer requested 10 Pcs 19 KG Commercial LPG Cylinders. Pending Admin Approval.',
-              payload: {
-                customerName: 'Hotel Rajdhani (Connaught Place)',
-                customerId: 'cust_demo_1',
-                cylinderKg: '19 KG Commercial',
-                orderedQty: 10,
-                depositFeePerCylinder: 2000,
-                totalDepositAmount: 20000,
-                requestedDate: '2026-09-03',
-                status: 'PENDING_ADMIN_APPROVAL',
-              },
-              createdAt: '2026-09-03 08:30',
-            },
-            {
-              id: 'item_adm_1',
-              requestType: 'CREDIT_OVERRIDE',
-              referenceId: 'CUST-0092',
-              requestedBy: 'System Auto-Check',
-              notes: 'Credit Limit Override Request (Balance: ₹65,000 > Limit: ₹50,000)',
-              payload: {
-                customerName: 'Apex Industrial Fabrics',
-                orderNumber: 'CYL-ORD-00039',
-                deliveryDate: '2026-08-26',
-                productName: '47.5 KG Industrial LPG Cylinder',
-                orderedQty: 10,
-                deliveredQty: 10,
-                emptyReceivedQty: 5,
-                paymentMode: 'CREDIT',
-                paymentAmount: 45000,
-                deliveryProofPhotoUrl: 'https://placehold.co/400x300?text=Credit+Limit+Exceeded',
-              },
-              createdAt: '2026-08-26 11:00',
-            },
-          ]);
-        } else {
-          setItems([
-            {
-              id: 'item_cs_1',
-              requestType: 'CASH_SUBMISSION',
-              referenceId: 'CS-881924',
-              requestedBy: 'Ramesh Kumar (del_boy_ramesh)',
-              notes: 'Cash Submission CS-881924 of ₹12,000 by Ramesh Kumar to Accountant Office',
-              payload: {
-                deliveryBoyId: 'del_boy_ramesh',
-                deliveryBoyName: 'Ramesh Kumar',
-                openingCash: 2000,
-                collections: 30500,
-                previousSubmitted: 18500,
-                currentWalletBalance: 14000,
-                submissionAmount: 12000,
-                receiver: 'Accountant Office',
-                proofPhotoUrl: 'https://placehold.co/400x300?text=Cash+Deposit+Receipt',
-                date: '2026-08-26',
-              },
-              createdAt: '2026-08-26 16:00',
-            },
-            {
-              id: 'item_1',
-              requestType: 'DELIVERY_VERIFICATION',
-              referenceId: 'CYL-DEL-00001',
-              requestedBy: 'Ramesh (Delivery Boy)',
-              notes: 'Delivery CYL-DEL-00001 verification required (ONLINE: ₹18,500)',
-              payload: {
-                customerName: 'Hotel Rajdhani',
-                orderNumber: 'CYL-ORD-00001',
-                deliveryDate: '2026-08-26',
-                productName: '19 KG Commercial LPG Cylinder',
-                orderedQty: 10,
-                deliveredQty: 10,
-                emptyReceivedQty: 10,
-                paymentMode: 'ONLINE',
-                paymentAmount: 18500,
-                transactionId: 'UPI-2026-98124012',
-                paymentProofPhotoUrl: 'https://placehold.co/400x300?text=UPI+Screenshot',
-                deliveryProofPhotoUrl: 'https://placehold.co/400x300?text=Delivery+Proof+Photo',
-              },
-              createdAt: '2026-08-26 14:30',
-            },
-            {
-              id: 'item_2',
-              requestType: 'DELIVERY_VERIFICATION',
-              referenceId: 'CYL-DEL-00002',
-              requestedBy: 'Ramesh (Delivery Boy)',
-              notes: 'Delivery CYL-DEL-00002 verification required (CHEQUE: ₹22,500) ⚠️ VARIANCE DETECTED',
-              payload: {
-                customerName: 'Apex Industrial Fabrics',
-                orderNumber: 'CYL-ORD-00002',
-                deliveryDate: '2026-08-26',
-                productName: '47.5 KG Industrial LPG Cylinder',
-                orderedQty: 5,
-                deliveredQty: 4,
-                emptyReceivedQty: 5,
-                hasVariance: true,
-                varianceNotes: 'Delivered Qty (4 Pcs) differs from Ordered Qty (5 Pcs).',
-                paymentMode: 'CHEQUE',
-                paymentAmount: 22500,
-                chequeNumber: '000412',
-                chequeBank: 'HDFC Bank',
-                chequeDate: '2026-08-26',
-                chequePhotoUrl: 'https://placehold.co/400x300?text=HDFC+Cheque+Copy',
-                deliveryProofPhotoUrl: 'https://placehold.co/400x300?text=Site+Delivery+Proof',
-              },
-              createdAt: '2026-08-26 15:10',
-            },
-          ]);
-        }
-      }
-    } catch (err) {
-      console.error(err);
+      const qs = new URLSearchParams({ status });
+      if (typeKey) qs.set('type', typeKey);
+      const data = await api<ApprovalItem[]>(`/api/cylinder/approval-queue?${qs}`);
+      setItems(data);
+      setSelectedId((cur) => (cur && data.some((d) => d.id === cur) ? cur : data[0]?.id || null));
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [status, typeKey, showToast]);
 
   useEffect(() => {
-    fetchDayLock();
-    fetchQueue();
-  }, [activeTab]);
+    void load();
+  }, [load]);
 
-  const handleLockDay = async () => {
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    items.forEach((i) => (c[i.type] = (c[i.type] || 0) + 1));
+    return c;
+  }, [items]);
+  const visible = typeFilter === 'ALL' ? items : items.filter((i) => i.type === typeFilter);
+  const selected = visible.find((i) => i.id === selectedId) || visible[0] || null;
+
+  const decide = async () => {
+    if (!selected || !decision) return;
+    if (decision.action === 'REJECT' && !decision.note.trim()) return showToast('Reason is mandatory for rejection.', 'error');
+    setBusy(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch('/api/financial/day-lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'LOCK_DAY',
-          date: today,
-          user: 'Chief Accountant',
-          expectedCash: reconciliation.expectedCash,
-          actualCash: reconciliation.actualCash,
-          expectedStock: reconciliation.expectedStock,
-          actualStock: reconciliation.actualStock,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setIsDayLocked(true);
-        alert(json.message);
-        fetchDayLock();
-      }
-    } catch (err) {
-      alert('Failed to lock day');
-    }
-  };
-
-  const handleReopenDaySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (reopenUserRole !== 'SUPER_ADMIN') {
-      alert('⚠️ Security Error: Only Super Admin or Admin can reopen a locked day!');
-      return;
-    }
-    if (!reopenReason.trim()) {
-      alert('⚠️ Mandatory Reopen Reason is required!');
-      return;
-    }
-
-    setReopenSubmitting(true);
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch('/api/financial/day-lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'REOPEN_DAY',
-          date: today,
-          user: 'Super Admin',
-          userRole: reopenUserRole,
-          reopenReason: reopenReason.trim(),
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setIsDayLocked(false);
-        setIsReopenModalOpen(false);
-        alert('🔓 Day Reopened Successfully! Action logged in Audit Log.');
-        fetchDayLock();
-      } else {
-        alert('Error: ' + json.error);
-      }
-    } catch (err: any) {
-      alert('Reopen action failed: ' + err.message);
+      await api('/api/cylinder/approval-queue', { body: { itemId: selected.id, action: decision.action, note: decision.note.trim() || null } });
+      showToast(decision.action === 'APPROVE' ? 'Approved.' : 'Rejected.');
+      setDecision(null);
+      await load();
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
     } finally {
-      setReopenSubmitting(false);
-    }
-  };
-
-  const handleOpenRejectModal = (itemId: string) => {
-    setRejectItemId(itemId);
-    setRejectReason('');
-    setIsRejectModalOpen(true);
-  };
-
-  const handleConfirmReject = async () => {
-    if (!rejectItemId) return;
-    if (!rejectReason.trim()) {
-      alert('⚠️ Mandatory Rejection Reason is required!');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/cylinder/approval-queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: rejectItemId, action: 'REJECT', actionBy: activeTab, notes: rejectReason }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        alert('❌ Item Rejected & Audit Logged!');
-        setIsRejectModalOpen(false);
-        fetchQueue();
-      }
-    } catch (err) {
-      alert('Action failed');
-    }
-  };
-
-  const handleApprove = async (item: any) => {
-    if (isDayLocked) {
-      alert('🔒 Date is LOCKED by Accountant! Approvals & ledger posting are frozen until Admin reopens the day.');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/cylinder/approval-queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId: item.id, action: 'APPROVE', actionBy: activeTab }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        alert('✅ APPROVED & VERIFIED!\n1. Atomic Ledger & Cash updates completed\n2. Customer Cylinder balance synced');
-        
-        if (item.requestType === 'DELIVERY_VERIFICATION') {
-          setSelectedInvoiceData({
-            id: `inv_${Date.now()}`,
-            invoiceNumber: `INV-${Date.now().toString().slice(-5)}`,
-            date: new Date().toISOString().split('T')[0],
-            dueDate: new Date().toISOString().split('T')[0],
-            customerName: item.payload?.customerName || 'Hotel Rajdhani',
-            customerAddress: 'Connaught Place, New Delhi',
-            customerGstin: '07AAAAA0000A1Z5',
-            items: [
-              {
-                productName: item.payload?.productName || '19 KG Commercial LPG Cylinder',
-                quantity: item.payload?.deliveredQty || 10,
-                unitPrice: item.payload?.paymentAmount ? item.payload.paymentAmount / (item.payload?.deliveredQty || 10) : 1850,
-                totalAmount: item.payload?.paymentAmount || 18500,
-              },
-            ],
-            grandTotal: item.payload?.paymentAmount || 18500,
-            paymentMode: item.payload?.paymentMode || 'CASH',
-          });
-          setIsPrintInvoiceOpen(true);
-        }
-        fetchQueue();
-      } else {
-        alert('Error: ' + json.error);
-      }
-    } catch (err) {
-      alert('Approval Action Failed');
-    }
-  };
-
-  const handleLatePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isDayLocked) {
-      alert('🔒 Date is LOCKED by Accountant! Payment entries are frozen until Admin reopens the day.');
-      return;
-    }
-    setLateSubmitting(true);
-    try {
-      const res = await fetch('/api/payments/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceId: `inv_late_${Date.now()}`,
-          paymentAmount: Number(lateAmount),
-          paymentMode: latePaymentMode,
-          transactionId: lateTransactionId,
-          customerName: lateCustomerName,
-          status: 'SUCCESS',
-        }),
-      });
-
-      const json = await res.json();
-      if (json.success) {
-        alert(`✅ Late Payment Verified & Posted!\n1. Ledger Credit created: ₹${lateAmount}\n2. Customer Balance recalculated\n3. WhatsApp Receipt dispatched!`);
-        setIsLatePaymentModalOpen(false);
-        fetchQueue();
-      } else {
-        alert('Error: ' + json.error);
-      }
-    } catch (err: any) {
-      alert('Late payment posting failed: ' + err.message);
-    } finally {
-      setLateSubmitting(false);
+      setBusy(false);
     }
   };
 
   return (
-    <div className="p-6 space-y-6 text-slate-800 dark:text-slate-100">
-      
-      {/* Top Header & Role Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <Clock className="w-7 h-7 text-amber-500" /> Central Accountant Verification & Financial Lock Queue
-          </h1>
-          <p className="text-sm text-slate-500">Verify side-by-side delivery execution, cash submissions, payment screenshots, and day closing locks</p>
+    <div className="space-y-4">
+      {toast}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-black text-slate-900">{title}</h2>
+        <div className="flex items-center gap-2">
+          {(['PENDING', 'APPROVED', 'REJECTED'] as const).map((s) => (
+            <button key={s} onClick={() => setStatus(s)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold', status === s ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
+              {s.charAt(0) + s.slice(1).toLowerCase()}
+            </button>
+          ))}
+          <Button tone="secondary" size="sm" onClick={() => void load()}>
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </Button>
         </div>
+      </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsLatePaymentModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs md:text-sm shadow transition"
-          >
-            <Plus className="w-4 h-4" /> + Late Payment Entry
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setTypeFilter('ALL')} className={cx('px-3 py-1 rounded-full text-[11px] font-bold border', typeFilter === 'ALL' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200')}>
+          All ({items.length})
+        </button>
+        {Object.entries(counts).map(([t, n]) => (
+          <button key={t} onClick={() => setTypeFilter(t)} className={cx('px-3 py-1 rounded-full text-[11px] font-bold border', typeFilter === t ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200')}>
+            {APPROVAL_TYPES[t as ApprovalType]?.label || t} ({n})
           </button>
-          
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs md:text-sm font-semibold border">
-            <button
-              onClick={() => setActiveTab('ACCOUNTANT')}
-              className={`px-4 py-2 rounded-lg transition ${activeTab === 'ACCOUNTANT' ? 'bg-white dark:bg-slate-700 shadow text-emerald-600 font-bold dark:text-white' : 'text-slate-500'}`}
-            >
-              Accountant Queue ({items.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('MANAGER')}
-              className={`px-4 py-2 rounded-lg transition ${activeTab === 'MANAGER' ? 'bg-white dark:bg-slate-700 shadow text-amber-600 font-bold dark:text-white' : 'text-slate-500'}`}
-            >
-              Manager Queue
-            </button>
-            <button
-              onClick={() => setActiveTab('ADMIN')}
-              className={`px-4 py-2 rounded-lg transition ${activeTab === 'ADMIN' ? 'bg-white dark:bg-slate-700 shadow text-purple-600 font-bold dark:text-white' : 'text-slate-500'}`}
-            >
-              Admin Queue
-            </button>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Day Lock & Financial Reconciliation Panel */}
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-extrabold text-sm md:text-base text-slate-900 dark:text-white">
-              Daily Financial & Stock Reconciliation Gatekeeper
-            </h3>
-            {isDayLocked ? (
-              <span className="px-3 py-1 bg-slate-900 text-amber-400 font-black text-xs rounded-full flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5" /> LOCKED
-              </span>
-            ) : (
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 text-xs font-bold rounded-full">
-                ACTIVE / UNLOCKED
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {!isDayLocked ? (
-              <button
-                onClick={handleLockDay}
-                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5"
-              >
-                <Lock className="w-4 h-4 text-amber-400" /> Complete Reconciliation & Lock Day
-              </button>
-            ) : (
-              <button
-                onClick={() => setIsReopenModalOpen(true)}
-                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5"
-              >
-                <Unlock className="w-4 h-4" /> Reopen Day (Super Admin Only)
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Reconciliation Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          {/* Cash Reconciliation */}
-          <div className={`p-3 rounded-xl border ${reconciliation.hasCashMismatch ? 'bg-rose-50 border-rose-300 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-            <div className="font-extrabold uppercase text-[10px] text-slate-400">Cash Reconciliation</div>
-            <div className="flex justify-between mt-1">
-              <span>Expected: <strong>₹{reconciliation.expectedCash.toLocaleString('en-IN')}</strong></span>
-              <span>Actual: <strong>₹{reconciliation.actualCash.toLocaleString('en-IN')}</strong></span>
-            </div>
-            <div className="font-extrabold mt-1 text-sm flex items-center justify-between border-t pt-1">
-              <span>Diff: ₹{reconciliation.cashDifference.toLocaleString('en-IN')}</span>
-              {reconciliation.hasCashMismatch ? (
-                <span className="text-rose-600 flex items-center gap-1 text-[11px]"><AlertTriangle className="w-3.5 h-3.5" /> Cash Mismatch</span>
-              ) : (
-                <span className="text-emerald-600 text-[11px]">✓ Matched</span>
-              )}
-            </div>
-          </div>
-
-          {/* Stock Reconciliation */}
-          <div className={`p-3 rounded-xl border ${reconciliation.hasStockMismatch ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-            <div className="font-extrabold uppercase text-[10px] text-slate-400">Cylinder Stock Reconciliation</div>
-            <div className="flex justify-between mt-1">
-              <span>Expected: <strong>{reconciliation.expectedStock} Pcs</strong></span>
-              <span>Actual: <strong>{reconciliation.actualStock} Pcs</strong></span>
-            </div>
-            <div className="font-extrabold mt-1 text-sm flex items-center justify-between border-t pt-1">
-              <span>Diff: {reconciliation.stockDifference} Pcs</span>
-              {reconciliation.hasStockMismatch ? (
-                <span className="text-amber-600 flex items-center gap-1 text-[11px]"><AlertTriangle className="w-3.5 h-3.5" /> Stock Mismatch</span>
-              ) : (
-                <span className="text-emerald-600 text-[11px]">✓ Matched</span>
-              )}
-            </div>
-          </div>
-
-          {/* Verification Progress */}
-          <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border space-y-1">
-            <div className="font-extrabold uppercase text-[10px] text-slate-400">Verification Progress</div>
-            <div className="text-sm font-black text-indigo-600 mt-1">{items.length} Verification Items Pending</div>
-            <div className="text-[10px] text-slate-400">Locking the day freezes all ledger entries and payment updates.</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Verification Queue Cards */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="p-8 text-center text-slate-400">Loading Approval Queue...</div>
-        ) : items.length === 0 ? (
-          <div className="p-8 text-center bg-white dark:bg-slate-800 rounded-xl border text-slate-400 font-semibold">
-            🎉 All verification requests have been cleared! No pending queue items.
-          </div>
-        ) : (
-          items.map(item => {
-            const isCashSubmission = item.requestType === 'CASH_SUBMISSION';
-            const hasVariance = item.payload?.hasVariance || false;
-            const varianceNotes = item.payload?.varianceNotes || '';
-
+      <div className="grid lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-2 space-y-2">
+          {loading && <Empty>Loading…</Empty>}
+          {!loading && visible.length === 0 && <Empty>Nothing here. 🎉</Empty>}
+          {visible.map((item) => {
+            const overdue = item.status === 'PENDING' && item.dueAt && new Date(item.dueAt) < new Date();
             return (
-              <div key={item.id} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-                
-                {/* Item Top Badge Header */}
-                <div className="flex items-center justify-between border-b pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 text-xs font-black rounded-full uppercase ${isCashSubmission ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}`}>
-                      {item.requestType}
-                    </span>
-                    <span className="font-mono text-xs font-bold text-slate-500">{item.referenceId}</span>
-                    {hasVariance && (
-                      <span className="px-2.5 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 text-[11px] font-extrabold rounded flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> VARIANCE DETECTED
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-slate-400">{item.createdAt}</span>
+              <button
+                key={item.id}
+                onClick={() => setSelectedId(item.id)}
+                className={cx('w-full text-left p-3 rounded-xl border transition', selected?.id === item.id ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300')}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Badge tone="blue">{APPROVAL_TYPES[item.type]?.label || item.type}</Badge>
+                  {overdue ? <Badge tone="red">Overdue</Badge> : <span className="text-[10px] text-slate-400">{dateTime(item.createdAt)}</span>}
                 </div>
-
-                {/* Render CASH_SUBMISSION Queue View */}
-                {isCashSubmission ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-sky-50/50 dark:bg-sky-950/20 p-4 rounded-xl border border-sky-200 dark:border-sky-900">
-                    <div>
-                      <div className="text-[10px] font-black uppercase text-sky-800 dark:text-sky-300">Delivery Boy Driver Wallet</div>
-                      <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-1">{item.payload?.deliveryBoyName}</div>
-                      <div className="text-xs text-slate-500 mt-1 space-y-0.5">
-                        <div>Opening Cash: <strong>₹{item.payload?.openingCash}</strong></div>
-                        <div>Cash Collected: <strong className="text-emerald-600">₹{item.payload?.collections}</strong></div>
-                        <div>Previous Submitted: <strong>₹{item.payload?.previousSubmitted}</strong></div>
-                        <div>Current Wallet: <strong className="text-amber-600">₹{item.payload?.currentWalletBalance}</strong></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] font-black uppercase text-sky-800 dark:text-sky-300">Deposit Submission Details</div>
-                      <div className="text-xl font-black text-emerald-600 mt-1">₹{item.payload?.submissionAmount?.toLocaleString('en-IN')}</div>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-bold">
-                        Receiver: {item.payload?.receiver || 'Accountant Office'}
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">Date: {item.payload?.date}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] font-black uppercase text-sky-800 dark:text-sky-300 mb-1">Deposit Receipt Proof</div>
-                      <img
-                        src={item.payload?.proofPhotoUrl || 'https://placehold.co/400x200?text=Deposit+Receipt'}
-                        alt="Deposit Receipt"
-                        className="w-full h-24 object-cover rounded-lg border shadow-sm"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  /* Side-by-Side Comparison Container for Delivery Verification */
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    
-                    {/* LEFT SIDE: System Order Specs */}
-                    <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border space-y-2">
-                      <div className="text-[10px] font-black uppercase text-indigo-600 border-b pb-1">
-                        📋 System Order Specifications
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Customer Name</span>
-                          <span className="font-extrabold text-slate-900 dark:text-white">{item.payload?.customerName || 'Hotel Rajdhani'}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Order Number</span>
-                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{item.payload?.orderNumber || 'CYL-ORD-00001'}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Cylinder Product</span>
-                          <span className="font-bold text-slate-800 dark:text-slate-200">{item.payload?.productName || '19 KG Commercial LPG Cylinder'}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Ordered Full Quantity</span>
-                          <span className="font-black text-indigo-600 text-sm">{item.payload?.orderedQty || 10} Pcs</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* RIGHT SIDE: Delivery Boy Real Execution */}
-                    <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-xl border border-emerald-200 dark:border-emerald-900 space-y-2">
-                      <div className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 border-b pb-1 flex justify-between">
-                        <span>🚚 Delivery Partner Real Execution</span>
-                        <span className="font-normal text-slate-500">By: {item.requestedBy}</span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Delivered Full</span>
-                          <span className="font-black text-emerald-600 text-sm">{item.payload?.deliveredQty || 10} Pcs</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Empty Received</span>
-                          <span className="font-black text-amber-600 text-sm">{item.payload?.emptyReceivedQty || 10} Pcs</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Payment Mode</span>
-                          <span className="font-black text-purple-600 text-sm uppercase">{item.payload?.paymentMode || 'CASH'}</span>
-                        </div>
-                      </div>
-
-                      {/* Mode Specific Verification Proof Details */}
-                      <div className="pt-2 border-t space-y-1.5 text-xs">
-                        {item.payload?.paymentMode === 'ONLINE' && (
-                          <div className="bg-sky-100 dark:bg-sky-950/60 p-2 rounded-lg font-mono text-[11px] text-sky-900 dark:text-sky-200 flex items-center justify-between">
-                            <span>UPI Ref: {item.payload?.transactionId || 'UPI-2026-98124012'}</span>
-                            <span className="font-bold text-emerald-600">✓ Screenshot Verified</span>
-                          </div>
-                        )}
-
-                        {item.payload?.paymentMode === 'CHEQUE' && (
-                          <div className="bg-amber-100 dark:bg-amber-950/60 p-2 rounded-lg text-[11px] text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                            <span>Cheque #: {item.payload?.chequeNumber} ({item.payload?.chequeBank})</span>
-                            <span className="font-bold">Date: {item.payload?.chequeDate}</span>
-                          </div>
-                        )}
-
-                        {item.payload?.paymentMode === 'CREDIT' && (
-                          <div className="bg-purple-100 dark:bg-purple-950/60 p-2 rounded-lg text-[11px] text-purple-900 dark:text-purple-200 font-bold">
-                            💳 Credit Delivery: ₹0 collected now. ₹{item.payload?.paymentAmount || 18500} will be posted to Customer Ledger Outstanding.
-                          </div>
-                        )}
-
-                        {hasVariance && (
-                          <div className="bg-rose-100 dark:bg-rose-950 p-2 rounded-lg text-rose-800 dark:text-rose-200 text-[11px] font-bold">
-                            ⚠️ Variance Note: {varianceNotes}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Proof Photos Bar for Deliveries */}
-                {!isCashSubmission && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">Delivery Proof Photo (Mandatory)</div>
-                      <img
-                        src={item.payload?.deliveryProofPhotoUrl || 'https://placehold.co/400x200?text=Delivery+Proof'}
-                        alt="Delivery Proof"
-                        className="w-full h-28 object-cover rounded-xl border shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">
-                        {item.payload?.paymentMode === 'ONLINE' ? 'Payment Screenshot' : item.payload?.paymentMode === 'CHEQUE' ? 'Cheque Copy Photo' : 'Delivery Receipt'}
-                      </div>
-                      <img
-                        src={item.payload?.paymentProofPhotoUrl || item.payload?.chequePhotoUrl || item.payload?.deliveryProofPhotoUrl || 'https://placehold.co/400x200?text=Payment+Proof'}
-                        alt="Payment Proof"
-                        className="w-full h-28 object-cover rounded-xl border shadow-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex justify-end gap-3 pt-3 border-t">
-                  <button
-                    onClick={() => handleOpenRejectModal(item.id)}
-                    className="flex items-center gap-1.5 px-4 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-extrabold transition"
-                  >
-                    <XCircle className="w-4 h-4" /> Reject / Send Back
-                  </button>
-                  <button
-                    onClick={() => handleApprove(item)}
-                    disabled={isDayLocked}
-                    className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-lg transition disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-4 h-4" /> {isCashSubmission ? 'Approve Cash Submission' : 'Approve & Generate Verified Invoice'}
-                  </button>
-                </div>
-              </div>
+                <div className="mt-1 text-xs font-black text-slate-900">{item.title}</div>
+                {item.summary && <div className="text-[11px] text-slate-600 line-clamp-2">{item.summary}</div>}
+                <div className="text-[10px] text-slate-400 mt-1">by {item.requestedByName}</div>
+              </button>
             );
-          })
-        )}
+          })}
+        </div>
+
+        <div className="lg:col-span-3">
+          {selected ? (
+            <Card
+              title={selected.title}
+              actions={
+                selected.status === 'PENDING' ? (
+                  <>
+                    <Button tone="danger" size="sm" onClick={() => setDecision({ action: 'REJECT', note: '' })}>
+                      <XCircle className="h-3.5 w-3.5" /> {selected.type === 'DELIVERY_VERIFICATION' ? 'Send back' : 'Reject'}
+                    </Button>
+                    <Button size="sm" onClick={() => setDecision({ action: 'APPROVE', note: '' })}>
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {selected.type === 'CREDIT_APPROVAL' ? 'Approve with override' : 'Approve'}
+                    </Button>
+                  </>
+                ) : (
+                  <StatusBadge status={selected.status} />
+                )
+              }
+            >
+              <Detail item={selected} />
+              <div className="mt-4 border-t border-slate-100 pt-3 space-y-1">
+                <div className="text-[10px] font-black uppercase text-slate-400">History</div>
+                {selected.logs.map((log) => (
+                  <div key={log.id} className="text-[11px] text-slate-600 flex gap-2">
+                    <Clock className="h-3 w-3 mt-0.5 text-slate-400" />
+                    <span>
+                      <strong>{log.action}</strong> by {log.actorName} · {dateTime(log.createdAt)}
+                      {log.note && <> — {log.note}</>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : (
+            !loading && <Card><Empty>Select an item to review.</Empty></Card>
+          )}
+        </div>
       </div>
 
-      {/* REOPEN DAY MODAL (Super Admin Only) */}
-      {isReopenModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-700">
-            <div className="border-b pb-2">
-              <h3 className="text-base font-black text-amber-600 flex items-center gap-2">
-                <Unlock className="w-5 h-5" /> Reopen Locked Day (Super Admin)
-              </h3>
-              <p className="text-xs text-slate-500">Security Check: Only Super Admin can reopen a locked day</p>
-            </div>
+      <Modal
+        open={!!decision}
+        title={decision?.action === 'APPROVE' ? 'Approve' : selected?.type === 'DELIVERY_VERIFICATION' ? 'Send back for correction' : 'Reject'}
+        onClose={() => setDecision(null)}
+        footer={
+          <>
+            <Button tone="secondary" onClick={() => setDecision(null)}>Cancel</Button>
+            <Button tone={decision?.action === 'APPROVE' ? 'primary' : 'danger'} busy={busy} onClick={decide}>
+              Confirm
+            </Button>
+          </>
+        }
+      >
+        {selected?.type === 'CREDIT_APPROVAL' && decision?.action === 'APPROVE' && (
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold flex gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> This customer is over the credit limit. Approving records a credit override in your name.
+          </div>
+        )}
+        <Field label={decision?.action === 'REJECT' ? 'Reason (required)' : 'Note (optional)'}>
+          <textarea value={decision?.note || ''} onChange={(e) => decision && setDecision({ ...decision, note: e.target.value })} rows={3} className={inputClass} />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
 
-            <form onSubmit={handleReopenDaySubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">User Authorization Role</label>
-                <select
-                  value={reopenUserRole}
-                  onChange={e => setReopenUserRole(e.target.value as any)}
-                  className="w-full px-3 py-2 border rounded-lg font-bold"
-                >
-                  <option value="SUPER_ADMIN">Super Admin (Authorized)</option>
-                  <option value="ACCOUNTANT">Accountant (Unauthorized)</option>
-                </select>
-              </div>
+const Photo = ({ url, label }: { url?: string | null; label: string }) =>
+  url ? (
+    <a href={url} target="_blank" rel="noreferrer" className="block">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={label} className="h-28 w-full object-cover rounded-lg border border-slate-200" />
+      <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
+        {label} <ExternalLink className="h-3 w-3" />
+      </span>
+    </a>
+  ) : null;
 
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Mandatory Reopen Reason *</label>
-                <textarea
-                  value={reopenReason}
-                  onChange={e => setReopenReason(e.target.value)}
-                  placeholder="e.g. Audit correction required after bank deposit statement verification..."
-                  className="w-full px-3 py-2 border rounded-xl"
-                  rows={3}
-                  required
-                />
-              </div>
+const Line = ({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) => (
+  <div className="flex justify-between gap-3 text-xs py-1 border-b border-slate-50">
+    <span className="text-slate-500">{label}</span>
+    <span className={cx('font-bold text-right', tone || 'text-slate-900')}>{value}</span>
+  </div>
+);
 
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <button type="button" onClick={() => setIsReopenModalOpen(false)} className="px-3 py-2 border rounded-lg">
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={reopenSubmitting}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow"
-                >
-                  {reopenSubmitting ? 'Unlocking...' : 'Confirm & Reopen Day'}
-                </button>
-              </div>
-            </form>
+function Detail({ item }: { item: ApprovalItem }) {
+  const ref = item.reference;
+  if (item.type === 'DELIVERY_VERIFICATION' && ref) {
+    const orderItems: { productId: string; orderedQty: number }[] = ref.order?.items || [];
+    return (
+      <div className="space-y-3">
+        {ref.hasVariance && (
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs font-semibold flex gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> {ref.varianceNotes}
+          </div>
+        )}
+        <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+          <thead className="bg-slate-50 text-slate-500">
+            <tr>
+              <th className="p-2 text-left">Product</th>
+              <th className="p-2 text-right">Ordered</th>
+              <th className="p-2 text-right">Delivered</th>
+              <th className="p-2 text-right">Empty recd.</th>
+              <th className="p-2 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {((ref.items || []) as DeliveryLine[]).map((i) => {
+              const ordered = orderItems.find((o) => o.productId === i.productId)?.orderedQty ?? i.orderedQty;
+              return (
+                <tr key={i.id} className="border-t border-slate-100">
+                  <td className="p-2 font-bold">{i.productName}</td>
+                  <td className="p-2 text-right">{ordered}</td>
+                  <td className={cx('p-2 text-right font-bold', i.deliveredQty !== ordered && 'text-amber-700')}>{i.deliveredQty}</td>
+                  <td className={cx('p-2 text-right', i.emptyReceivedQty !== i.deliveredQty && 'text-amber-700')}>{i.emptyReceivedQty}</td>
+                  <td className="p-2 text-right font-mono">{inr(i.totalAmount)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="grid sm:grid-cols-2 gap-x-6">
+          <div>
+            <Line label="Bill amount" value={inr(ref.invoiceAmount)} />
+            <Line label="Payment mode" value={ref.paymentMode} />
+            <Line label="Collected" value={inr(ref.paymentAmount)} tone={ref.paymentAmount < ref.invoiceAmount && ref.paymentMode !== 'CREDIT' ? 'text-amber-700' : undefined} />
+            {ref.transactionId && <Line label="Transaction ID" value={ref.transactionId} />}
+            {ref.chequeNumber && <Line label="Cheque" value={`${ref.chequeNumber} · ${ref.chequeBank} · ${ref.chequeDate}`} />}
+          </div>
+          <div>
+            <Line label="Delivery boy" value={ref.deliveryBoyName} />
+            <Line label="Delivery date" value={ref.deliveryDate} />
+            <Line label="Revision" value={ref.revision} />
+            {ref.latitude != null && (
+              <Line
+                label="Location"
+                value={
+                  <a className="text-sky-700 flex items-center gap-1" target="_blank" rel="noreferrer" href={`https://maps.google.com/?q=${ref.latitude},${ref.longitude}`}>
+                    <MapPin className="h-3 w-3" /> Map
+                  </a>
+                }
+              />
+            )}
+            {ref.remarks && <Line label="Remarks" value={ref.remarks} />}
           </div>
         </div>
-      )}
-
-      {/* MANDATORY REJECTION REASON MODAL */}
-      {isRejectModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-700">
-            <div className="border-b pb-2">
-              <h3 className="text-base font-black text-rose-600 flex items-center gap-2">
-                <XCircle className="w-5 h-5" /> Reject Item Verification
-              </h3>
-              <p className="text-xs text-slate-500">Provide mandatory rejection reason for audit log</p>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Mandatory Rejection Reason *</label>
-                <textarea
-                  value={rejectReason}
-                  onChange={e => setRejectReason(e.target.value)}
-                  placeholder="e.g. Payment screenshot is unreadable / Cash deposit mismatch..."
-                  className="w-full px-3 py-2 border rounded-xl"
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <button type="button" onClick={() => setIsRejectModalOpen(false)} className="px-3 py-2 border rounded-lg">
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmReject}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow"
-                >
-                  Confirm Rejection
-                </button>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Photo url={ref.deliveryProofUrl} label="Delivery proof" />
+          <Photo url={ref.paymentProofUrl} label="Payment screenshot" />
+          <Photo url={ref.chequePhotoUrl} label="Cheque photo" />
         </div>
-      )}
-
-      {/* LATE PAYMENT ENTRY MODAL */}
-      {isLatePaymentModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 border border-slate-200 dark:border-slate-700">
-            <div className="border-b pb-2">
-              <h3 className="text-base font-black text-emerald-600 flex items-center gap-2">
-                <Plus className="w-5 h-5" /> Record Verified Late Customer Payment
-              </h3>
-              <p className="text-xs text-slate-500">Posts credit to ledger, recalculates balance & sends WhatsApp receipt</p>
-            </div>
-
-            <form onSubmit={handleLatePaymentSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Customer Account</label>
-                <input
-                  type="text"
-                  value={lateCustomerName}
-                  onChange={e => setLateCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Payment Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={lateAmount}
-                    onChange={e => setLateAmount(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg font-extrabold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold uppercase text-slate-500 mb-1">Payment Mode</label>
-                  <select
-                    value={latePaymentMode}
-                    onChange={e => setLatePaymentMode(e.target.value as any)}
-                    className="w-full px-3 py-2 border rounded-lg font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700 cursor-pointer"
-                  >
-                    <option value="ONLINE">Online UPI</option>
-                    <option value="CASH">Cash</option>
-                    <option value="CHEQUE">Cheque</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold uppercase text-slate-500 mb-1">Transaction Ref / Cheque #</label>
-                <input
-                  type="text"
-                  value={lateTransactionId}
-                  onChange={e => setLateTransactionId(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg font-mono font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <button type="button" onClick={() => setIsLatePaymentModalOpen(false)} className="px-3 py-2 border rounded-lg">
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={lateSubmitting}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow"
-                >
-                  {lateSubmitting ? 'Posting...' : 'Post Credit & Dispatches Receipt'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* EXISTING PRINT INVOICE MODAL REUSE */}
-      {isPrintInvoiceOpen && selectedInvoiceData && (
-        <PrintInvoiceModal
-          onClose={() => setIsPrintInvoiceOpen(false)}
-          invoice={selectedInvoiceData}
-        />
+      </div>
+    );
+  }
+  if ((item.type === 'ORDER_APPROVAL' || item.type === 'CREDIT_APPROVAL') && ref) {
+    const outstanding = ref.customer?.balance ?? 0;
+    const limit = ref.customer?.creditLimit ?? 0;
+    return (
+      <div className="space-y-2">
+        {((ref.items || []) as OrderLine[]).map((i) => (
+          <Line key={i.id} label={`${i.productName} × ${i.orderedQty}`} value={inr(i.totalAmount)} />
+        ))}
+        <Line label="Order total" value={inr(ref.totalAmount)} />
+        <Line label="Customer outstanding" value={inr(outstanding)} tone={limit && outstanding + ref.totalAmount > limit ? 'text-rose-600' : undefined} />
+        <Line label="Credit limit" value={limit ? inr(limit) : 'No limit'} />
+        <Line label="Delivery date" value={`${ref.requestedDeliveryDate}${ref.priority === 'URGENT' ? ' · URGENT' : ''}`} />
+        <Line label="Source" value={ref.source} />
+        <Line label="Address" value={ref.deliveryAddress || '—'} />
+      </div>
+    );
+  }
+  if (item.type === 'PAYMENT_VERIFICATION' && ref) {
+    return (
+      <div className="space-y-2">
+        <Line label="Customer" value={ref.customerName} />
+        <Line label="Amount" value={inr(ref.amount)} />
+        <Line label="Mode" value={ref.mode} />
+        <Line label="Payment date" value={ref.paymentDate} />
+        {ref.transactionId && <Line label="Transaction ID" value={ref.transactionId} />}
+        {ref.chequeNumber && <Line label="Cheque" value={`${ref.chequeNumber} · ${ref.chequeBank} · ${ref.chequeDate}`} />}
+        <Line label="Entered by" value={ref.enteredBy} />
+        {ref.notes && <Line label="Notes" value={ref.notes} />}
+        <div className="grid grid-cols-3"><Photo url={ref.proofUrl} label="Proof" /></div>
+      </div>
+    );
+  }
+  if (item.type === 'CASH_SUBMISSION' && ref) {
+    return (
+      <div className="space-y-2">
+        <Line label="Delivery boy" value={ref.deliveryBoyName} />
+        <Line label="Handed to" value={ref.receiverName} />
+        <Line label="Amount" value={inr(ref.amount)} />
+        <Line label="Date" value={ref.date} />
+        <div className="grid grid-cols-3"><Photo url={ref.proofUrl} label="Proof" /></div>
+      </div>
+    );
+  }
+  if (item.type === 'STOCK_TRANSFER' && ref) {
+    return (
+      <div className="space-y-2">
+        <Line label="From" value={ref.fromName} />
+        <Line label="To" value={ref.toName} />
+        {((ref.items || []) as TransferLine[]).map((i) => (
+          <Line key={i.id} label={i.productName} value={`${i.fullQty} full / ${i.emptyQty} empty`} />
+        ))}
+        {ref.notes && <Line label="Notes" value={ref.notes} />}
+      </div>
+    );
+  }
+  if (item.type === 'DEVICE_APPROVAL' && ref) {
+    return (
+      <div className="space-y-2">
+        <Line label="User" value={`${ref.user?.name} (${ref.user?.mobile || '—'})`} />
+        <Line label="Device" value={ref.label} />
+        <Line label="Device ID" value={<span className="font-mono text-[10px]">{ref.deviceId}</span>} />
+        <p className="text-[11px] text-slate-500">Approve only if this is the delivery boy&apos;s own company phone.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {item.summary && <p className="text-xs text-slate-700">{item.summary}</p>}
+      {item.payload && (
+        <pre className="text-[11px] bg-slate-50 border border-slate-100 rounded-lg p-3 overflow-x-auto">{JSON.stringify(item.payload, null, 2)}</pre>
       )}
     </div>
   );

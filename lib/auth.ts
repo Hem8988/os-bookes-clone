@@ -1,94 +1,68 @@
-import { crypto } from 'next/dist/compiled/@edge-runtime/primitives';
-import { prisma } from './db';
-import cryptoNode from 'crypto';
+'use client';
 
-export interface AuthSession {
+import { useEffect, useState } from 'react';
+import type { Permission, Role } from './permissions';
+
+// Client-side view of the logged-in user. Authorisation is always enforced
+// by the API; this only drives what the screens show.
+
+export interface SessionUser {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'ACCOUNTANT' | 'DELIVERY_BOY' | 'CUSTOMER';
-  customerId?: string | null;
-  deliveryBoyId?: string | null;
-  tenantId?: string;
+  role: Role;
+  customerId: string | null;
 }
 
-export function hashPassword(password: string): string {
-  return cryptoNode.createHash('sha256').update(password + 'deskshark_salt_2026').digest('hex');
+export interface SessionInfo {
+  user: SessionUser;
+  permissions: Permission[];
+  company: { name: string; phone: string; supportPhone: string; gstin: string; address: string; upiId: string; email: string };
 }
 
-export function verifyPassword(password: string, hashed: string): boolean {
-  return hashPassword(password) === hashed;
-}
+// One request per page load, shared by every component that asks.
+let pending: Promise<SessionInfo | null> | null = null;
 
-export function encodeSession(session: AuthSession): string {
-  return Buffer.from(JSON.stringify(session)).toString('base64');
-}
-
-export function decodeSession(token: string): AuthSession | null {
-  try {
-    const json = Buffer.from(token, 'base64').toString('utf8');
-    return JSON.parse(json);
-  } catch (e) {
-    return null;
+function loadSession(): Promise<SessionInfo | null> {
+  if (!pending) {
+    pending = fetch('/api/auth/me', { cache: 'no-store' }).then(async (res) => {
+      if (res.status === 401) {
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+        return null;
+      }
+      const json = await res.json();
+      return json.authenticated ? { user: json.user, permissions: json.permissions, company: json.company } : null;
+    });
+    pending.catch(() => {
+      pending = null;
+    });
   }
+  return pending;
 }
 
-export async function seedUsersIfMissing() {
-  try {
-    const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
-    if (adminCount === 0) {
-      const hashedAdmin = hashPassword('admin123');
-      const hashedAcc = hashPassword('acc123');
-      const hashedDriver = hashPassword('driver123');
-      const hashedCust = hashPassword('cust123');
+export function useSession() {
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
 
-      await Promise.all([
-        prisma.user.create({
-          data: {
-            name: 'Dhananjay (System Admin)',
-            email: 'admin@deskshark.com',
-            mobile: '9876543210',
-            password: hashedAdmin,
-            role: 'ADMIN',
-            status: 'ACTIVE',
-          },
-        }),
-        prisma.user.create({
-          data: {
-            name: 'Ravi (Chief Accountant)',
-            email: 'accountant@deskshark.com',
-            mobile: '9876543211',
-            password: hashedAcc,
-            role: 'ACCOUNTANT',
-            status: 'ACTIVE',
-          },
-        }),
-        prisma.user.create({
-          data: {
-            name: 'Amit (Fleet Driver)',
-            email: 'driver@deskshark.com',
-            mobile: '9876543212',
-            password: hashedDriver,
-            role: 'DELIVERY_BOY',
-            deliveryBoyId: 'del_boy_ramesh',
-            status: 'ACTIVE',
-          },
-        }),
-        prisma.user.create({
-          data: {
-            name: 'Hotel Rajdhani (Customer)',
-            email: 'customer@deskshark.com',
-            mobile: '9876543213',
-            password: hashedCust,
-            role: 'CUSTOMER',
-            customerId: 'cust_demo_1',
-            status: 'ACTIVE',
-          },
-        }),
-      ]);
-      console.log('[Auth Seed] 4 Role Users seeded in database cleanly.');
-    }
-  } catch (err) {
-    console.error('Error seeding auth users:', err);
+  useEffect(() => {
+    let cancelled = false;
+    loadSession()
+      .then((s) => !cancelled && setSession(s))
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const can = (permission: Permission) => !!session?.permissions.includes(permission);
+  return { session, loading, can };
+}
+
+export async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } finally {
+    window.location.href = '/login';
   }
 }

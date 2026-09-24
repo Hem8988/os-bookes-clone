@@ -1,212 +1,111 @@
-import { PrismaClient } from '../lib/generated/prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import {
-  INITIAL_CUSTOMERS,
-  INITIAL_PRODUCTS,
-  INITIAL_INVOICES,
-  INITIAL_UNITS,
-  INITIAL_CATEGORIES,
-  INITIAL_BRANDS,
-  INITIAL_TAXES,
-  INITIAL_BANKS,
-  INITIAL_STAFF,
-  INITIAL_ACCOUNTS,
-  INITIAL_COMPANIES,
-  INITIAL_EXPENSES,
-  INITIAL_INCOMES,
-  INITIAL_PAYMENTS,
-  INITIAL_BOM,
-  INITIAL_PURCHASE_ORDERS,
-  INITIAL_PURCHASES,
-  INITIAL_PURCHASE_RETURNS,
-  INITIAL_SALE_ORDERS,
-  INITIAL_SALES_RETURNS,
-  INITIAL_CHALLANS,
-  INITIAL_QUOTATIONS,
-  INITIAL_ADJUSTMENTS,
-  INITIAL_BRANCH_TRANSFERS,
-  INITIAL_CUSTOMER_LEDGER,
-  INITIAL_COMPANY_LEDGER,
-  INITIAL_BANK_BOOK,
-  INITIAL_EMPLOYEE_LEDGER,
-  INITIAL_EXPENSES_LEDGER,
-  INITIAL_INCOMES_LEDGER,
-  INITIAL_PAYMENT_LEDGER,
-  INITIAL_ATTENDANCE,
-  INITIAL_AUDIT_LOG,
-} from '../lib/mockData';
+import 'dotenv/config';
+import { randomBytes } from 'crypto';
+import { prisma, transaction } from '../lib/db';
+import { systemActor } from '../lib/server/audit';
+import { createCustomer } from '../lib/server/customers';
+import { adjustLocationStock, getDefaultWarehouse } from '../lib/server/inventory';
+import { hashPassword } from '../lib/server/password';
+import { saveSetting } from '../lib/server/settings';
+import { DEFAULT_SETTINGS } from '../lib/settings';
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!
-});
-const prisma = new PrismaClient({ adapter });
+// Seeds a working LPG distribution setup: one user per role, a godown with
+// opening stock, 19 KG / 47.5 KG cylinders, routes and three sample customers.
+// Safe to re-run: it does nothing once users exist.
 
-const DEFAULT_BOOK_TYPES = [
-  'BANK BOOK',
-  'CASH BOOK',
-  'NON-PAYMENT BOOK',
-  'LOAN ACCOUNT',
-  'OD / CC ACCOUNT',
-  'PETTY CASH BOOK',
-];
+const TENANT = process.env.DEFAULT_TENANT_ID || 'default';
+
+const password = (envKey: string) => process.env[envKey] || `${randomBytes(6).toString('base64url')}9a`;
 
 async function main() {
-  await prisma.unit.createMany({ data: INITIAL_UNITS, skipDuplicates: true });
-  await prisma.category.createMany({ data: INITIAL_CATEGORIES, skipDuplicates: true });
-  await prisma.brand.createMany({ data: INITIAL_BRANDS, skipDuplicates: true });
-  await prisma.tax.createMany({ data: INITIAL_TAXES, skipDuplicates: true });
-  await prisma.bank.createMany({ data: INITIAL_BANKS, skipDuplicates: true });
-  await prisma.bookType.createMany({
-    data: DEFAULT_BOOK_TYPES.map((name) => ({ name })),
-    skipDuplicates: true,
-  });
-  await prisma.employee.createMany({ data: INITIAL_STAFF, skipDuplicates: true });
-  await prisma.account.createMany({ data: INITIAL_ACCOUNTS, skipDuplicates: true });
-  await prisma.company.createMany({ data: INITIAL_COMPANIES, skipDuplicates: true });
-  await prisma.expense.createMany({ data: INITIAL_EXPENSES, skipDuplicates: true });
-  await prisma.income.createMany({ data: INITIAL_INCOMES, skipDuplicates: true });
-  await prisma.paymentModeMaster.createMany({
-    data: INITIAL_PAYMENTS.map((p) => ({
-      id: p.id,
-      modeName: p.modeName,
-      linkedAccount: p.linkedAccount,
-      transactionFeePercent: p.transactionFeePercent,
-      active: p.active,
-    })),
-    skipDuplicates: true,
-  });
-
-  for (const bom of INITIAL_BOM) {
-    await prisma.bom.upsert({
-      where: { id: bom.id },
-      create: {
-        id: bom.id,
-        finishedGoodId: bom.finishedGoodId,
-        finishedGoodName: bom.finishedGoodName,
-        bomCode: bom.bomCode,
-        laborCost: bom.laborCost,
-        totalCost: bom.totalCost,
-        active: bom.active ?? true,
-        components: {
-          create: bom.components.map((c) => ({
-            productId: c.productId,
-            productName: c.productName,
-            productCode: c.productCode,
-            quantity: c.quantity,
-            unit: c.unit,
-            unitCost: c.unitCost,
-            mrp: c.mrp,
-            salePrice: c.salePrice,
-            wholesalePrice: c.wholesalePrice,
-            image: c.image,
-            customValues: c.customValues,
-          })),
-        },
-      },
-      update: {},
-    });
+  if ((await prisma.user.count()) > 0) {
+    console.log('Database already has users — seed skipped.');
+    return;
   }
+  const actor = systemActor(TENANT, 'Seed');
 
-  await prisma.purchaseOrder.createMany({ data: INITIAL_PURCHASE_ORDERS, skipDuplicates: true });
-  await prisma.purchaseInvoice.createMany({ data: INITIAL_PURCHASES, skipDuplicates: true });
-  await prisma.returnDocument.createMany({
-    data: INITIAL_PURCHASE_RETURNS.map((r) => ({ ...r, kind: 'Purchase' })),
-    skipDuplicates: true,
-  });
-  await prisma.saleOrder.createMany({ data: INITIAL_SALE_ORDERS, skipDuplicates: true });
-  await prisma.returnDocument.createMany({
-    data: INITIAL_SALES_RETURNS.map((r) => ({ ...r, kind: 'Sales' })),
-    skipDuplicates: true,
-  });
-  await prisma.deliveryChallan.createMany({ data: INITIAL_CHALLANS, skipDuplicates: true });
-  await prisma.quotation.createMany({ data: INITIAL_QUOTATIONS, skipDuplicates: true });
-  await prisma.stockAdjustment.createMany({ data: INITIAL_ADJUSTMENTS, skipDuplicates: true });
-  await prisma.branchStockTransfer.createMany({ data: INITIAL_BRANCH_TRANSFERS, skipDuplicates: true });
+  await saveSetting(TENANT, 'company', { ...DEFAULT_SETTINGS.company, name: process.env.SEED_COMPANY_NAME || DEFAULT_SETTINGS.company.name }, 'Seed');
 
-  const ledgerBuckets: [string, typeof INITIAL_CUSTOMER_LEDGER][] = [
-    ['customer', INITIAL_CUSTOMER_LEDGER],
-    ['company', INITIAL_COMPANY_LEDGER],
-    ['bank', INITIAL_BANK_BOOK],
-    ['employee', INITIAL_EMPLOYEE_LEDGER],
-    ['expenses', INITIAL_EXPENSES_LEDGER],
-    ['incomes', INITIAL_INCOMES_LEDGER],
-    ['payment', INITIAL_PAYMENT_LEDGER],
+  const credentials = [
+    { name: 'Super Admin', email: 'admin@deskshark.local', mobile: '9000000001', role: 'SUPER_ADMIN', password: password('SEED_ADMIN_PASSWORD') },
+    { name: 'Operations Manager', email: 'manager@deskshark.local', mobile: '9000000002', role: 'MANAGER', password: password('SEED_MANAGER_PASSWORD') },
+    { name: 'Accountant', email: 'accountant@deskshark.local', mobile: '9000000003', role: 'ACCOUNTANT', password: password('SEED_ACCOUNTANT_PASSWORD') },
+    { name: 'Ramesh Kumar', email: 'ramesh@deskshark.local', mobile: '9000000004', role: 'DELIVERY_BOY', password: password('SEED_DRIVER_PASSWORD') },
+    { name: 'Suresh Verma', email: 'suresh@deskshark.local', mobile: '9000000005', role: 'DELIVERY_BOY', password: password('SEED_DRIVER_PASSWORD') },
   ];
-  for (const [ledgerType, entries] of ledgerBuckets) {
-    await prisma.ledgerEntry.createMany({
-      data: entries.map((e) => ({ ...e, ledgerType })),
-      skipDuplicates: true,
-    });
+  const users: Record<string, string> = {};
+  for (const c of credentials) {
+    const user = await prisma.user.create({ data: { tenantId: TENANT, name: c.name, email: c.email, mobile: c.mobile, role: c.role, passwordHash: hashPassword(c.password) } });
+    users[c.email] = user.id;
   }
+  const ramesh = users['ramesh@deskshark.local'];
+  const suresh = users['suresh@deskshark.local'];
 
-  await prisma.attendance.createMany({ data: INITIAL_ATTENDANCE, skipDuplicates: true });
-  await prisma.auditLog.createMany({ data: INITIAL_AUDIT_LOG, skipDuplicates: true });
-  await prisma.customer.createMany({
-    data: INITIAL_CUSTOMERS.map((c) => ({ ...c, tags: c.tags ?? [] })),
-    skipDuplicates: true,
+  // Masters
+  await prisma.tax.createMany({
+    data: [5, 12, 18, 28].map((rate) => ({ tenantId: TENANT, name: `GST ${rate}%`, rate, cgst: rate / 2, sgst: rate / 2, igst: rate })),
   });
-  await prisma.product.createMany({
-    data: INITIAL_PRODUCTS.map((p) => ({ ...p, productTags: p.productTags ?? [] })),
-    skipDuplicates: true,
+  await prisma.unit.createMany({ data: [{ tenantId: TENANT, code: 'PCS', name: 'Pieces', symbol: 'pcs' }, { tenantId: TENANT, code: 'KG', name: 'Kilogram', symbol: 'kg', isDecimalAllowed: true }] });
+  await prisma.category.createMany({ data: ['LPG', 'Industrial Gas', 'Accessory'].map((name) => ({ tenantId: TENANT, name, hsnDefault: name === 'Accessory' ? '84818090' : '27111900' })) });
+  await prisma.paymentMode.createMany({
+    data: [
+      { tenantId: TENANT, modeName: 'Cash', linkedAccount: 'Company Cash' },
+      { tenantId: TENANT, modeName: 'UPI', linkedAccount: 'Bank (Receipts)' },
+      { tenantId: TENANT, modeName: 'Cheque', linkedAccount: 'Bank (Receipts)' },
+      { tenantId: TENANT, modeName: 'Credit', linkedAccount: 'Sundry Debtors' },
+    ],
+  });
+  await prisma.bookType.createMany({ data: ['BANK BOOK', 'CASH BOOK', 'PETTY CASH BOOK'].map((name) => ({ tenantId: TENANT, name })) });
+
+  // Products (generic schema: more gases can be added later)
+  const lpg19 = await prisma.product.create({
+    data: { tenantId: TENANT, sku: 'LPG-19', name: '19 KG Commercial LPG Cylinder', productHindiName: '19 किलो कमर्शियल सिलेंडर', category: 'LPG', gasType: 'LPG', weightVolume: 19, salePrice: 1850, purchasePrice: 1650, taxRate: 18, emptyDepositValue: 2500, minStockAlert: 20 },
+  });
+  const lpg47 = await prisma.product.create({
+    data: { tenantId: TENANT, sku: 'LPG-47.5', name: '47.5 KG Industrial LPG Cylinder', productHindiName: '47.5 किलो इंडस्ट्रियल सिलेंडर', category: 'LPG', gasType: 'LPG', weightVolume: 47.5, salePrice: 4400, purchasePrice: 3950, taxRate: 18, emptyDepositValue: 4500, minStockAlert: 10 },
   });
 
-  for (const inv of INITIAL_INVOICES) {
-    await prisma.invoice.upsert({
-      where: { id: inv.id },
-      create: {
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        date: inv.date,
-        dueDate: inv.dueDate,
-        customerId: inv.customerId,
-        customerName: inv.customerName,
-        customerGstin: inv.customerGstin,
-        customerPhone: inv.customerPhone,
-        salesmanId: inv.salesmanId,
-        salesmanName: inv.salesmanName,
-        subTotal: inv.subTotal,
-        totalDiscount: inv.totalDiscount,
-        totalCgst: inv.totalCgst,
-        totalSgst: inv.totalSgst,
-        totalIgst: inv.totalIgst,
-        roundOff: inv.roundOff,
-        grandTotal: inv.grandTotal,
-        paymentMode: inv.paymentMode,
-        bankAccountId: inv.bankAccountId,
-        status: inv.status,
-        isIgst: inv.isIgst,
-        notes: inv.notes,
-        items: {
-          create: inv.items.map((it) => ({
-            productId: it.productId,
-            productName: it.productName,
-            hsnCode: it.hsnCode,
-            quantity: it.quantity,
-            unit: it.unit,
-            unitPrice: it.unitPrice,
-            mrp: it.mrp,
-            discountPercent: it.discountPercent,
-            taxRate: it.taxRate,
-            taxableAmount: it.taxableAmount,
-            cgstAmount: it.cgstAmount,
-            sgstAmount: it.sgstAmount,
-            igstAmount: it.igstAmount,
-            totalAmount: it.totalAmount,
-          })),
-        },
-      },
-      update: {},
-    });
+  // Godown with opening stock
+  const warehouse = await getDefaultWarehouse(prisma, TENANT);
+  await transaction(async (tx) => {
+    const location = { type: 'WAREHOUSE' as const, id: warehouse.id, name: warehouse.name };
+    for (const [product, full, empty] of [[lpg19, 100, 20], [lpg47, 50, 10]] as const) {
+      await adjustLocationStock(tx, { tenantId: TENANT, location, productId: product.id, productName: product.name, fullDelta: full, emptyDelta: empty, defectiveDelta: 0, type: 'OPENING', reason: 'Opening stock', performedBy: 'Seed' });
+    }
+  });
+
+  // Routes & areas
+  const central = await prisma.route.create({ data: { tenantId: TENANT, code: 'RT-CENTRAL', name: 'Central Route', defaultDeliveryBoyId: ramesh } });
+  const south = await prisma.route.create({ data: { tenantId: TENANT, code: 'RT-SOUTH', name: 'South Industrial Route', defaultDeliveryBoyId: suresh } });
+  await prisma.area.createMany({
+    data: [
+      { tenantId: TENANT, code: 'CP', name: 'Connaught Place', routeId: central.id },
+      { tenantId: TENANT, code: 'KB', name: 'Karol Bagh', routeId: central.id },
+      { tenantId: TENANT, code: 'OKH', name: 'Okhla Industrial Area', routeId: south.id },
+    ],
+  });
+
+  // Sample customers
+  const samples = [
+    { name: 'Hotel Rajdhani', contactPerson: 'Mr. Sharma', phone: '9811000001', address: '7 Barakhamba Road, Connaught Place, New Delhi', area: 'Connaught Place', route: 'Central Route', segment: 'Hotel', defaultDeliveryBoyId: ramesh, defaultProductIds: [lpg19.id], creditLimit: 50000, paymentTerms: 'NET_15', openingBalance: 12000, openingCylinders: [{ productId: lpg19.id, qty: 8 }] },
+    { name: 'Standard Bakers', contactPerson: 'Mr. Gupta', phone: '9811000002', address: '12 Ajmal Khan Road, Karol Bagh, New Delhi', area: 'Karol Bagh', route: 'Central Route', segment: 'Restaurant', defaultDeliveryBoyId: ramesh, defaultProductIds: [lpg19.id], creditLimit: 25000, paymentTerms: 'COD', openingCylinders: [{ productId: lpg19.id, qty: 4 }] },
+    { name: 'Apex Industrial Fabrics', contactPerson: 'Ms. Kapoor', phone: '9811000003', gstin: '07AAACA1234A1Z5', address: 'Plot 44, Okhla Phase 1, New Delhi', area: 'Okhla Industrial Area', route: 'South Industrial Route', segment: 'Industrial', defaultDeliveryBoyId: suresh, defaultProductIds: [lpg19.id, lpg47.id], creditLimit: 200000, paymentTerms: 'NET_30', openingBalance: 45000, openingCylinders: [{ productId: lpg47.id, qty: 12 }, { productId: lpg19.id, qty: 6 }] },
+  ];
+  for (const sample of samples) await transaction((tx) => createCustomer(tx, actor, { ...sample, type: 'Customer', deliveryAddresses: [{ label: 'Main', address: sample.address, isDefault: true }] }));
+
+  const portalCustomer = await prisma.customer.findFirst({ where: { tenantId: TENANT, phone: '9811000001' } });
+  const customerPassword = password('SEED_CUSTOMER_PASSWORD');
+  await prisma.user.create({ data: { tenantId: TENANT, name: 'Hotel Rajdhani', email: 'rajdhani@customer.local', role: 'CUSTOMER', customerId: portalCustomer!.id, passwordHash: hashPassword(customerPassword) } });
+
+  console.log('\nSeed complete. Login credentials (change them after first login):');
+  for (const c of [...credentials, { email: 'rajdhani@customer.local', role: 'CUSTOMER', password: customerPassword }]) {
+    console.log(`  ${c.role.padEnd(13)} ${c.email.padEnd(28)} ${c.password}`);
   }
-
-  console.log('Seed complete.');
+  console.log('\nDelivery boys need their phone approved by the admin on first login (Admin → Security → Devices).');
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exitCode = 1;
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => prisma.$disconnect());

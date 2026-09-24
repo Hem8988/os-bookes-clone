@@ -1,22 +1,15 @@
 {
-  "name": "Deskshark LPG ERP & Cylinder Distribution",
-  "short_name": "Deskshark ERP",
-  "description": "B2B LPG ERP, Delivery Boy Fleet App & Cylinder Distribution System",
+  "name": "DeskShark — Cylinder Distribution",
+  "short_name": "DeskShark",
+  "description": "Orders, deliveries, cylinder stock, cash and accounts for gas distributors.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#10b981",
-  "orientation": "any",
+  "theme_color": "#059669",
+  "orientation": "portrait",
   "icons": [
-    {
-      "src": "https://placehold.co/192x192/10b981/ffffff.png?text=Deskshark",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "https://placehold.co/512x512/10b981/ffffff.png?text=Deskshark+ERP",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }

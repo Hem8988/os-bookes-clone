@@ -3,6 +3,7 @@
 import React from 'react';
 import { Printer, X, Building2, ShieldCheck, CheckCircle2, QrCode, FileText } from 'lucide-react';
 import { PurchaseOrderItem } from '../lib/types';
+import { initials, useCompany } from '../lib/useCompany';
 
 export interface PrintTotal {
   label: string;
@@ -82,6 +83,7 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
   remark,
   onClose,
 }) => {
+  const company = useCompany();
   const handlePrint = () => {
     window.print();
   };
@@ -193,26 +195,24 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
               <div className="md:col-span-7 space-y-1">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center font-black text-sm">
-                    PI
+                    {initials(company.name)}
                   </div>
-                  <h1 className="text-lg md:text-xl font-black text-slate-950 tracking-tight">
-                    PRAMUKH INDANE GAS AGENCY
+                  <h1 className="text-lg md:text-xl font-black text-slate-950 tracking-tight uppercase">
+                    {company.legalName || company.name}
                   </h1>
                 </div>
-                <p className="text-[11px] font-semibold text-slate-700">
-                  Authorized Commercial & Industrial LPG Distributor
-                </p>
-                <p className="text-[11px] text-slate-600">
-                  Indane Gas Godown Road, Main Market, Indore, Madhya Pradesh - 452001
-                </p>
+                {company.address && <p className="text-[11px] text-slate-600">{company.address}</p>}
                 <div className="flex flex-wrap gap-x-3 text-[11px] text-slate-700 font-medium pt-0.5">
-                  <span>GSTIN: <strong className="text-slate-900 font-mono">23AAAFP1234F1Z5</strong></span>
-                  <span>State: <strong className="text-slate-900 font-mono">23 (MP)</strong></span>
-                  <span>PAN: <strong className="text-slate-900 font-mono">AAAFP1234F</strong></span>
+                  {company.gstin && <span>GSTIN: <strong className="text-slate-900 font-mono">{company.gstin}</strong></span>}
+                  {company.stateCode && <span>State: <strong className="text-slate-900 font-mono">{company.stateCode}</strong></span>}
                 </div>
-                <p className="text-[11px] text-slate-600">
-                  Phone: <strong>+91 98260 00000</strong> | Email: <strong>billing@pramukhindane.com</strong>
-                </p>
+                {(company.phone || company.email) && (
+                  <p className="text-[11px] text-slate-600">
+                    {company.phone && <>Phone: <strong>{company.phone}</strong></>}
+                    {company.phone && company.email && ' | '}
+                    {company.email && <>Email: <strong>{company.email}</strong></>}
+                  </p>
+                )}
               </div>
 
               {/* Document Metadata (5 Cols) */}
@@ -473,7 +473,7 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
 
             <div className="text-right space-y-8">
               <div className="text-slate-900 font-bold">
-                For PRAMUKH INDANE GAS AGENCY
+                For {company.name}
               </div>
               <div className="border-t border-slate-900 pt-1 inline-block w-48 font-bold text-slate-950">
                 Authorised Signatory

@@ -25,9 +25,7 @@ import {
   PurchaseOrderItem,
   PurchaseOrder,
   PurchaseInvoice,
-  SaleOrder,
   Quotation,
-  StockAdjustment,
   ReturnDocument,
   Invoice,
   InvoiceItem,
@@ -42,9 +40,7 @@ interface ChallanModuleProps {
   onUpdateChallan?: (ch: DeliveryChallan) => void;
   onAddPO: (po: PurchaseOrder) => void;
   onAddPurchase: (pur: PurchaseInvoice) => void;
-  onAddSO: (so: SaleOrder) => void;
   onAddQuotation: (qt: Quotation) => void;
-  onAddAdjustment: (adj: StockAdjustment) => void;
   onAddPurchaseReturn: (ret: ReturnDocument) => void;
   onAddSalesReturn: (ret: ReturnDocument) => void;
   onAddInvoice: (inv: Invoice) => void;
@@ -57,9 +53,7 @@ type ConvertTarget =
   | 'customer-sale-return'
   | 'company-purchase-return'
   | 'company-purchase-order'
-  | 'customer-sale-order'
-  | 'customer-quotation'
-  | 'stock-adjustment';
+  | 'customer-quotation';
 
 const CONVERT_OPTIONS: { key: ConvertTarget; label: string; icon: typeof ShoppingCart }[] = [
   { key: 'customer-sale', label: 'Customer Sale', icon: ShoppingCart },
@@ -67,9 +61,7 @@ const CONVERT_OPTIONS: { key: ConvertTarget; label: string; icon: typeof Shoppin
   { key: 'customer-sale-return', label: 'Customer Sale Return', icon: RotateCcw },
   { key: 'company-purchase-return', label: 'Company Purchase Return', icon: Truck },
   { key: 'company-purchase-order', label: 'Company Purchase Order', icon: Truck },
-  { key: 'customer-sale-order', label: 'Customer Sale Order', icon: ShoppingCart },
   { key: 'customer-quotation', label: 'Customer Quotation', icon: Calculator },
-  { key: 'stock-adjustment', label: 'Stock Adjustment', icon: SlidersHorizontal },
 ];
 
 const GST_SLABS = [0, 5, 12, 18, 28];
@@ -92,9 +84,7 @@ export const ChallanModule: React.FC<ChallanModuleProps> = ({
   onUpdateChallan,
   onAddPO,
   onAddPurchase,
-  onAddSO,
   onAddQuotation,
-  onAddAdjustment,
   onAddPurchaseReturn,
   onAddSalesReturn,
   onAddInvoice,
@@ -241,7 +231,7 @@ export const ChallanModule: React.FC<ChallanModuleProps> = ({
       status: challanToEdit?.status || 'Dispatched',
       items,
       remark,
-      createdBy: challanToEdit?.createdBy || 'Shiv Kumar (Admin)',
+      createdBy: challanToEdit?.createdBy || '',
     };
 
     if (challanToEdit) {
@@ -269,21 +259,6 @@ export const ChallanModule: React.FC<ChallanModuleProps> = ({
     const grandTotal = parseFloat(totals.grandTotal.toFixed(2));
 
     switch (target) {
-      case 'customer-sale-order': {
-        onAddSO({
-          id: `so-${Date.now()}`,
-          soNumber: `SO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-          customerName: customer.name,
-          customerGstin: customer.gstin,
-          date,
-          validUntil: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
-          totalAmount: grandTotal,
-          status: 'Pending',
-        });
-        alert('Converted to a Customer Sale Order.');
-        onClose();
-        return;
-      }
       case 'company-purchase-order': {
         onAddPO({
           id: `po-${Date.now()}`,
@@ -359,21 +334,6 @@ export const ChallanModule: React.FC<ChallanModuleProps> = ({
           status: 'Sent',
         });
         alert('Converted to a Customer Quotation.');
-        onClose();
-        return;
-      }
-      case 'stock-adjustment': {
-        onAddAdjustment({
-          id: `adj-${Date.now()}`,
-          adjustCode: `ADJ-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-          date,
-          productName: items[0].productName,
-          adjustmentType: 'Deduction (-)',
-          qty: totals.totalQty,
-          reason: 'Physical Stock Count',
-          approvedBy: 'Shiv Kumar (Admin)',
-        });
-        alert('Converted to a Stock Adjustment.');
         onClose();
         return;
       }

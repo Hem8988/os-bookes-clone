@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { SESSION_COOKIE } from './sessionToken';
 
 /** Error that maps directly onto an HTTP response. */
 export class ApiError extends Error {
@@ -19,7 +20,11 @@ export function ok<T>(data: T, message?: string, init?: ResponseInit) {
 
 export function fail(error: unknown) {
   if (error instanceof ApiError) {
-    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    const res = NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    // A signed cookie whose session was revoked / timed out would otherwise keep
+    // the page gate letting the user in while every API says 401 (redirect loop).
+    if (error.code === 'UNAUTHORIZED') res.cookies.delete(SESSION_COOKIE);
+    return res;
   }
   // Prisma errors, recognised by code/name so this file stays client-free.
   const prismaCode = (error as { code?: string })?.code;

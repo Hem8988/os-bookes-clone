@@ -4,7 +4,7 @@ import { notFound, round2 } from './http';
 export interface CustomerLedgerInput {
   tenantId: string;
   customerId: string;
-  entryType: 'OPENING' | 'INVOICE' | 'PAYMENT' | 'ADJUSTMENT' | 'REVERSAL';
+  entryType: 'OPENING' | 'INVOICE' | 'PAYMENT' | 'ADJUSTMENT' | 'REVERSAL' | 'CREDIT_NOTE' | 'REFUND';
   debit?: number;
   credit?: number;
   voucherNumber: string;

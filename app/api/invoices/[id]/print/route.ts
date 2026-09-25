@@ -44,7 +44,11 @@ export const GET = handle(async (request: Request, ctx: Ctx) => {
   const gstin = invoice.customerGstin || customer?.gstin || '';
   const customerPan = (typeof extra.pan === 'string' && extra.pan) || (gstin.length === 15 ? gstin.slice(2, 12) : '');
 
-  return ok({ ...invoice, print, customerPan, canEditRefs: can(auth.role, 'invoices.manage') });
+  // IRN / e-way bill details saved from Books → E-invoice.
+  const saved = (invoice.extra as Record<string, unknown> | null) ?? {};
+  const pick = (k: string) => (typeof saved[k] === 'string' && saved[k] ? (saved[k] as string) : undefined);
+  const einv = { irn: pick('irn') || ((print as { irn?: string } | null)?.irn ?? undefined), ackNo: pick('ackNo'), ackDate: pick('ackDate'), signedQr: pick('signedQr'), ewbNo: pick('ewbNo'), ewbValidUpto: pick('ewbValidUpto') };
+  return ok({ ...invoice, print: print ? { ...print, ...einv } : null, customerPan, canEditRefs: can(auth.role, 'invoices.manage') });
 });
 
 /** Save the hand-typed references (GRN / vehicle / challan / P.O. no.) shown on the print. */

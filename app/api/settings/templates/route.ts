@@ -3,7 +3,7 @@ import { DEFAULT_TEMPLATES } from '@/lib/whatsapp';
 import { audit } from '@/lib/server/audit';
 import { requireAuth } from '@/lib/server/auth';
 import { badRequest, handle, ok, optStr, readJson, str } from '@/lib/server/http';
-import { emailConfigured } from '@/lib/server/messaging/email';
+import { emailReady } from '@/lib/server/messaging/email';
 import { pushConfigured } from '@/lib/server/messaging/push';
 import { smsConfigured } from '@/lib/server/messaging/sms';
 import { whatsappConfigured } from '@/lib/server/messaging/whatsapp';
@@ -16,7 +16,7 @@ export const GET = handle(async (request: Request) => {
     const s = stored.find((t) => t.key === d.key);
     return { ...d, body: s?.body ?? d.body, metaTemplateName: s?.metaTemplateName ?? null, language: s?.language ?? 'en', active: s?.active ?? true, customised: !!s };
   });
-  return ok({ templates, channels: { whatsapp: whatsappConfigured(), email: emailConfigured(), sms: smsConfigured(), push: pushConfigured() } });
+  return ok({ templates, channels: { whatsapp: whatsappConfigured(), email: await emailReady(auth.tenantId), sms: smsConfigured(), push: pushConfigured() } });
 });
 
 export const PUT = handle(async (request: Request) => {

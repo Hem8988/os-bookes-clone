@@ -7,6 +7,9 @@ export interface CompanyProfile {
   gstin: string;
   stateCode: string;
   address: string;
+  /** City and PIN code — required on e-invoice and e-way bill JSON. */
+  city: string;
+  pincode: string;
   phone: string;
   supportPhone: string;
   email: string;
@@ -61,12 +64,60 @@ export interface OperationsPolicy {
   /** Day of week (0 = Sunday) the outstanding reminder job runs. */
   outstandingReminderWeekday: number;
   blockLockWithPendingItems: boolean;
+  /** A customer holding cylinders with no empty returned for this many days is overdue. */
+  emptyOverdueDays: number;
+  /** WhatsApp customers when they are due for their usual refill. */
+  refillReminders: boolean;
+  /** Day of month (1–28) the monthly statement is sent; 0 = off. */
+  statementDay: number;
+}
+
+/** Monthly budget per expense head (ledger name → rupees). */
+export interface BudgetPolicy {
+  heads: Record<string, number>;
+}
+
+/** Owner's end-of-day summary on WhatsApp / email. */
+export interface OwnerReportPolicy {
+  enabled: boolean;
+  /** Comma separated mobile numbers. */
+  phones: string;
+  /** Comma separated emails. */
+  emails: string;
+  /** Hour of the day (India time, 0–23) the report goes out. */
+  hour: number;
+}
+
+/** Books of accounts: where the monthly CA pack goes and the financial year. */
+export interface BooksPolicy {
+  caName: string;
+  caEmail: string;
+  /** Extra copies, comma separated. */
+  ccEmails: string;
+  /** Day of month (1–28) the previous month's pack is emailed automatically; 0 = only by hand. */
+  autoSendDay: number;
+  /** First month of the financial year (4 = April). */
+  fyStartMonth: number;
+}
+
+/** Outgoing email (SMTP). The password is stored sealed (see lib/server/secretBox). */
+export interface EmailSettings {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  passwordSealed: string;
+  from: string;
 }
 
 export interface SettingsMap {
   company: CompanyProfile;
   security: SecurityPolicy;
   operations: OperationsPolicy;
+  books: BooksPolicy;
+  email: EmailSettings;
+  owner: OwnerReportPolicy;
+  budgets: BudgetPolicy;
 }
 
 export type SettingKey = keyof SettingsMap;
@@ -78,6 +129,8 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     gstin: '',
     stateCode: '',
     address: '',
+    city: '',
+    pincode: '',
     phone: '',
     supportPhone: '',
     email: '',
@@ -119,6 +172,31 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     whatsappSessionTimeoutMinutes: 10,
     outstandingReminderWeekday: 1,
     blockLockWithPendingItems: true,
+    emptyOverdueDays: 30,
+    refillReminders: false,
+    statementDay: 0,
+  },
+  budgets: { heads: {} },
+  owner: {
+    enabled: false,
+    phones: '',
+    emails: '',
+    hour: 21,
+  },
+  email: {
+    host: '',
+    port: 587,
+    secure: false,
+    user: '',
+    passwordSealed: '',
+    from: '',
+  },
+  books: {
+    caName: '',
+    caEmail: '',
+    ccEmails: '',
+    autoSendDay: 0,
+    fyStartMonth: 4,
   },
 };
 

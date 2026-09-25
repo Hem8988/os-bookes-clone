@@ -7,6 +7,7 @@ import { useT } from '../lib/i18n';
 import { useApiData } from '../lib/useApiData';
 import { logout, useSession } from '../lib/auth';
 import { LanguageToggle } from './LanguageToggle';
+import CustomerComplaints from './ops/CustomerComplaints';
 import { PrintInvoiceModal, InvoiceView } from './PrintInvoiceModal';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, today, useToast } from './ui';
 
@@ -24,7 +25,7 @@ interface Portal {
 export function CustomerPortalModule() {
   const { t } = useT();
   const { session } = useSession();
-  const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'statement'>('orders');
+  const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'statement' | 'complaints'>('orders');
   const [ordering, setOrdering] = useState(false);
   const [printing, setPrinting] = useState<InvoiceView | null>(null);
   const [toast, showToast] = useToast();
@@ -63,8 +64,8 @@ export function CustomerPortalModule() {
               {data.customer.cylinderBalances.map((c) => <Stat key={c.productName} label={`${c.productName} with you`} value={c.currentBalance} />)}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex gap-2">
-                {(['orders', 'invoices', 'payments', 'statement'] as const).map((tabKey) => (
+              <div className="flex flex-wrap gap-2">
+                {(['orders', 'invoices', 'payments', 'statement', 'complaints'] as const).map((tabKey) => (
                   <button key={tabKey} onClick={() => setTab(tabKey)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold capitalize', tab === tabKey ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
                     {t(tabKey)}
                   </button>
@@ -97,6 +98,7 @@ export function CustomerPortalModule() {
                     <div className="flex items-center gap-2">
                       <span className="font-mono">{inr(i.grandTotal)}</span>
                       <StatusBadge status={i.status || 'Unpaid'} />
+                      {i.status !== 'Paid' && i.status !== 'Cancelled' && <PayNow invoiceId={i.id} onError={(m) => showToast(m, 'error')} />}
                       <Button size="sm" tone="ghost" onClick={() => setPrinting(i)}><Printer className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
@@ -113,6 +115,7 @@ export function CustomerPortalModule() {
                 ))}
               </Card>
             )}
+            {tab === 'complaints' && <CustomerComplaints onToast={showToast} />}
             {tab === 'statement' && (
               <Card>
                 <table className="w-full text-xs">
@@ -143,6 +146,25 @@ export function CustomerPortalModule() {
       />
     </div>
   );
+}
+
+/** Opens the online payment page (Razorpay) or the UPI app for this invoice's balance. */
+function PayNow({ invoiceId, onError }: { invoiceId?: string; onError: (m: string) => void }) {
+  const { t } = useT();
+  const [busy, setBusy] = useState(false);
+  if (!invoiceId) return null;
+  const go = async () => {
+    setBusy(true);
+    try {
+      const link = await api<{ url: string; upiUrl: string | null; provider: string }>('/api/payments/pay-link', { body: { invoiceId } });
+      window.location.href = link.provider === 'RAZORPAY' ? link.url : link.upiUrl || link.url;
+    } catch (e) {
+      onError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Button size="sm" busy={busy} onClick={go}>{t('Pay now')}</Button>;
 }
 
 function NewOrder({ defaultProductIds, onClose, onDone, onError }: { defaultProductIds: string[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {

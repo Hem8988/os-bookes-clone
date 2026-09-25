@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Menu } from 'lucide-react';
 import { errorMessage } from '../lib/api';
 import { logout, useSession } from '../lib/auth';
 import type { Permission } from '../lib/permissions';
@@ -33,6 +33,13 @@ import type {
 import { AdminModule } from './AdminModule';
 import ApprovalQueueModule from './ApprovalQueueModule';
 import { BillingModule } from './BillingModule';
+import BooksModule from './books/BooksModule';
+import ComplaintsPanel from './ops/ComplaintsPanel';
+import CylindersPanel from './ops/CylindersPanel';
+import OwnerDashboard from './ops/OwnerDashboard';
+import ReorderPanel from './ops/ReorderPanel';
+import RoutePanel from './ops/RoutePanel';
+import VehiclesPanel from './ops/VehiclesPanel';
 import CashWalletModule from './CashWalletModule';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
 import { CustomersModule } from './CustomersModule';
@@ -65,6 +72,14 @@ export default function Workspace() {
   const { session, loading, can } = useSession();
   const [tab, setTab] = useState('dashboard');
   const [sub, setSub] = useState<string | undefined>();
+  // Phones: the sidebar is a slide-in menu.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 768px)');
+    const close = () => wide.matches && setMenuOpen(false);
+    wide.addEventListener('change', close);
+    return () => wide.removeEventListener('change', close);
+  }, []);
   const [printInvoice, setPrintInvoice] = useState<InvoiceView | null>(null);
   const [ledgerCustomerId, setLedgerCustomerId] = useState<string | null>(null);
   const [toast, showToast] = useToast();
@@ -220,6 +235,10 @@ export default function Workspace() {
       }
       case 'gst':
         return <GstReportsModule invoices={invoices.items.filter((i) => (i.status as string) !== 'Cancelled')} />;
+      case 'registers':
+        return sub === 'cylinders' ? <CylindersPanel /> : sub === 'vehicles' ? <VehiclesPanel /> : sub === 'owner' ? <OwnerDashboard /> : sub === 'reorder' ? <ReorderPanel /> : sub === 'route' ? <RoutePanel /> : <ComplaintsPanel />;
+      case 'books':
+        return <BooksModule key={sub || 'overview'} sub={sub} onNavigate={(next) => navigate('books', next)} />;
       case 'reports':
         return <ReportsModule key={sub || 'sales'} initialReport={sub || 'sales'} />;
       case 'whatsapp':
@@ -363,9 +382,34 @@ export default function Workspace() {
         products={products.items}
         invoices={invoices.items}
       />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar activeTab={tab} activeSub={sub} can={can} onNavigate={navigate} />
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">{screen()}</main>
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* Desktop: sidebar always in the layout. */}
+        <div className="hidden md:block h-full flex-shrink-0">
+          <Sidebar activeTab={tab} activeSub={sub} can={can} onNavigate={navigate} />
+        </div>
+        {/* Phone: slide-in copy over the page, only while open. */}
+        {menuOpen && (
+          <div className="md:hidden absolute inset-0 z-40 flex">
+            <div className="h-full shadow-2xl">
+              <Sidebar
+                activeTab={tab}
+                activeSub={sub}
+                can={can}
+                onNavigate={(t, s) => {
+                  setMenuOpen(false);
+                  navigate(t, s);
+                }}
+              />
+            </div>
+            <div className="flex-1 bg-slate-900/40" onClick={() => setMenuOpen(false)} />
+          </div>
+        )}
+        <main className="flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
+          <button onClick={() => setMenuOpen(true)} className="md:hidden mb-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm">
+            <Menu className="h-4 w-4" /> Menu
+          </button>
+          {screen()}
+        </main>
       </div>
       <PrintInvoiceModal invoice={printInvoice} onClose={() => setPrintInvoice(null)} />
       <CustomerLedgerModal isOpen={!!ledgerCustomer} customer={ledgerCustomer} onClose={() => setLedgerCustomerId(null)} />

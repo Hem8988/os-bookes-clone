@@ -46,6 +46,47 @@ The delivery PWA can be packaged as an Android app (Trusted Web Activity) for
 reliable camera, GPS and fingerprint login — see [android/README.md](android/README.md).
 The interface has an English / हिंदी switch on the delivery app, customer portal and login.
 
+## Books of accounts & CA pack
+
+Sidebar → **Books (Tally)**: double-entry books kept automatically from invoices,
+payments, cash handovers, purchase bills and expenses — day book, ledgers, cash &
+bank book, GSTR-1 / GSTR-3B, trial balance, P&L and balance sheet. **CA pack** gives
+the month as one Excel workbook plus Tally files (import *Masters* first, then
+*Transactions*) and emails it to the CA; set a day of the month to send it
+automatically. `npm run books:check [YYYY-MM]` prints the books for a month.
+
+Also under Books: purchase / sales returns (debit & credit notes), bank
+reconciliation (upload the bank statement), cheque register (PDC, deposit, clear,
+bounce with charges), salary & payroll, **GSTR-2B match** (upload the portal JSON /
+Excel), **E-invoice & e-way bill** (JSON for the IRP / EWB bulk upload; the IRN, Ack
+and signed QR entered back print on the invoice), **TDS** (deducted by customers /
+from suppliers, challans, Form 16A) and 37 reports, each downloadable as Excel.
+
+## Operations extras
+
+Sidebar → Operations: **Owner dashboard** (phone-friendly day summary), **Refill due**
+(each customer's refill cycle learnt from past orders; per customer: suggest,
+WhatsApp reminder or auto-create the order for approval), **Route plan** (open
+orders in shortest order from past delivery GPS, opens in Google Maps),
+**Complaints** (customers can raise them from the portal too), **Cylinder register &
+testing** (serial numbers, hydro-test due dates, CSV import) and **Vehicles**
+(document expiry alerts, fuel / service log booked as expenses, cost per km).
+
+Scheduled jobs (in-app scheduler or `/api/cron/*`): CA pack (monthly), outstanding
+reminders (weekly), owner report (daily), refill reminders / auto-orders (daily,
+8 AM) and monthly customer statements (Settings → Operations → statement day).
+
+## Deploying an update (VPS)
+
+```bash
+git pull
+npm run deploy      # npm ci → prisma db push (adds new tables, stops on data loss) → build
+pm2 restart deskshark   # or however the app is started
+```
+
+Make sure `.env` has a real `SESSION_SECRET` (32+ random characters): it signs
+logins and encrypts the SMTP password saved in Settings → Email.
+
 ## Backups
 
 Schedule `npm run db:backup` daily (needs `pg_dump`). It keeps 7 daily, 4 weekly and
@@ -54,6 +95,7 @@ Schedule `npm run db:backup` daily (needs `pg_dump`). It keeps 7 daily, 4 weekly
 ## Integrations
 
 Configure in `.env` (see `.env.example`): WhatsApp Cloud API webhook
-`/api/whatsapp/webhook`, SMTP email, SMS fallback, web push (VAPID), S3 storage,
-daily cron `POST /api/cron/outstanding-reminders` with `Authorization: Bearer $CRON_SECRET`.
+`/api/whatsapp/webhook`, SMS fallback, web push (VAPID), S3 storage. Email is set in Admin → Settings → Email
+(or SMTP_* in `.env`). Monthly CA pack and weekly reminders run from the built-in
+scheduler; `/api/cron/*` with `Authorization: Bearer $CRON_SECRET` also works.
 Without them the app still runs; messages are logged as SIMULATED.

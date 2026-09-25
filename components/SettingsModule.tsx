@@ -1,15 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Save, Plus } from 'lucide-react';
+import { Save, Plus, Send } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { ROLE_LABELS, Role } from '../lib/permissions';
-import { CompanyProfile, OperationsPolicy, SecurityPolicy } from '../lib/settings';
+import { CompanyProfile, OperationsPolicy, OwnerReportPolicy, SecurityPolicy } from '../lib/settings';
 import { refreshCompany } from '../lib/useCompany';
 import { Button, Card, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
 
-type Tab = 'company' | 'security' | 'operations' | 'ip';
+type Tab = 'company' | 'email' | 'owner' | 'security' | 'operations' | 'ip';
 
 export function SettingsModule() {
   const [tab, setTab] = useState<Tab>('company');
@@ -17,7 +17,7 @@ export function SettingsModule() {
     <div className="space-y-4">
       <h2 className="text-lg font-black text-slate-900">Settings</h2>
       <div className="flex flex-wrap gap-2">
-        {([['company', 'Company'], ['security', 'Security policy'], ['operations', 'Operations'], ['ip', 'Accountant IP allow-list']] as const).map(([key, label]) => (
+        {([['company', 'Company'], ['email', 'Email'], ['owner', 'Owner daily report'], ['security', 'Security policy'], ['operations', 'Operations'], ['ip', 'Accountant IP allow-list']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold', tab === key ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
             {label}
           </button>
@@ -27,7 +27,105 @@ export function SettingsModule() {
       {tab === 'security' && <SettingForm<SecurityPolicy> settingKey="security" render={(v, set) => <SecurityFields value={v} onChange={set} />} />}
       {tab === 'operations' && <SettingForm<OperationsPolicy> settingKey="operations" render={(v, set) => <OperationsFields value={v} onChange={set} />} />}
       {tab === 'ip' && <IpRules />}
+      {tab === 'email' && <EmailSettings />}
+      {tab === 'owner' && (
+        <>
+          <SettingForm<OwnerReportPolicy> settingKey="owner" render={(v, set) => <OwnerFields value={v} onChange={set} />} />
+          <OwnerPreview />
+        </>
+      )}
     </div>
+  );
+}
+
+interface EmailConfig { host: string; port: number; secure: boolean; user: string; from: string; hasPassword: boolean; source: 'settings' | 'env' | 'none'; ready: boolean }
+
+const SMTP_PRESETS: [string, string, number, boolean][] = [
+  ['Gmail / Google Workspace', 'smtp.gmail.com', 587, false],
+  ['Zoho Mail', 'smtp.zoho.in', 465, true],
+  ['Outlook / Microsoft 365', 'smtp.office365.com', 587, false],
+  ['Hostinger', 'smtp.hostinger.com', 465, true],
+];
+
+function EmailSettings() {
+  const [toast, showToast] = useToast();
+  const q = useApiData<EmailConfig>('/api/settings/email', (m) => showToast(m, 'error'));
+  const [draft, setDraft] = useState<(EmailConfig & { password: string }) | null>(null);
+  const [testTo, setTestTo] = useState('');
+  const [busy, setBusy] = useState<'save' | 'test' | null>(null);
+  const v = draft ?? (q.data ? { ...q.data, password: '' } : null);
+  const set = (patch: Partial<EmailConfig & { password: string }>) => v && setDraft({ ...v, ...patch });
+
+  const save = async () => {
+    if (!v) return;
+    setBusy('save');
+    try {
+      await api('/api/settings/email', { method: 'PUT', body: { host: v.host, port: v.port, secure: v.secure, user: v.user, from: v.from, password: v.password } });
+      showToast('Email settings saved.');
+      setDraft(null);
+      q.reload();
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const test = async () => {
+    setBusy('test');
+    try {
+      const r = await api<{ to: string }>('/api/settings/email', { body: { to: testTo } });
+      showToast(`Test email sent to ${r.to} — check the inbox (and spam).`);
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card actions={<Button size="sm" busy={busy === 'save'} disabled={!draft} onClick={save}><Save className="h-3.5 w-3.5" /> Save</Button>}>
+      {toast}
+      {!v ? (
+        <p className="text-xs text-slate-400">Loading…</p>
+      ) : (
+        <div className="space-y-4">
+          <div className={cx('p-3 rounded-xl text-xs font-semibold', q.data?.ready ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800')}>
+            {q.data?.ready
+              ? q.data.source === 'env'
+                ? 'Email works using the SMTP_* values in the server .env. Fill in the form below to manage it from here instead.'
+                : 'Email is set up. CA packs, invoices and reminders go out by email.'
+              : 'Email is not set up yet — CA packs and reminders are only logged. Fill in your mail provider’s SMTP details below.'}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {SMTP_PRESETS.map(([label, host, port, secure]) => (
+              <button key={label} type="button" onClick={() => set({ host, port, secure })} className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:border-slate-400">
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label="SMTP server" className="sm:col-span-2"><input value={v.host} onChange={(e) => set({ host: e.target.value })} placeholder="smtp.gmail.com" className={inputClass} /></Field>
+            <Field label="Port"><input type="number" value={v.port} onChange={(e) => set({ port: Number(e.target.value), secure: Number(e.target.value) === 465 })} className={inputClass} /></Field>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Username (email)"><input value={v.user} onChange={(e) => set({ user: e.target.value })} placeholder="accounts@yourfirm.in" className={inputClass} /></Field>
+            <Field label="Password" hint={v.hasPassword ? 'A password is saved — leave blank to keep it.' : 'For Gmail use an App Password (Google Account → Security → App passwords).'}>
+              <input type="password" autoComplete="new-password" value={v.password} onChange={(e) => set({ password: e.target.value })} placeholder={v.hasPassword ? '••••••••' : ''} className={inputClass} />
+            </Field>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="From (shown to the receiver)" hint="Optional. e.g. Pramukh Indane <accounts@yourfirm.in>"><input value={v.from} onChange={(e) => set({ from: e.target.value })} className={inputClass} /></Field>
+            <label className="flex items-center gap-2 text-xs font-semibold self-end pb-2"><input type="checkbox" checked={v.secure} onChange={(e) => set({ secure: e.target.checked })} /> Use SSL (port 465)</label>
+          </div>
+          <div className="border-t border-slate-100 pt-3 flex flex-wrap items-end gap-2">
+            <Field label="Send a test email to" className="flex-1 min-w-56"><input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="your email (blank = your login email)" className={inputClass} /></Field>
+            <Button tone="secondary" busy={busy === 'test'} disabled={!!draft} onClick={test}><Send className="h-4 w-4" /> Send test</Button>
+          </div>
+          {draft && <p className="text-[11px] text-slate-500">Save first, then send a test.</p>}
+          <p className="text-[11px] text-slate-400">The password is stored encrypted and is never shown again.</p>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -129,6 +227,8 @@ function CompanyFields({ value, onChange }: { value: CompanyProfile; onChange: (
         {f('pan', 'PAN')}
         {f('stateCode', 'State code', 'Two digits, e.g. 27 — decides CGST/SGST vs IGST')}
         {f('address', 'Address')}
+        {f('city', 'City / place', 'Needed for e-invoice & e-way bill')}
+        {f('pincode', 'PIN code')}
         {f('phone', 'Phone')}
         {f('supportPhone', 'Support number (sent to customers)')}
         {f('email', 'Email')}
@@ -231,6 +331,9 @@ function OperationsFields({ value, onChange }: { value: OperationsPolicy; onChan
       <div className="grid sm:grid-cols-3 gap-3">
         <Field label="Quantity variance flag (%)"><input type="number" min={0} step={0.5} value={value.varianceTolerancePercent} onChange={(e) => onChange({ ...value, varianceTolerancePercent: Number(e.target.value) })} className={inputClass} /></Field>
         <Field label="WhatsApp session timeout (min)"><input type="number" min={2} value={value.whatsappSessionTimeoutMinutes} onChange={(e) => onChange({ ...value, whatsappSessionTimeoutMinutes: Number(e.target.value) })} className={inputClass} /></Field>
+        <Field label="Empty cylinder overdue after (days)" hint="Customers holding cylinders with no empty returned for this long are flagged."><input type="number" min={1} value={value.emptyOverdueDays ?? 30} onChange={(e) => onChange({ ...value, emptyOverdueDays: Number(e.target.value) })} className={inputClass} /></Field>
+        <Field label="Monthly statement day" hint="Day of the month (1–28) every customer gets last month's statement on WhatsApp / email. 0 = off."><input type="number" min={0} max={28} value={value.statementDay ?? 0} onChange={(e) => onChange({ ...value, statementDay: Math.min(28, Math.max(0, Number(e.target.value) || 0)) })} className={inputClass} /></Field>
+        <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={!!value.refillReminders} onChange={(e) => onChange({ ...value, refillReminders: e.target.checked })} /> Send refill reminders when a customer is due for their usual order (Operations → Refill due)</label>
         <Field label="Outstanding reminder day">
           <select value={value.outstandingReminderWeekday} onChange={(e) => onChange({ ...value, outstandingReminderWeekday: Number(e.target.value) })} className={inputClass}>
             {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => <option key={d} value={i}>{d}</option>)}
@@ -309,6 +412,53 @@ function IpRules() {
           </>
         )}
       </Modal>
+    </Card>
+  );
+}
+
+
+function OwnerFields({ value, onChange }: { value: OwnerReportPolicy; onChange: (v: OwnerReportPolicy) => void }) {
+  return (
+    <div className="space-y-4">
+      <Toggle label="Send the owner a summary every day (sales, collection, cash with staff, stock, dues)" checked={value.enabled} onChange={(v) => onChange({ ...value, enabled: v })} />
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label="WhatsApp numbers" hint="Comma separated, e.g. 9876543210, 9812345678" className="sm:col-span-2">
+          <input value={value.phones} onChange={(e) => onChange({ ...value, phones: e.target.value })} className={inputClass} />
+        </Field>
+        <Field label="Send at (India time)">
+          <select value={value.hour} onChange={(e) => onChange({ ...value, hour: Number(e.target.value) })} className={inputClass}>
+            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{`${h % 12 || 12}:00 ${h < 12 ? 'AM' : 'PM'}`}</option>)}
+          </select>
+        </Field>
+      </div>
+      <Field label="Also email to" hint="Optional, comma separated.">
+        <input value={value.emails} onChange={(e) => onChange({ ...value, emails: e.target.value })} className={inputClass} />
+      </Field>
+      <p className="text-[11px] text-slate-500">WhatsApp sends free text only inside the 24-hour window after the owner last messaged the business number. For guaranteed delivery add a Meta-approved template in WhatsApp → Templates, or keep an email here too.</p>
+    </div>
+  );
+}
+
+function OwnerPreview() {
+  const [toast, showToast] = useToast();
+  const [date, setDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()));
+  const [busy, setBusy] = useState(false);
+  const q = useApiData<{ text: string }>(`/api/books/owner-report?date=${date}`, (m) => showToast(m, 'error'));
+  const send = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ sentTo: { to: string; ok: boolean }[] }>('/api/books/owner-report', { body: { date } });
+      showToast(`Sent to ${r.sentTo.map((x) => `${x.to}${x.ok ? '' : ' (failed)'}`).join(', ')}`);
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Preview" actions={<div className="flex gap-2"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cx(inputClass, 'w-40 py-1 text-xs')} /><Button size="sm" busy={busy} onClick={send}><Send className="h-3.5 w-3.5" /> Send now</Button></div>}>
+      {toast}
+      <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-emerald-50/60 border border-emerald-100 rounded-xl p-3">{q.data?.text || 'Loading…'}</pre>
     </Card>
   );
 }

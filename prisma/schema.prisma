@@ -745,6 +745,12 @@ model Payment {
   verifiedAt      DateTime?
   rejectionReason String?
   notes           String?
+  chequeStatus    String? // PDC | RECEIVED | DEPOSITED | CLEARED | BOUNCED (cheque payments only)
+  depositedOn     String?
+  clearedOn       String?
+  bouncedOn       String?
+  bounceReason    String?
+  bounceCharges   Float     @default(0)
   createdAt       DateTime  @default(now())
 
   @@unique([tenantId, paymentNumber])
@@ -1250,4 +1256,478 @@ model Quotation {
   extra         Json?
 
   @@map("quotations")
+}
+
+// ───────────────────────── Books of accounts (double entry) ─────────────────────────
+// Tally-style general ledger. Vouchers generated from business documents carry
+// sourceType/sourceId (one voucher per source, re-synced when the source
+// changes); manual vouchers have sourceType MANUAL.
+
+model LedgerAccount {
+  id             String               @id @default(cuid())
+  tenantId       String               @default("default")
+  code           String
+  name           String
+  groupName      String // Tally group, e.g. Sundry Debtors, Cash-in-Hand, Sales Accounts, Duties & Taxes
+  nature         String // ASSET | LIABILITY | INCOME | EXPENSE
+  systemKey      String? // SALES | OUTPUT_CGST | PARTY:<customerId> | WALLET:<walletId> | EXPENSE_HEAD:<name> …
+  partyId        String?
+  openingBalance Float                @default(0) // + debit / − credit
+  gstin          String?
+  notes          String?
+  isSystem       Boolean              @default(false)
+  active         Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  lines          AccountVoucherLine[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, systemKey])
+  @@index([tenantId, groupName])
+  @@map("gl_accounts")
+}
+
+model AccountVoucher {
+  id            String               @id @default(cuid())
+  tenantId      String               @default("default")
+  voucherNumber String
+  voucherType   String // SALES | PURCHASE | RECEIPT | PAYMENT | CONTRA | JOURNAL | CREDIT_NOTE | DEBIT_NOTE
+  date          String
+  partyName     String?
+  narration     String?
+  amount        Float                @default(0)
+  sourceType    String // CUSTOMER_LEDGER | CASH_SUBMISSION | PURCHASE_BILL | EXPENSE | MANUAL
+  sourceId      String?
+  sourceStamp   String?
+  againstBillId String?
+  cancelled     Boolean              @default(false)
+  createdBy     String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  lines         AccountVoucherLine[]
+
+  @@unique([tenantId, voucherNumber])
+  @@unique([tenantId, sourceType, sourceId])
+  @@index([tenantId, date])
+  @@map("gl_vouchers")
+}
+
+model AccountVoucherLine {
+  id        String         @id @default(cuid())
+  voucherId String
+  voucher   AccountVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  accountId String
+  account   LedgerAccount  @relation(fields: [accountId], references: [id])
+  debit     Float          @default(0)
+  credit    Float          @default(0)
+  narration String?
+
+  @@index([accountId])
+  @@index([voucherId])
+  @@map("gl_voucher_lines")
+}
+
+/** GST purchase bill from the bottling plant or any supplier (Party Master → Vendor). */
+model PurchaseBill {
+  id                String             @id @default(cuid())
+  tenantId          String             @default("default")
+  billNumber        String
+  supplierId        String
+  supplierName      String
+  supplierGstin     String?
+  supplierInvoiceNo String
+  date              String
+  dueDate           String?
+  isIgst            Boolean            @default(false)
+  subTotal          Float              @default(0)
+  totalCgst         Float              @default(0)
+  totalSgst         Float              @default(0)
+  totalIgst         Float              @default(0)
+  roundOff          Float              @default(0)
+  grandTotal        Float              @default(0)
+  paidAmount        Float              @default(0)
+  status            String             @default("Unpaid") // Unpaid | Partial | Paid | Cancelled
+  itcEligible       Boolean            @default(true)
+  stockReceived     Boolean            @default(false)
+  warehouseId       String?
+  notes             String?
+  createdBy         String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  items             PurchaseBillItem[]
+
+  @@unique([tenantId, billNumber])
+  @@index([tenantId, date])
+  @@map("purchase_bills")
+}
+
+model PurchaseBillItem {
+  id            String       @id @default(cuid())
+  billId        String
+  bill          PurchaseBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  productId     String?
+  description   String
+  hsnCode       String       @default("")
+  quantity      Float        @default(0)
+  unit          String       @default("PCS")
+  rate          Float        @default(0) // before GST
+  taxRate       Float        @default(0)
+  taxableAmount Float        @default(0)
+  cgstAmount    Float        @default(0)
+  sgstAmount    Float        @default(0)
+  igstAmount    Float        @default(0)
+  totalAmount   Float        @default(0)
+
+  @@map("purchase_bill_items")
+}
+
+/** Day-to-day expense (salary, fuel, rent, repairs …) paid in cash / bank or on credit. */
+model ExpenseEntry {
+  id            String   @id @default(cuid())
+  tenantId      String   @default("default")
+  entryNumber   String
+  date          String
+  headName      String
+  description   String?
+  amount        Float    @default(0) // before GST
+  gstRate       Float    @default(0)
+  gstAmount     Float    @default(0)
+  isIgst        Boolean  @default(false)
+  totalAmount   Float    @default(0)
+  paidFrom      String // CASH | BANK | CREDIT
+  paidAccountId String? // gl account the money left from (cash / bank)
+  supplierId    String?
+  supplierName  String?
+  billNumber    String?
+  supplierGstin String?
+  attachmentUrl String?
+  cancelled     Boolean  @default(false)
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, entryNumber])
+  @@index([tenantId, date])
+  @@map("expense_entries")
+}
+
+// ───────────────────────── Returns (GST credit / debit notes) ─────────────────────────
+
+/** Sales return / rate reduction to a customer (GST credit note, GSTR-1 table 9B). */
+model CreditNote {
+  id              String           @id @default(cuid())
+  tenantId        String           @default("default")
+  noteNumber      String
+  date            String
+  invoiceId       String?
+  invoiceNumber   String?
+  invoiceDate     String?
+  customerId      String
+  customerName    String
+  customerGstin   String?
+  reason          String // RETURN | RATE_DIFFERENCE | DAMAGED | OTHER
+  isIgst          Boolean          @default(false)
+  subTotal        Float            @default(0)
+  totalCgst       Float            @default(0)
+  totalSgst       Float            @default(0)
+  totalIgst       Float            @default(0)
+  roundOff        Float            @default(0)
+  grandTotal      Float            @default(0)
+  stockReturned   Boolean          @default(false)
+  warehouseId     String?
+  refundAmount    Float            @default(0)
+  refundMode      String           @default("NONE") // NONE | CASH | BANK
+  refundAccountId String?
+  status          String           @default("Active") // Active | Cancelled
+  notes           String?
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  items           CreditNoteItem[]
+
+  @@unique([tenantId, noteNumber])
+  @@index([tenantId, date])
+  @@index([tenantId, customerId])
+  @@map("credit_notes")
+}
+
+model CreditNoteItem {
+  id            String     @id @default(cuid())
+  noteId        String
+  note          CreditNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  productId     String?
+  productName   String
+  hsnCode       String     @default("")
+  quantity      Float      @default(0)
+  unit          String     @default("PCS")
+  rate          Float      @default(0) // GST-inclusive, like invoice lines
+  taxRate       Float      @default(0)
+  taxableAmount Float      @default(0)
+  cgstAmount    Float      @default(0)
+  sgstAmount    Float      @default(0)
+  igstAmount    Float      @default(0)
+  totalAmount   Float      @default(0)
+
+  @@map("credit_note_items")
+}
+
+/** Purchase return to the plant / supplier (GST debit note). */
+model DebitNote {
+  id                String          @id @default(cuid())
+  tenantId          String          @default("default")
+  noteNumber        String
+  date              String
+  purchaseBillId    String?
+  billNumber        String?
+  supplierInvoiceNo String?
+  supplierId        String
+  supplierName      String
+  supplierGstin     String?
+  reason            String // RETURN | RATE_DIFFERENCE | SHORT_SUPPLY | DAMAGED | OTHER
+  isIgst            Boolean         @default(false)
+  subTotal          Float           @default(0)
+  totalCgst         Float           @default(0)
+  totalSgst         Float           @default(0)
+  totalIgst         Float           @default(0)
+  roundOff          Float           @default(0)
+  grandTotal        Float           @default(0)
+  itcReversed       Boolean         @default(true)
+  stockReturned     Boolean         @default(false)
+  warehouseId       String?
+  status            String          @default("Active") // Active | Cancelled
+  notes             String?
+  createdBy         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  items             DebitNoteItem[]
+
+  @@unique([tenantId, noteNumber])
+  @@index([tenantId, date])
+  @@map("debit_notes")
+}
+
+model DebitNoteItem {
+  id            String    @id @default(cuid())
+  noteId        String
+  note          DebitNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  productId     String?
+  description   String
+  hsnCode       String    @default("")
+  quantity      Float     @default(0)
+  unit          String    @default("PCS")
+  rate          Float     @default(0) // before GST, like purchase bill lines
+  taxRate       Float     @default(0)
+  taxableAmount Float     @default(0)
+  cgstAmount    Float     @default(0)
+  sgstAmount    Float     @default(0)
+  igstAmount    Float     @default(0)
+  totalAmount   Float     @default(0)
+
+  @@map("debit_note_items")
+}
+
+// ───────────────────────── Bank reconciliation ─────────────────────────
+
+/** One line of an uploaded bank statement, matched to a books voucher line. */
+model BankStatementLine {
+  id            String   @id @default(cuid())
+  tenantId      String   @default("default")
+  accountId     String // gl bank ledger
+  importBatch   String
+  date          String
+  description   String
+  reference     String?
+  debit         Float    @default(0) // money out of the bank
+  credit        Float    @default(0) // money into the bank
+  balance       Float?
+  status        String   @default("UNMATCHED") // UNMATCHED | MATCHED | IGNORED
+  matchedLineId String?  @unique // AccountVoucherLine.id
+  matchedBy     String?
+  matchedAt     DateTime?
+  fingerprint   String // de-duplicates re-uploads
+  createdAt     DateTime @default(now())
+
+  @@unique([tenantId, accountId, fingerprint])
+  @@index([tenantId, accountId, date])
+  @@map("bank_statement_lines")
+}
+
+// ───────────────────────── Payroll ─────────────────────────
+
+model PayrollRun {
+  id         String        @id @default(cuid())
+  tenantId   String        @default("default")
+  month      String // YYYY-MM
+  status     String        @default("DRAFT") // DRAFT | POSTED | PAID
+  gross      Float         @default(0)
+  deductions Float         @default(0)
+  net        Float         @default(0)
+  paidFromId String?
+  paidAt     String?
+  createdBy  String
+  postedBy   String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  lines      PayrollLine[]
+
+  @@unique([tenantId, month])
+  @@map("payroll_runs")
+}
+
+model PayrollLine {
+  id             String     @id @default(cuid())
+  runId          String
+  run            PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employeeName   String
+  designation    String?
+  monthlySalary  Float      @default(0)
+  workingDays    Int        @default(0)
+  presentDays    Float      @default(0)
+  paidLeaves     Float      @default(0)
+  basicEarned    Float      @default(0)
+  overtimeHours  Float      @default(0)
+  overtimePay    Float      @default(0)
+  deliveries     Int        @default(0)
+  cylinders      Int        @default(0)
+  incentive      Float      @default(0)
+  bonus          Float      @default(0)
+  advanceDeduct  Float      @default(0)
+  otherDeduct    Float      @default(0)
+  gross          Float      @default(0)
+  net            Float      @default(0)
+  remarks        String?
+
+  @@map("payroll_lines")
+}
+
+// ───────────────────────── Assets, complaints, vehicles ─────────────────────────
+
+/** A physical cylinder by serial number, with its statutory test dates. */
+model CylinderAsset {
+  id           String    @id @default(cuid())
+  tenantId     String    @default("default")
+  serialNo     String
+  productId    String?
+  productName  String
+  manufacturer String?
+  mfgDate      String?
+  lastTestDate String?
+  nextTestDue  String?
+  tareWeight   Float?
+  status       String    @default("IN_STOCK") // IN_STOCK | WITH_CUSTOMER | WITH_DELIVERY_BOY | AT_PLANT | FOR_TESTING | CONDEMNED
+  locationName String?
+  customerId   String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, serialNo])
+  @@index([tenantId, nextTestDue])
+  @@map("cylinder_assets")
+}
+
+model Complaint {
+  id              String    @id @default(cuid())
+  tenantId        String    @default("default")
+  complaintNumber String
+  customerId      String?
+  customerName    String
+  phone           String?
+  category        String // LEAK | SHORT_WEIGHT | DELAY | DAMAGED_CYLINDER | BILLING | STAFF | OTHER
+  priority        String    @default("NORMAL") // URGENT | HIGH | NORMAL | LOW
+  description     String
+  orderNumber     String?
+  status          String    @default("OPEN") // OPEN | ASSIGNED | RESOLVED | CLOSED
+  assignedToId    String?
+  assignedToName  String?
+  resolution      String?
+  source          String    @default("STAFF") // STAFF | CUSTOMER_PORTAL | WHATSAPP
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+
+  @@unique([tenantId, complaintNumber])
+  @@index([tenantId, status])
+  @@map("complaints")
+}
+
+model Vehicle {
+  id             String       @id @default(cuid())
+  tenantId       String       @default("default")
+  number         String
+  type           String       @default("Tempo") // Tempo | Truck | Tata Ace | Bike | Other
+  capacity       Int?
+  driverUserId   String?
+  driverName     String?
+  fuelType       String       @default("Diesel")
+  odometer       Float        @default(0)
+  insuranceUpto  String?
+  pucUpto        String?
+  permitUpto     String?
+  fitnessUpto    String?
+  serviceDueKm   Float?
+  serviceDueDate String?
+  active         Boolean      @default(true)
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  logs           VehicleLog[]
+
+  @@unique([tenantId, number])
+  @@map("vehicles")
+}
+
+model VehicleLog {
+  id             String   @id @default(cuid())
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  tenantId       String   @default("default")
+  date           String
+  kind           String // FUEL | SERVICE | REPAIR | TYRE | INSURANCE | OTHER
+  odometer       Float?
+  litres         Float?
+  amount         Float    @default(0)
+  expenseEntryId String?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, vehicleId, date])
+  @@map("vehicle_logs")
+}
+
+// TDS deducted by customers on our bills (receivable, claimed against Form 16A /
+// 26AS) and TDS we deduct from suppliers (payable, deposited by challan).
+model TdsEntry {
+  id              String   @id @default(cuid())
+  tenantId        String   @default("default")
+  entryNumber     String
+  direction       String // RECEIVABLE | PAYABLE
+  date            String
+  partyId         String
+  partyName       String
+  pan             String?
+  section         String // 194Q | 194C | 194J | 194I | 194H | 194A | OTHER
+  baseAmount      Float    @default(0)
+  rate            Float    @default(0)
+  amount          Float
+  referenceType   String? // INVOICE | PURCHASE_BILL | EXPENSE
+  referenceId     String?
+  referenceNo     String?
+  certificateNo   String?
+  certificateDate String?
+  challanNo       String?
+  depositedOn     String?
+  depositBatchId  String?
+  ledgerEntryId   String?
+  cancelled       Boolean  @default(false)
+  notes           String?
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, entryNumber])
+  @@index([tenantId, direction, date])
+  @@map("tds_entries")
 }

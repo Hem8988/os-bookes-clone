@@ -31,7 +31,9 @@ export type MovementType =
   | 'EMPTY_RETURN'
   | 'DAMAGE'
   | 'ADJUSTMENT'
-  | 'REVERSAL';
+  | 'REVERSAL'
+  | 'SALES_RETURN'
+  | 'PURCHASE_RETURN';
 
 export interface Movement {
   tenantId: string;
@@ -179,6 +181,35 @@ export async function adjustLocationStock(
 }
 
 /** Correction of a customer's cylinder holding (± qty). */
+/**
+ * Full cylinders a customer sends back (sales return): customer → godown, and
+ * the customer's holding goes down by the same count. reverse=true undoes it.
+ */
+export async function customerReturnsFull(
+  tx: Tx,
+  input: { tenantId: string; customer: { id: string; name: string }; warehouse: StockLocation; lines: StockLine[]; referenceId: string; referenceNumber: string; performedBy: string; reverse?: boolean }
+) {
+  const lines = input.lines.filter((l) => (l.fullQty || 0) > 0);
+  if (!lines.length) return;
+  const customer: StockLocation = { type: 'CUSTOMER', id: input.customer.id, name: input.customer.name };
+  await moveStock(tx, {
+    tenantId: input.tenantId,
+    type: input.reverse ? 'REVERSAL' : 'SALES_RETURN',
+    from: input.reverse ? input.warehouse : customer,
+    to: input.reverse ? customer : input.warehouse,
+    lines: lines.map((l) => ({ ...l, emptyQty: 0 })),
+    referenceType: 'CREDIT_NOTE',
+    referenceId: input.referenceId,
+    referenceNumber: input.referenceNumber,
+    reason: input.reverse ? `Credit note ${input.referenceNumber} cancelled` : `Sales return ${input.referenceNumber}`,
+    performedBy: input.performedBy,
+    allowNegative: !!input.reverse,
+  });
+  // moveStock counts full cylinders *to* a customer as delivered; a return takes
+  // them back out of the customer's holding.
+  if (!input.reverse) for (const l of lines) await changeCustomerHolding(tx, input.tenantId, input.customer.id, l, -(l.fullQty || 0), 0, 0);
+}
+
 export async function adjustCustomerHolding(
   tx: Tx,
   input: { tenantId: string; customerId: string; customerName: string; productId: string; productName: string; qtyDelta: number; opening?: boolean; reason: string; performedBy: string; referenceId?: string }

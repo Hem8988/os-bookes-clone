@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Printer, X } from 'lucide-react';
+import { Link2, Pencil, Printer, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCompany } from '../lib/useCompany';
 import { amountInWords, stateLabel, GST_STATES } from '../lib/gst';
@@ -57,6 +57,11 @@ interface PrintExtra {
   deliveryNumber?: string;
   deliveryBoy?: string;
   irn?: string;
+  ackNo?: string;
+  ackDate?: string;
+  signedQr?: string;
+  ewbNo?: string;
+  ewbValidUpto?: string;
   vehicleNumber?: string;
   grnNumber?: string;
   challanNumber?: string;
@@ -111,6 +116,23 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const [refs, setRefs] = useState<Record<RefKey, string> | null>(null);
   const [saving, setSaving] = useState(false);
   const [refError, setRefError] = useState('');
+  const [payMsg, setPayMsg] = useState('');
+  const [paying, setPaying] = useState(false);
+  const sendPayLink = async (invoiceId: string) => {
+    setPaying(true);
+    setPayMsg('');
+    try {
+      const res = await fetch('/api/payments/pay-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceId, send: true }), credentials: 'same-origin' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.success === false) throw new Error(json.error || 'Could not create the link.');
+      setPayMsg(json.message || 'Payment link sent.');
+      if (json.data?.url) void navigator.clipboard?.writeText(json.data.url).catch(() => undefined);
+    } catch (e) {
+      setPayMsg(e instanceof Error ? e.message : 'Could not create the link.');
+    } finally {
+      setPaying(false);
+    }
+  };
   if (!invoice || !inv) return null;
 
   const startEditRefs = () => {
@@ -202,6 +224,12 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
             <h3 className="font-extrabold text-sm">Tax Invoice {inv.invoiceNumber}</h3>
           </div>
           <div className="flex items-center gap-2">
+            {payMsg && <span className="text-[11px] text-emerald-300 max-w-[220px] truncate" title={payMsg}>{payMsg}</span>}
+            {inv.canEditRefs && inv.id && due > 0 && inv.status !== 'Cancelled' && (
+              <button disabled={paying} onClick={() => sendPayLink(inv.id!)} title="Create an online payment link, WhatsApp it to the customer and copy it" className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
+                <Link2 className="h-3.5 w-3.5" /> {paying ? 'Sending…' : 'Send pay link'}
+              </button>
+            )}
             {inv.canEditRefs && inv.id && !refs && (
               <button onClick={startEditRefs} className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
                 <Pencil className="h-3.5 w-3.5" /> GRN / Challan
@@ -385,8 +413,10 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
                   <td className="border-r border-black px-1 py-2" colSpan={1}>
                     {p?.irn ? (
                       <div className="space-y-1">
-                        <QRCodeSVG value={p.irn} size={76} />
+                        <QRCodeSVG value={p.signedQr || p.irn} size={p.signedQr ? 96 : 76} />
                         <div className="text-[10px] break-all">IRN NO : {p.irn}</div>
+                        {p.ackNo && <div className="text-[10px]">Ack No : {p.ackNo}{p.ackDate ? ` · Ack Dt : ${p.ackDate.split('-').reverse().join('/')}` : ''}</div>}
+                        {p.ewbNo && <div className="text-[10px]">E-Way Bill No : {p.ewbNo}{p.ewbValidUpto ? ` · valid ${p.ewbValidUpto.split('-').reverse().join('/')}` : ''}</div>}
                       </div>
                     ) : upiLink ? (
                       <div className="flex items-end gap-2">

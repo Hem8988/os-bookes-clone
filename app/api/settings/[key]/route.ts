@@ -8,7 +8,8 @@ import { getSetting, saveSetting } from '@/lib/server/settings';
 type Ctx = { params: Promise<{ key: string }> };
 
 function keyOf(raw: string): SettingKey {
-  if (!(raw in DEFAULT_SETTINGS)) throw badRequest('Unknown setting.');
+  // Email has its own route (the SMTP password is sealed and never sent back).
+  if (!(raw in DEFAULT_SETTINGS) || raw === 'email') throw badRequest('Unknown setting.');
   return raw as SettingKey;
 }
 

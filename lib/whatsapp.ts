@@ -75,6 +75,27 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
     variables: ['customerName', 'outstanding', 'paymentTerms', 'supportPhone', 'companyName'],
   },
   {
+    key: 'EMPTY_CYLINDER_REMINDER',
+    name: 'Empty Cylinder Reminder',
+    trigger: 'Empty cylinders overdue (Books → Reports → Empty cylinders)',
+    body: 'Namaste {{customerName}}, aapke paas hamare {{cylinders}} cylinder {{days}} din se hain. Kripya khali cylinder wapas kar dein ya humein bata dein.\nSupport: {{supportPhone}}\n— {{companyName}}',
+    variables: ['customerName', 'cylinders', 'days', 'supportPhone', 'companyName'],
+  },
+  {
+    key: 'REFILL_REMINDER',
+    name: 'Refill Reminder',
+    trigger: 'Customer is due for a refill (auto-reorder)',
+    body: 'Namaste {{customerName}}, aapka {{items}} ka refill due hai. Order karne ke liye is message ka reply karein ya app se order karein.\nSupport: {{supportPhone}}\n— {{companyName}}',
+    variables: ['customerName', 'items', 'supportPhone', 'companyName'],
+  },
+  {
+    key: 'MONTHLY_STATEMENT',
+    name: 'Monthly Statement',
+    trigger: 'Monthly statement job (Settings → Operations)',
+    body: 'Namaste {{customerName}}, {{month}} ka statement:\nOpening: Rs {{opening}}\nBills: Rs {{billed}}\nPaid: Rs {{paid}}\nClosing balance: Rs {{closing}}\n{{link}}\n— {{companyName}}',
+    variables: ['customerName', 'month', 'opening', 'billed', 'paid', 'closing', 'link', 'companyName'],
+  },
+  {
     key: 'OTP',
     name: 'OTP / Account Activation',
     trigger: 'Login OTP or onboarding',

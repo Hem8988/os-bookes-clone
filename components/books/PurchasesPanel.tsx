@@ -6,6 +6,7 @@ import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Column, LedgerOption, money, PeriodBar, plain, ReportTable, sum, usePeriod } from './shared';
+import { SupplierSelect } from './SupplierSelect';
 
 interface BillItem { id: string; productId: string | null; description: string; hsnCode: string; quantity: number; unit: string; rate: number; taxRate: number; taxableAmount: number; cgstAmount: number; sgstAmount: number; igstAmount: number; totalAmount: number }
 interface Bill {
@@ -32,7 +33,6 @@ interface Bill {
   createdBy: string;
   items: BillItem[];
 }
-interface Party { id: string; name: string; type: string; gstin?: string | null; status?: string }
 interface Product { id: string; name: string; hsnCode: string; unit: string; taxRate: number; purchasePrice?: number }
 interface Warehouse { id: string; name: string; isDefault: boolean }
 
@@ -159,10 +159,8 @@ type FormLine = { productId: string; description: string; hsnCode: string; quant
 const emptyLine = (): FormLine => ({ productId: '', description: '', hsnCode: '', quantity: '', unit: 'PCS', rate: '', taxRate: '18' });
 
 function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
-  const partiesQ = useApiData<Party[]>('/api/customers?type=Vendor', onError);
   const productsQ = useApiData<Product[]>('/api/products', onError);
   const warehousesQ = useApiData<Warehouse[]>('/api/cylinder/warehouses', onError);
-  const suppliers = (partiesQ.data ?? []).filter((p) => p.type === 'Vendor');
   const products = productsQ.data ?? [];
   const warehouses = warehousesQ.data ?? [];
   const [supplierId, setSupplierId] = useState(bill?.supplierId || '');
@@ -234,13 +232,8 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
       }
     >
       <div className="grid sm:grid-cols-4 gap-3">
-        <Field label="Supplier / plant" className="sm:col-span-2" hint={suppliers.length ? undefined : 'Add the plant in Customers → Plants / suppliers first.'}>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={inputClass}>
-            <option value="">Choose supplier…</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}{s.gstin ? ` · ${s.gstin}` : ''}</option>
-            ))}
-          </select>
+        <Field label="Supplier / plant" className="sm:col-span-2">
+          <SupplierSelect value={supplierId} showGstin onError={onError} onChange={(id) => setSupplierId(id)} />
         </Field>
         <Field label="Supplier's invoice no.">
           <input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} className={inputClass} placeholder="e.g. IOCL/2345" />

@@ -6,6 +6,7 @@ import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Column, LedgerOption, money, PeriodBar, plain, ReportTable, sum, Tabs, usePeriod } from './shared';
+import { SupplierSelect } from './SupplierSelect';
 
 interface NoteItem { productId: string | null; productName?: string; description?: string; quantity: number; rate: number; taxRate: number; totalAmount: number }
 interface CreditNote { id: string; noteNumber: string; date: string; customerName: string; customerGstin: string | null; invoiceNumber: string | null; reason: string; subTotal: number; totalCgst: number; totalSgst: number; totalIgst: number; grandTotal: number; stockReturned: boolean; refundAmount: number; refundMode: string; status: string; notes: string | null; items: NoteItem[] }
@@ -280,7 +281,6 @@ function CreditNoteForm({ onClose, onSaved, onError }: { onClose: () => void; on
 }
 
 function DebitNoteForm({ onClose, onSaved, onError }: { onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
-  const suppliers = useApiData<Party[]>('/api/customers?type=Vendor', onError).data ?? [];
   const products = useApiData<Product[]>('/api/products', onError).data ?? [];
   const warehouses = useApiData<Warehouse[]>('/api/cylinder/warehouses', onError).data ?? [];
   const [supplierId, setSupplierId] = useState('');
@@ -323,10 +323,7 @@ function DebitNoteForm({ onClose, onSaved, onError }: { onClose: () => void; onS
     <Modal open wide title="New debit note (purchase return)" onClose={onClose} footer={<><Button tone="secondary" onClick={onClose}>Close</Button><Button busy={busy} disabled={!supplierId || total <= 0} onClick={save}>Save · {money(total)}</Button></>}>
       <div className="grid sm:grid-cols-3 gap-3">
         <Field label="Supplier / plant">
-          <select value={supplierId} onChange={(e) => { setSupplierId(e.target.value); pickBill(''); }} className={inputClass}>
-            <option value="">Choose supplier…</option>
-            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <SupplierSelect value={supplierId} onError={onError} onChange={(id) => { setSupplierId(id); pickBill(''); }} />
         </Field>
         <Field label="Against purchase bill" hint={bill ? `Bill total ${money(bill.grandTotal)}` : 'Optional'}>
           <select value={billId} onChange={(e) => pickBill(e.target.value)} disabled={!supplierId} className={inputClass}>

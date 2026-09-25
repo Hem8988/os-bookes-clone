@@ -15,10 +15,15 @@ export interface SessionClaims {
   exp: number; // unix seconds
 }
 
+/** True when SESSION_SECRET is set to a long enough random value. */
+export const sessionSecretReady = () => (process.env.SESSION_SECRET || '').length >= 32;
+
+// No built-in fallback: a secret in the source code is public, and anyone who
+// knows it can forge a login cookie. The server must be given its own.
 function secret(): string {
   const value = process.env.SESSION_SECRET;
   if (value && value.length >= 32) return value;
-  return 'deskshark_production_session_secret_key_2026_super_secure_auth';
+  throw new Error('SESSION_SECRET is missing or shorter than 32 characters — set it in the server .env (e.g. openssl rand -base64 32).');
 }
 
 const b64url = (buf: Buffer) => buf.toString('base64url');
@@ -33,6 +38,8 @@ export function verifySession(token: string | undefined | null): SessionClaims |
   if (!token) return null;
   const [payload, signature] = token.split('.');
   if (!payload || !signature) return null;
+  // Without a secret nobody is logged in (pages go to /login instead of crashing).
+  if (!sessionSecretReady()) return null;
   const expected = createHmac('sha256', secret()).update(payload).digest();
   const given = Buffer.from(signature, 'base64url');
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
@@ -74,7 +81,7 @@ export function signPendingLogin(pending: PendingLogin): string {
 export function verifyPendingLogin(token: string | null): PendingLogin | null {
   if (!token) return null;
   const [payload, signature] = token.split('.');
-  if (!payload || !signature) return null;
+  if (!payload || !signature || !sessionSecretReady()) return null;
   const expected = createHmac('sha256', secret()).update(`pending:${payload}`).digest();
   const given = Buffer.from(signature, 'base64url');
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;

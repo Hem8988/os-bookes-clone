@@ -7,6 +7,7 @@ import { sectionLabel, TDS_SECTIONS } from '../../lib/tds';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Field, inputClass, Modal, today, useToast } from '../ui';
 import { BooksHeader, Column, Kpi, LedgerOption, money, PeriodBar, plain, ReportTable, sum, Tabs, usePeriod } from './shared';
+import { SupplierSelect } from './SupplierSelect';
 
 interface Entry { id: string; entryNumber: string; direction: 'RECEIVABLE' | 'PAYABLE'; date: string; partyName: string; pan: string | null; section: string; baseAmount: number; rate: number; amount: number; referenceNo: string | null; certificateNo: string | null; challanNo: string | null; depositedOn: string | null; cancelled: boolean; quarter: string; dueOn: string | null; state: string }
 interface Party { id: string; name: string; shortName?: string | null; gstin?: string | null }
@@ -107,7 +108,7 @@ export default function TdsPanel() {
 }
 
 function NewTds({ direction, onClose, onSaved, onError }: { direction: 'RECEIVABLE' | 'PAYABLE'; onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
-  const parties = useApiData<Party[]>(direction === 'RECEIVABLE' ? '/api/customers' : '/api/customers?type=Vendor', onError).data ?? [];
+  const parties = useApiData<Party[]>(direction === 'RECEIVABLE' ? '/api/customers' : null, onError).data ?? [];
   const [v, setV] = useState({ date: today(), partyId: '', section: direction === 'RECEIVABLE' ? '194Q' : '194C', baseAmount: '', rate: String(TDS_SECTIONS.find((s) => s.code === (direction === 'RECEIVABLE' ? '194Q' : '194C'))!.rate), amount: '', referenceId: '', pan: '', notes: '' });
   const invoices = useApiData<InvoiceRef[]>(direction === 'RECEIVABLE' && v.partyId ? `/api/books/credit-notes?invoicesFor=${v.partyId}` : null, onError).data ?? [];
   const bills = (useApiData<BillRef[]>(direction === 'PAYABLE' && v.partyId ? `/api/books/purchases?supplierId=${v.partyId}` : null, onError).data ?? []).filter((b) => b.status !== 'Cancelled' && b.grandTotal - b.paidAmount > 0.5);
@@ -129,10 +130,14 @@ function NewTds({ direction, onClose, onSaved, onError }: { direction: 'RECEIVAB
       <div className="grid sm:grid-cols-3 gap-3">
         <Field label="Date"><input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} className={inputClass} /></Field>
         <Field label={direction === 'RECEIVABLE' ? 'Customer' : 'Supplier'}>
-          <select value={v.partyId} onChange={(e) => { const p = parties.find((x) => x.id === e.target.value); setV({ ...v, partyId: e.target.value, referenceId: '', pan: p?.gstin && p.gstin.length === 15 ? p.gstin.slice(2, 12) : '' }); }} className={inputClass}>
-            <option value="">Choose…</option>
-            {parties.map((p) => <option key={p.id} value={p.id}>{p.shortName || p.name}</option>)}
-          </select>
+          {direction === 'PAYABLE' ? (
+            <SupplierSelect value={v.partyId} onError={onError} onChange={(id, p) => setV({ ...v, partyId: id, referenceId: '', pan: p?.gstin && p.gstin.length === 15 ? p.gstin.slice(2, 12) : '' })} />
+          ) : (
+            <select value={v.partyId} onChange={(e) => { const p = parties.find((x) => x.id === e.target.value); setV({ ...v, partyId: e.target.value, referenceId: '', pan: p?.gstin && p.gstin.length === 15 ? p.gstin.slice(2, 12) : '' }); }} className={inputClass}>
+              <option value="">Choose…</option>
+              {parties.map((p) => <option key={p.id} value={p.id}>{p.shortName || p.name}</option>)}
+            </select>
+          )}
         </Field>
         <Field label="PAN" hint="Taken from the GSTIN when available"><input value={v.pan} onChange={(e) => setV({ ...v, pan: e.target.value.toUpperCase() })} className={inputClass} maxLength={10} /></Field>
         <Field label="Section"><select value={v.section} onChange={(e) => { const rate = String(TDS_SECTIONS.find((s) => s.code === e.target.value)?.rate ?? 0); setV({ ...v, section: e.target.value, rate, amount: calc(v.baseAmount, rate) || v.amount }); }} className={inputClass}>{TDS_SECTIONS.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}</select></Field>

@@ -41,8 +41,10 @@ export const GET = handle(async (request: Request) => {
 });
 
 export const POST = handle(async (request: Request) => {
-  const auth = await requireAuth(request, 'customers.manage', { write: true });
+  const auth = await requireAuth(request, undefined, { write: true });
   const body = await readJson(request);
+  // Accountants add suppliers while entering bills / expenses; customers stay admin-only.
+  if (!can(auth.role, 'customers.manage') && !(body.type === 'Vendor' && can(auth.role, 'books.manage'))) throw forbidden();
   const customer = await transaction((tx) => createCustomer(tx, auth, body));
   return ok(customer, `Customer ${customer.customerCode} created.`);
 });

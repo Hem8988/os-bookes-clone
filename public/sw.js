@@ -2,7 +2,10 @@
 // web-push. API responses are never cached (they contain customer data and
 // must always be fresh); offline delivery entries live in IndexedDB instead.
 
-const CACHE = 'deskshark-shell-v3';
+const CACHE = 'deskshark-shell-v4';
+// On localhost (next dev) build files keep their names while their content
+// changes, so nothing is cached there — otherwise the browser shows stale CSS / JS.
+const DEV = ['localhost', '127.0.0.1'].includes(self.location.hostname);
 const SHELL = ['/delivery', '/login', '/manifest.json', '/icon.svg', '/icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -19,7 +22,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (DEV || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   // Hashed build assets never change: cache-first.
   if (url.pathname.startsWith('/_next/static/')) {

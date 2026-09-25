@@ -7,6 +7,7 @@ import { api, errorMessage, uploadFile } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Column, LedgerOption, money, PeriodBar, plain, ReportTable, sum, usePeriod } from './shared';
+import { SupplierSelect } from './SupplierSelect';
 
 interface Expense {
   id: string;
@@ -28,7 +29,6 @@ interface Expense {
   cancelled: boolean;
   createdBy: string;
 }
-interface Party { id: string; name: string; type: string; gstin?: string | null }
 
 export default function ExpensesPanel() {
   const [toast, showToast] = useToast();
@@ -148,10 +148,8 @@ export default function ExpensesPanel() {
 
 function ExpenseForm({ expense, heads, onClose, onSaved, onError }: { expense: Expense | null; heads: string[]; onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
   const ledgersQ = useApiData<LedgerOption[]>('/api/books/accounts', onError);
-  const partiesQ = useApiData<Party[]>('/api/customers?type=Vendor', onError);
   const cash = (ledgersQ.data ?? []).filter((l) => l.groupName === 'Cash-in-Hand');
   const banks = (ledgersQ.data ?? []).filter((l) => l.groupName === 'Bank Accounts');
-  const suppliers = (partiesQ.data ?? []).filter((p) => p.type === 'Vendor');
   const [date, setDate] = useState(expense?.date || today());
   const [head, setHead] = useState(expense?.headName || '');
   const [description, setDescription] = useState(expense?.description || '');
@@ -240,10 +238,7 @@ function ExpenseForm({ expense, heads, onClose, onSaved, onError }: { expense: E
       ) : null}
       <div className="grid grid-cols-2 gap-3">
         <Field label={paidFrom === 'CREDIT' ? 'Supplier (required)' : 'Supplier (optional)'}>
-          <select value={supplierId} onChange={(e) => { setSupplierId(e.target.value); const s = suppliers.find((x) => x.id === e.target.value); if (s?.gstin) setGstin(s.gstin); }} className={inputClass}>
-            <option value="">—</option>
-            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <SupplierSelect value={supplierId} placeholder="—" onError={onError} onChange={(id, s) => { setSupplierId(id); if (s?.gstin) setGstin(s.gstin); }} />
         </Field>
         <Field label="Supplier GSTIN (for ITC)"><input value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} className={inputClass} /></Field>
       </div>

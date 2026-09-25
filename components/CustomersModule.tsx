@@ -25,6 +25,36 @@ import { api, errorMessage, uploadFile } from '../lib/api';
 import { AddEditVendorModal } from './AddEditVendorModal';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
 import { MonthlyCustomerRateModal } from './MonthlyCustomerRateModal';
+import { today } from './ui';
+
+/** 2026-09 → "Sep 26" */
+const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+
+/**
+ * The rate a customer is billed this month per product, picked the same way
+ * as orders (lib/server/pricing.ts): latest monthly rate up to this month,
+ * else the fixed party rate, else the product's standard rate.
+ */
+function ratesThisMonth(c: Customer, products: Product[], month: string) {
+  const rates = Array.isArray(c.partyRates) ? c.partyRates : [];
+  const ids = new Set<string>([...rates.map((r) => r.productId), ...(c.defaultProductIds || [])]);
+  (c.cylinderBalances || []).forEach((b) => {
+    const p = products.find((x) => x.name === b.productName);
+    if (p && b.currentBalance) ids.add(p.id);
+  });
+  return [...ids].flatMap((id) => {
+    const product = products.find((p) => p.id === id);
+    const own = rates.filter((r) => r.productId === id);
+    const monthly = own.filter((r) => r.effectiveMonth && r.effectiveMonth <= month).sort((a, b) => (b.effectiveMonth || '').localeCompare(a.effectiveMonth || ''))[0];
+    const chosen = monthly || own.find((r) => !r.effectiveMonth);
+    const rate = chosen ? chosen.customRate ?? chosen.price : product?.salePrice;
+    if (rate == null) return [];
+    const name = (product?.name || own[0]?.productName || '').split(' ').slice(0, 2).join(' ');
+    // Where the rate came from: set for this month, carried from an older month, fixed, or standard.
+    const from = monthly ? (monthly.effectiveMonth === month ? 'month' : monthly.effectiveMonth!) : chosen ? 'fixed' : 'standard';
+    return [{ id, name, rate, from }];
+  });
+}
 
 interface CustomersModuleProps {
   customers: Customer[];
@@ -57,6 +87,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   }, [defaultType]);
 
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const thisMonth = today().slice(0, 7);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -524,6 +555,38 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                                 </span>
                               )}
                             </div>
+
+                            {c.type === 'Customer' && (() => {
+                              const rates = ratesThisMonth(c, products, thisMonth);
+                              if (!rates.length) return null;
+                              return (
+                                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700">₹ {monthLabel(thisMonth)} rate:</span>
+                                  {rates.map((r) => (
+                                    <span
+                                      key={r.id}
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide border ${
+                                        r.from === 'month' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 'bg-amber-50 text-amber-800 border-amber-300'
+                                      }`}
+                                      title={
+                                        r.from === 'month'
+                                          ? `Rate set for ${monthLabel(thisMonth)}`
+                                          : r.from === 'fixed'
+                                            ? 'Fixed party rate — no monthly rate set for this month'
+                                            : r.from === 'standard'
+                                              ? 'Standard product rate — no party rate set'
+                                              : `Carried from ${monthLabel(r.from)} — no rate set for ${monthLabel(thisMonth)} yet`
+                                      }
+                                    >
+                                      {r.name} ₹{r.rate.toLocaleString('en-IN')}
+                                      {r.from !== 'month' && (
+                                        <span className="ml-1 font-bold opacity-80">({r.from === 'fixed' ? 'fixed' : r.from === 'standard' ? 'std' : monthLabel(r.from)})</span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
 

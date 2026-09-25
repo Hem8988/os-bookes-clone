@@ -29,10 +29,39 @@ export interface LoginAttempt {
 const actorFor = (user: User, request: Request) => ({ tenantId: user.tenantId, userId: user.id, name: user.name, role: user.role, ip: clientIp(request), userAgent: userAgent(request) });
 
 async function findUser(identifier: string) {
-  const id = identifier.trim().toLowerCase();
-  if (id.includes('@')) return prisma.user.findUnique({ where: { email: id } });
-  const key = phoneKey(id);
-  return key.length === 10 ? prisma.user.findFirst({ where: { mobile: { endsWith: key } } }) : null;
+  const raw = identifier.trim().toLowerCase();
+  if (!raw) return null;
+
+  // 1. Direct email match
+  let user = await prisma.user.findUnique({ where: { email: raw } });
+  if (user) return user;
+
+  // 2. Fix common typos like .loca -> .local
+  if (raw.endsWith('.loca')) {
+    user = await prisma.user.findUnique({ where: { email: raw + 'l' } });
+    if (user) return user;
+  }
+
+  // 3. Simple username or prefix (e.g. 'admin' -> 'admin@deskshark.local')
+  if (!raw.includes('@')) {
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: `${raw}@deskshark.local` },
+          { email: { startsWith: `${raw}@` } }
+        ]
+      }
+    });
+    if (user) return user;
+  }
+
+  // 4. Phone number match
+  const key = phoneKey(raw);
+  if (key.length === 10) {
+    return prisma.user.findFirst({ where: { mobile: { endsWith: key } } });
+  }
+
+  return null;
 }
 
 /** Step 1: password + policy checks. Returns the remaining steps. */

@@ -67,7 +67,10 @@ export async function saveAttendance(tenantId: string, cells: { employeeId: stri
 
 // ───────────────────────── Payroll run ─────────────────────────
 
-async function computeLine(tenantId: string, e: { id: string; name: string; salary: number; salaryType: string | null; paidHoliday: number | null; userId: string | null; designation: string | null; role: string; extra: unknown }, month: string) {
+/** Daily-wage staff: the employee form saves 'Day' (older data may say 'DAILY'). */
+export const isDailyWage = (salaryType: string | null | undefined) => /^(day|daily)$/i.test(String(salaryType || '').trim());
+
+async function computeLine(tenantId: string, e: { id: string; name: string; salary: number; salaryType: string | null; paidHoliday: number | null; userId: string | null; phone?: string | null; designation: string | null; role: string; extra: unknown }, month: string) {
   const { from, to } = monthRange(month);
   const days = Number(to.slice(8, 10));
   const marks = await prisma.attendance.findMany({ where: { tenantId, employeeId: e.id, date: { gte: from, lte: to } } });
@@ -79,15 +82,18 @@ async function computeLine(tenantId: string, e: { id: string; name: string; sala
   const unpaidLeave = Math.max(0, leaves - paidLeaveAllowed);
   // Unmarked days count as present — only absences, half days and extra leave reduce pay.
   const paidDays = Math.max(0, days - absent - half * 0.5 - unpaidLeave);
-  const daily = e.salaryType === 'DAILY';
+  const daily = isDailyWage(e.salaryType);
   const perDay = daily ? e.salary : e.salary / days;
   const basicEarned = r2(daily ? e.salary * paidDays : (e.salary * paidDays) / days);
   const overtimeHours = marks.reduce((s, m) => s + (m.overtimeHours || 0), 0);
   const overtimePay = r2((overtimeHours * perDay) / 8);
   let deliveries = 0;
   let cylinders = 0;
-  if (e.userId) {
-    const agg = await prisma.delivery.aggregate({ where: { tenantId, deliveryBoyId: e.userId, deliveryDate: { gte: from, lte: to }, status: 'VERIFIED' }, _count: true, _sum: { deliveredQtyTotal: true } });
+  // The employee form has no login link, so a delivery boy is matched by mobile number.
+  const phone10 = String(e.phone || '').replace(/\D/g, '').slice(-10);
+  const boyId = e.userId || (phone10.length === 10 ? (await prisma.user.findFirst({ where: { tenantId, role: 'DELIVERY_BOY', mobile: { endsWith: phone10 } }, select: { id: true } }))?.id : null) || null;
+  if (boyId) {
+    const agg = await prisma.delivery.aggregate({ where: { tenantId, deliveryBoyId: boyId, deliveryDate: { gte: from, lte: to }, status: 'VERIFIED' }, _count: true, _sum: { deliveredQtyTotal: true } });
     deliveries = agg._count;
     cylinders = Math.round(agg._sum.deliveredQtyTotal || 0);
   }

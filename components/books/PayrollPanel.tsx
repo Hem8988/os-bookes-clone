@@ -302,7 +302,7 @@ function Advances({ employees, onDone, onError }: { employees: Emp[]; onDone: (m
           {employees.map((e) => (
             <tr key={e.id}>
               <td className="p-2"><div className="font-bold">{e.name}</div><div className="text-[10px] text-slate-400">{e.designation || e.role}{e.userId ? ' · delivery login linked' : ''}</div></td>
-              <td className="p-2 text-right font-mono">{plain(e.salary)}{e.salaryType === 'DAILY' ? '/day' : ''}</td>
+              <td className="p-2 text-right font-mono">{plain(e.salary)}{/^(day|daily)$/i.test(e.salaryType || '') ? '/day' : '/month'}</td>
               <td className="p-2 text-right font-mono">{advances.get(e.name) ? <Badge tone="amber">{plain(advances.get(e.name)!)}</Badge> : '—'}</td>
               <td className="p-2 text-right">
                 <div className="flex justify-end gap-1">

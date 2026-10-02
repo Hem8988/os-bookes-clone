@@ -60,6 +60,7 @@ export const MENU: MenuSection[] = [
       { tab: 'inventory', sub: 'overview', label: 'Stock (godown / boys)', permission: 'inventory.view' },
       { tab: 'inventory', sub: 'transfers', label: 'Stock transfers', permission: 'inventory.view' },
       { tab: 'inventory', sub: 'movements', label: 'Stock movements', permission: 'inventory.view' },
+      { tab: 'inventory', sub: 'inward', label: 'Inward register (truck-wise)', permission: 'inventory.view' },
       { tab: 'cylinders', sub: 'customer', label: 'Customer cylinders', permission: 'customers.view' },
       { tab: 'cylinders', sub: 'voucher', label: 'SV / TV vouchers', permission: 'customers.view' },
     ],

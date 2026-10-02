@@ -5,7 +5,8 @@ import { ArrowRightLeft, Factory, PackagePlus, RefreshCw, SlidersHorizontal, War
 import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
-import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, useToast } from './ui';
+import { SupplierSelect } from './books/SupplierSelect';
+import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
 
 // Three-tier cylinder inventory (SRS §10): godowns → delivery boys → customers.
 
@@ -17,9 +18,9 @@ interface Overview {
   customerHoldings: { productId: string; productName: string; held: number; delivered: number; emptiesReceived: number }[];
 }
 interface Transfer { id: string; transferNumber: string; transferType: string; fromName: string; toName: string; status: string; requestedBy: string; approvedBy: string | null; rejectionReason: string | null; createdAt: string; items: { productName: string; fullQty: number; emptyQty: number }[] }
-interface Movement { id: string; transactionType: string; fromName: string | null; toName: string | null; productName: string; fullQty: number; emptyQty: number; defectiveQty: number; referenceNumber: string | null; reason: string | null; performedBy: string; createdAt: string }
+interface Movement { id: string; transactionType: string; fromType: string | null; toType: string | null; vehicleNumber: string | null; driverName: string | null; fromName: string | null; toName: string | null; productName: string; fullQty: number; emptyQty: number; defectiveQty: number; referenceNumber: string | null; reason: string | null; performedBy: string; createdAt: string }
 
-type Tab = 'overview' | 'transfers' | 'movements' | 'warehouses';
+type Tab = 'overview' | 'transfers' | 'movements' | 'inward' | 'warehouses';
 
 export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab }) {
   const { can } = useSession();
@@ -73,7 +74,7 @@ export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab 
       </div>
 
       <div className="flex gap-2">
-        {(['overview', 'transfers', 'movements', 'warehouses'] as Tab[]).map((t) => (
+        {(['overview', 'transfers', 'movements', 'inward', 'warehouses'] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold capitalize', tab === t ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
             {t}
           </button>
@@ -167,6 +168,8 @@ export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab 
             </table>
           )}
         </Card>
+      ) : tab === 'inward' ? (
+        <InwardRegister onError={(m) => showToast(m, 'error')} />
       ) : tab === 'movements' ? (
         <Card title="Stock movements (latest 300)">
           <div className="overflow-x-auto">
@@ -188,7 +191,7 @@ export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab 
                   <tr key={m.id} className="border-t border-slate-100">
                     <td className="p-2 whitespace-nowrap">{dateTime(m.createdAt)}</td>
                     <td className="p-2 font-bold">{m.transactionType.replace(/_/g, ' ')}</td>
-                    <td className="p-2">{m.fromName || '—'} → {m.toName || '—'}</td>
+                    <td className="p-2">{m.fromName || '—'} → {m.toName || '—'}{m.vehicleNumber && <div className="text-[10px] text-slate-400 font-mono">🚚 {m.vehicleNumber}</div>}</td>
                     <td className="p-2">{m.productName}</td>
                     <td className="p-2 text-right">{m.fullQty}</td>
                     <td className="p-2 text-right">{m.emptyQty}</td>
@@ -237,6 +240,87 @@ const StockTable = ({ title, rows }: { title: string; rows: StockRow[] }) => (
   </div>
 );
 
+/** Truck-wise register of loads from suppliers / plants and empties sent back. */
+function InwardRegister({ onError }: { onError: (m: string) => void }) {
+  const [from, setFrom] = useState(() => `${today().slice(0, 8)}01`);
+  const [to, setTo] = useState(today);
+  const [search, setSearch] = useState('');
+  const q = useApiData<Movement[]>(`/api/cylinder/ledger?inward=1&limit=1000&from=${from}&to=${to}`, onError);
+  const rows = (q.data ?? []).map((m) => {
+    const inward = m.toType === 'WAREHOUSE';
+    const sign = m.transactionType === 'REVERSAL' ? -1 : 1;
+    return {
+      ...m,
+      kind: m.transactionType === 'REVERSAL' ? 'Bill cancelled' : inward ? 'Received' : 'Empties sent',
+      party: (inward ? m.fromName : m.toName) || '—',
+      godown: (inward ? m.toName : m.fromName) || '—',
+      fullIn: m.transactionType === 'PURCHASE_RECEIPT' ? m.fullQty : m.transactionType === 'REVERSAL' ? sign * m.fullQty : 0,
+    };
+  });
+  const needle = search.trim().toLowerCase();
+  const shown = needle ? rows.filter((r) => [r.party, r.godown, r.vehicleNumber, r.driverName, r.referenceNumber, r.productName].some((v) => v?.toLowerCase().includes(needle))) : rows;
+  const fullIn = shown.reduce((s, r) => s + r.fullIn, 0);
+  const emptiesOut = shown.filter((r) => r.transactionType === 'EMPTY_TO_PLANT').reduce((s, r) => s + r.emptyQty, 0);
+  const trucks = new Set(shown.map((r) => r.vehicleNumber).filter(Boolean)).size;
+
+  return (
+    <Card title="Inward register — supplier → truck → godown">
+      <div className="flex flex-wrap items-end gap-2 mb-3">
+        <Field label="From"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass} /></Field>
+        <Field label="To"><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} /></Field>
+        <Field label="Search" className="flex-1 min-w-[180px]"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Supplier, truck no., driver, bill no…" className={inputClass} /></Field>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <Stat label="Full cylinders received" value={fullIn} />
+        <Stat label="Empties sent to plant" value={emptiesOut} />
+        <Stat label="Trucks" value={trucks} />
+      </div>
+      {q.data === undefined ? (
+        <Empty>Loading…</Empty>
+      ) : shown.length === 0 ? (
+        <Empty>No plant / supplier loads in this period.</Empty>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[860px]">
+            <thead className="text-slate-500 text-left">
+              <tr>
+                <th className="p-2">When</th>
+                <th className="p-2">Type</th>
+                <th className="p-2">Supplier / plant</th>
+                <th className="p-2">Truck</th>
+                <th className="p-2">Driver</th>
+                <th className="p-2">Godown</th>
+                <th className="p-2">Product</th>
+                <th className="p-2 text-right">Full</th>
+                <th className="p-2 text-right">Empty</th>
+                <th className="p-2">Ref</th>
+                <th className="p-2">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((r) => (
+                <tr key={r.id} className={cx('border-t border-slate-100', r.transactionType === 'REVERSAL' && 'text-rose-600')}>
+                  <td className="p-2 whitespace-nowrap">{dateTime(r.createdAt)}</td>
+                  <td className="p-2 font-bold">{r.kind}</td>
+                  <td className="p-2">{r.party}</td>
+                  <td className="p-2 font-mono whitespace-nowrap">{r.vehicleNumber || '—'}</td>
+                  <td className="p-2">{r.driverName || '—'}</td>
+                  <td className="p-2">{r.godown}</td>
+                  <td className="p-2">{r.productName}</td>
+                  <td className="p-2 text-right">{r.transactionType === 'REVERSAL' ? -r.fullQty : r.fullQty}</td>
+                  <td className="p-2 text-right">{r.emptyQty}</td>
+                  <td className="p-2">{r.referenceNumber}{r.reason && <div className="text-[10px] text-slate-400">{r.reason}</div>}</td>
+                  <td className="p-2">{r.performedBy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 type ModalProps = { data: Overview; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void };
 
 function useLines(products: Overview['products']) {
@@ -259,14 +343,19 @@ function useLines(products: Overview['products']) {
 function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
   const [kind, setKind] = useState<'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE'>('RECEIPT');
   const [warehouseId, setWarehouseId] = useState(data.warehouses[0]?.id || '');
+  const [supplierId, setSupplierId] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [driverName, setDriverName] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const { items, editor } = useLines(data.products);
+  const viaTruck = kind !== 'DAMAGE';
   const submit = async () => {
     setBusy(true);
     try {
-      await api('/api/cylinder/inventory', { body: { kind, warehouseId, items, reference, notes } });
+      const truck = viaTruck ? { supplierId: supplierId || null, vehicleNumber, driverName } : {};
+      await api('/api/cylinder/inventory', { body: { kind, warehouseId, items, reference, notes, ...truck } });
       onDone('Stock updated.');
     } catch (e) {
       onError(errorMessage(e));
@@ -288,6 +377,17 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
           {data.warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
       </Field>
+      {viaTruck && (
+        <>
+          <Field label={kind === 'RECEIPT' ? 'Received from (supplier / plant)' : 'Sent to (supplier / plant)'}>
+            <SupplierSelect value={supplierId} placeholder="Bottling plant (not specified)" onError={onError} onChange={(id) => setSupplierId(id)} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Truck no."><input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())} maxLength={20} placeholder="MH12 AB 1234" className={cx(inputClass, 'font-mono')} /></Field>
+            <Field label="Driver name"><input value={driverName} onChange={(e) => setDriverName(e.target.value)} maxLength={60} className={inputClass} /></Field>
+          </div>
+        </>
+      )}
       {editor(kind !== 'EMPTY_TO_PLANT', kind !== 'RECEIPT')}
       <Field label="Challan / invoice ref"><input value={reference} onChange={(e) => setReference(e.target.value)} className={inputClass} /></Field>
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>

@@ -4,7 +4,7 @@ import { createApproval } from './approvals';
 import { audit, Actor } from './audit';
 import type { Effects } from './effects';
 import { badRequest, conflict, forbidden, notFound } from './http';
-import { adjustCustomerHolding, adjustLocationStock, getDefaultWarehouse, moveStock, resolveLocation, StockLocation } from './inventory';
+import { adjustCustomerHolding, adjustLocationStock, cleanVehicleNumber, getDefaultWarehouse, moveStock, resolveLocation, StockLocation } from './inventory';
 import { nextNumber } from './sequence';
 
 export const TRANSFER_TYPES = ['WAREHOUSE_TO_DRIVER', 'DRIVER_TO_DRIVER', 'DRIVER_TO_WAREHOUSE', 'WAREHOUSE_TO_WAREHOUSE'] as const;
@@ -225,15 +225,37 @@ export async function requestAdjustment(tx: Tx, actor: Actor, input: AdjustmentI
 export async function recordPlantMovement(
   tx: Tx,
   actor: Actor,
-  input: { kind: 'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE'; warehouseId?: string; items: { productId: string; fullQty?: number; emptyQty?: number }[]; reference?: string | null; notes?: string | null }
+  input: {
+    kind: 'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE';
+    warehouseId?: string;
+    supplierId?: string | null;
+    vehicleNumber?: string | null;
+    driverName?: string | null;
+    items: { productId: string; fullQty?: number; emptyQty?: number }[];
+    reference?: string | null;
+    notes?: string | null;
+  }
 ) {
   const warehouse = input.warehouseId ? await resolveLocation(tx, actor.tenantId, 'WAREHOUSE', input.warehouseId) : await (async () => {
     const w = await getDefaultWarehouse(tx, actor.tenantId);
     return { type: 'WAREHOUSE' as const, id: w.id, name: w.name };
   })();
   const lines = await productLines(tx, actor.tenantId, input.items);
-  const plant: StockLocation = { type: 'PLANT', id: 'PLANT', name: 'Bottling Plant' };
-  const base = { tenantId: actor.tenantId, referenceType: 'PURCHASE', referenceNumber: input.reference || undefined, reason: input.notes || undefined, performedBy: actor.name };
+  let plant: StockLocation = { type: 'PLANT', id: 'PLANT', name: 'Bottling Plant' };
+  if (input.supplierId) {
+    const supplier = await tx.customer.findFirst({ where: { id: input.supplierId, tenantId: actor.tenantId }, select: { id: true, name: true } });
+    if (!supplier) throw badRequest('Supplier not found.');
+    plant = { type: 'PLANT', id: supplier.id, name: supplier.name };
+  }
+  const base = {
+    tenantId: actor.tenantId,
+    referenceType: 'PURCHASE',
+    referenceNumber: input.reference || undefined,
+    reason: input.notes || undefined,
+    vehicleNumber: cleanVehicleNumber(input.vehicleNumber),
+    driverName: input.driverName?.trim() || null,
+    performedBy: actor.name,
+  };
 
   if (input.kind === 'RECEIPT') {
     await moveStock(tx, { ...base, type: 'PURCHASE_RECEIPT', from: plant, to: warehouse, lines: lines.map((l) => ({ ...l, emptyQty: 0 })) });
@@ -244,5 +266,5 @@ export async function recordPlantMovement(
       await adjustLocationStock(tx, { tenantId: actor.tenantId, location: warehouse, productId: l.productId, productName: l.productName, fullDelta: -l.fullQty, emptyDelta: -l.emptyQty, defectiveDelta: l.fullQty + l.emptyQty, type: 'DAMAGE', reason: input.notes || 'Damaged cylinders', performedBy: actor.name });
     }
   }
-  await audit(tx, actor, { action: `PLANT_${input.kind}`, entityType: 'Stock', reference: input.reference || warehouse.name, newValue: lines });
+  await audit(tx, actor, { action: `PLANT_${input.kind}`, entityType: 'Stock', reference: input.reference || warehouse.name, newValue: { supplier: plant.name, vehicle: base.vehicleNumber, driver: base.driverName, lines } });
 }

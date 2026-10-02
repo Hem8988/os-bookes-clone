@@ -45,9 +45,19 @@ export interface Movement {
   referenceId?: string;
   referenceNumber?: string;
   reason?: string;
+  /** Truck and driver that carried a plant / supplier load. */
+  vehicleNumber?: string | null;
+  driverName?: string | null;
   performedBy: string;
   /** Allow a location to go negative (only for reversals of earlier movements). */
   allowNegative?: boolean;
+}
+
+/** "mh 12  ab1234" → "MH 12 AB1234"; blank → null. */
+export function cleanVehicleNumber(v: unknown) {
+  const text = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').toUpperCase() : '';
+  if (text.length > 20) throw badRequest('Truck number must be at most 20 characters.');
+  return text || null;
 }
 
 const HELD = (t: LocationType) => t === 'WAREHOUSE' || t === 'DELIVERY_BOY';
@@ -155,6 +165,8 @@ export async function moveStock(tx: Tx, m: Movement) {
         referenceId: m.referenceId,
         referenceNumber: m.referenceNumber,
         reason: m.reason,
+        vehicleNumber: m.vehicleNumber || null,
+        driverName: m.driverName || null,
         performedBy: m.performedBy,
       },
     });

@@ -195,7 +195,7 @@ export default function Workspace() {
       case 'delivery-board':
         return <DeliveryGpsTrackingModule />;
       case 'inventory':
-        return <InventoryModule key={sub || 'overview'} initialTab={(sub as 'overview' | 'transfers' | 'movements' | 'warehouses') || 'overview'} />;
+        return <InventoryModule key={sub || 'overview'} initialTab={(sub as 'overview' | 'transfers' | 'movements' | 'inward' | 'warehouses') || 'overview'} />;
       case 'cylinders':
         return <CylinderBalanceModule key={sub || 'customer'} initialSubTab={sub} />;
       case 'customers':

@@ -1,7 +1,7 @@
 import { prisma, transaction } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
-import { badRequest, forbidden, handle, ok, optStr, readJson } from '@/lib/server/http';
+import { badRequest, forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 import { getDefaultWarehouse } from '@/lib/server/inventory';
 import { recordPlantMovement } from '@/lib/server/stock';
 import { getWallet } from '@/lib/server/wallet';
@@ -46,6 +46,9 @@ export const POST = handle(async (request: Request) => {
     recordPlantMovement(tx, auth, {
       kind: kind as 'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE',
       warehouseId: optStr(body.warehouseId) || undefined,
+      supplierId: optStr(body.supplierId),
+      vehicleNumber: optStr(body.vehicleNumber),
+      driverName: str(body.driverName, 'Driver name', { max: 60 }) || null,
       items: Array.isArray(body.items) ? (body.items as { productId: string; fullQty?: number; emptyQty?: number }[]) : [],
       reference: optStr(body.reference),
       notes: optStr(body.notes),

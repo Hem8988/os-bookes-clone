@@ -35,6 +35,8 @@ export const POST = handle(async (request: Request) => {
         itcEligible: body.itcEligible !== false,
         receiveStock: body.receiveStock === true,
         warehouseId: optStr(body.warehouseId),
+        vehicleNumber: optStr(body.vehicleNumber),
+        driverName: str(body.driverName, 'Driver name', { max: 60 }) || null,
         notes: optStr(body.notes),
         items: Array.isArray(body.items) ? (body.items as PurchaseBillInput['items']) : [],
       },

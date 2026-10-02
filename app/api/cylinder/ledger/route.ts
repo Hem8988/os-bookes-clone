@@ -50,6 +50,17 @@ export const GET = handle(async (request: Request) => {
   if (type) where.transactionType = { in: type.split(',') };
   const locationId = url.searchParams.get('locationId');
   if (locationId) where.OR = [{ fromId: locationId }, { toId: locationId }];
+  // Inward register: plant / supplier loads in and empties out, plus cancelled purchase bills.
+  if (url.searchParams.get('inward')) {
+    where.AND = [{ OR: [{ transactionType: { in: ['PURCHASE_RECEIPT', 'EMPTY_TO_PLANT'] } }, { transactionType: 'REVERSAL', referenceType: 'PURCHASE' }] }];
+  }
+  const day = (k: string) => {
+    const v = url.searchParams.get(k);
+    return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  };
+  const from = day('from');
+  const to = day('to');
+  if (from || to) where.createdAt = { ...(from ? { gte: new Date(`${from}T00:00:00+05:30`) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}) };
   const transactions = await prisma.inventoryTransaction.findMany({ where, orderBy: { createdAt: 'desc' }, take: Math.min(Number(url.searchParams.get('limit')) || 200, 1000) });
   return ok(transactions);
 });

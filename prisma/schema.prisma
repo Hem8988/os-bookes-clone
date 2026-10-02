@@ -592,6 +592,8 @@ model InventoryTransaction {
   referenceId     String?
   referenceNumber String?
   reason          String?
+  vehicleNumber   String? // truck that carried a plant / supplier load
+  driverName      String?
   performedBy     String
   createdAt       DateTime @default(now())
 
@@ -1350,6 +1352,8 @@ model PurchaseBill {
   itcEligible       Boolean            @default(true)
   stockReceived     Boolean            @default(false)
   warehouseId       String?
+  vehicleNumber     String?
+  driverName        String?
   notes             String?
   createdBy         String
   createdAt         DateTime           @default(now())

@@ -29,6 +29,8 @@ interface Bill {
   status: string;
   itcEligible: boolean;
   stockReceived: boolean;
+  vehicleNumber: string | null;
+  driverName: string | null;
   notes: string | null;
   createdBy: string;
   items: BillItem[];
@@ -170,6 +172,8 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
   const [itc, setItc] = useState(bill ? bill.itcEligible : true);
   const [receive, setReceive] = useState(!bill);
   const [warehouseId, setWarehouseId] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState(bill?.vehicleNumber || '');
+  const [driverName, setDriverName] = useState(bill?.driverName || '');
   const [notes, setNotes] = useState(bill?.notes || '');
   const [lines, setLines] = useState<FormLine[]>(
     bill ? bill.items.map((i) => ({ productId: i.productId || '', description: i.description, hsnCode: i.hsnCode, quantity: String(i.quantity), unit: i.unit, rate: String(i.rate), taxRate: String(i.taxRate) })) : [emptyLine()]
@@ -205,6 +209,8 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
           itcEligible: itc,
           receiveStock: !bill && receive,
           warehouseId: warehouseId || null,
+          vehicleNumber,
+          driverName,
           notes,
           items: lines.filter((l) => Number(l.quantity) > 0).map((l) => ({ productId: l.productId || null, description: l.description, hsnCode: l.hsnCode, quantity: Number(l.quantity), unit: l.unit, rate: Number(l.rate), taxRate: Number(l.taxRate) })),
         },
@@ -301,12 +307,18 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid sm:grid-cols-4 gap-3">
         <Field label="Due date (optional)">
           <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
         </Field>
-        <Field label="Notes" className="sm:col-span-2">
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} placeholder="e.g. truck MH12 AB 1234, load 180 cylinders" />
+        <Field label="Truck no.">
+          <input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())} maxLength={20} className={cx(inputClass, 'font-mono')} placeholder="MH12 AB 1234" />
+        </Field>
+        <Field label="Driver name">
+          <input value={driverName} onChange={(e) => setDriverName(e.target.value)} maxLength={60} className={inputClass} />
+        </Field>
+        <Field label="Notes">
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} placeholder="e.g. load 180 cylinders" />
         </Field>
       </div>
       <div className="flex flex-wrap gap-4 text-xs font-semibold">
@@ -352,6 +364,7 @@ function BillView({ bill, onClose, onEdit }: { bill: Bill; onClose: () => void; 
         ]}
       />
       <div className="text-right text-sm font-black">Round off {plain(bill.roundOff)} · Bill total {money(bill.grandTotal)}</div>
+      {(bill.vehicleNumber || bill.driverName) && <p className="text-xs text-slate-600">Truck <strong className="font-mono">{bill.vehicleNumber || '—'}</strong>{bill.driverName ? ` · driver ${bill.driverName}` : ''}</p>}
       {bill.notes && <p className="text-xs text-slate-500">{bill.notes}</p>}
       <p className="text-[11px] text-slate-400">Entered by {bill.createdBy}{bill.stockReceived ? ' · cylinders received into the godown' : ''}{bill.itcEligible ? ' · ITC claimed' : ' · ITC not claimed'}</p>
     </Modal>

@@ -3,7 +3,7 @@ import { groupOf, GROUPS, MANUAL_VOUCHER_TYPES, VoucherType } from '@/lib/books'
 import { audit, Actor } from '../audit';
 import { assertDayOpen } from '../dayLocks';
 import { addDays, badRequest, conflict, forbidden, notFound } from '../http';
-import { getDefaultWarehouse, moveStock, resolveLocation } from '../inventory';
+import { cleanVehicleNumber, getDefaultWarehouse, moveStock, resolveLocation } from '../inventory';
 import { isInterState } from '../pricing';
 import { nextNumber } from '../sequence';
 import { getSetting } from '../settings';
@@ -30,6 +30,8 @@ export interface PurchaseBillInput {
   itcEligible?: boolean;
   receiveStock?: boolean;
   warehouseId?: string | null;
+  vehicleNumber?: string | null;
+  driverName?: string | null;
   notes?: string | null;
   items: { productId?: string | null; description?: string; hsnCode?: string; quantity: number; unit?: string; rate: number; taxRate: number }[];
 }
@@ -74,14 +76,15 @@ function billTotals(lines: { taxableAmount: number; cgstAmount: number; sgstAmou
   return { subTotal: sum('taxableAmount'), totalCgst: sum('cgstAmount'), totalSgst: sum('sgstAmount'), totalIgst: sum('igstAmount'), roundOff: r2(grandTotal - exact), grandTotal };
 }
 
-async function receiveBillStock(tx: Tx, actor: Actor, bill: { id: string; billNumber: string }, warehouseId: string | null | undefined, items: { productId: string | null; description: string; quantity: number }[], reverse: boolean) {
+async function receiveBillStock(tx: Tx, actor: Actor, bill: { id: string; billNumber: string; supplierId: string; supplierName: string; vehicleNumber: string | null; driverName: string | null }, warehouseId: string | null | undefined, items: { productId: string | null; description: string; quantity: number }[], reverse: boolean) {
   const cylinderLines = items.filter((i) => i.productId && Number.isInteger(i.quantity));
   if (!cylinderLines.length) return null;
   const warehouse = warehouseId ? await resolveLocation(tx, actor.tenantId, 'WAREHOUSE', warehouseId) : await (async () => {
     const w = await getDefaultWarehouse(tx, actor.tenantId);
     return { type: 'WAREHOUSE' as const, id: w.id, name: w.name };
   })();
-  const plant = { type: 'PLANT' as const, id: 'PLANT', name: 'Bottling Plant' };
+  // The supplier stands in for the plant so the stock ledger shows who sent the load.
+  const plant = { type: 'PLANT' as const, id: bill.supplierId, name: bill.supplierName };
   await moveStock(tx, {
     tenantId: actor.tenantId,
     type: reverse ? 'REVERSAL' : 'PURCHASE_RECEIPT',
@@ -92,6 +95,8 @@ async function receiveBillStock(tx: Tx, actor: Actor, bill: { id: string; billNu
     referenceId: bill.id,
     referenceNumber: bill.billNumber,
     reason: reverse ? `Purchase bill ${bill.billNumber} cancelled` : `Purchase bill ${bill.billNumber}`,
+    vehicleNumber: bill.vehicleNumber,
+    driverName: bill.driverName,
     performedBy: actor.name,
   });
   return warehouse.id;
@@ -119,6 +124,8 @@ export async function savePurchaseBill(tx: Tx, actor: Actor, input: PurchaseBill
     dueDate: isDate(input.dueDate) ? input.dueDate : addDays(input.date, supplier.creditDays ?? 0),
     isIgst: igst,
     itcEligible: input.itcEligible !== false,
+    vehicleNumber: cleanVehicleNumber(input.vehicleNumber),
+    driverName: input.driverName?.trim() || null,
     notes: input.notes?.trim() || null,
     ...totals,
   };

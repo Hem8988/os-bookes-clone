@@ -22,7 +22,7 @@ interface Movement { id: string; transactionType: string; fromType: string | nul
 
 type Tab = 'overview' | 'transfers' | 'movements' | 'inward' | 'warehouses';
 
-export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab }) {
+export function InventoryModule({ initialTab = 'overview', onNavigate }: { initialTab?: Tab; onNavigate?: (tab: string, sub?: string) => void }) {
   const { can } = useSession();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [modal, setModal] = useState<'plant' | 'transfer' | 'adjust' | 'warehouse' | null>(null);
@@ -52,9 +52,14 @@ export function InventoryModule({ initialTab = 'overview' }: { initialTab?: Tab 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-black text-slate-900">Cylinder Inventory</h2>
         <div className="flex flex-wrap gap-2">
+          {can('books.manage') && onNavigate && (
+            <Button onClick={() => onNavigate('books', 'purchases')}>
+              <PackagePlus className="h-4 w-4" /> Stock in (purchase bill)
+            </Button>
+          )}
           {can('inventory.receive') && (
-            <Button onClick={() => setModal('plant')}>
-              <Factory className="h-4 w-4" /> Plant receipt / dispatch
+            <Button tone="secondary" onClick={() => setModal('plant')}>
+              <Factory className="h-4 w-4" /> Empties to plant / damage
             </Button>
           )}
           {can('stock.transfer.request') && (
@@ -341,7 +346,7 @@ function useLines(products: Overview['products']) {
 }
 
 function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
-  const [kind, setKind] = useState<'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE'>('RECEIPT');
+  const [kind, setKind] = useState<'EMPTY_TO_PLANT' | 'DAMAGE'>('EMPTY_TO_PLANT');
   const [warehouseId, setWarehouseId] = useState(data.warehouses[0]?.id || '');
   const [supplierId, setSupplierId] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -364,10 +369,10 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
     }
   };
   return (
-    <Modal open title="Plant receipt / dispatch" onClose={onClose} footer={<Button busy={busy} disabled={!items.length} onClick={submit}><PackagePlus className="h-4 w-4" /> Save</Button>}>
+    <Modal open title="Empties to plant / damaged cylinders" onClose={onClose} footer={<Button busy={busy} disabled={!items.length} onClick={submit}><PackagePlus className="h-4 w-4" /> Save</Button>}>
+      <p className="text-xs rounded-xl bg-sky-50 border border-sky-100 text-sky-800 px-3 py-2">Full cylinders from the plant are added through <strong>Books → Purchase bills</strong>, so the stock, the supplier&apos;s account and GST are entered together.</p>
       <Field label="Type">
         <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={inputClass}>
-          <option value="RECEIPT">Full cylinders received from plant</option>
           <option value="EMPTY_TO_PLANT">Empty cylinders sent to plant for refill</option>
           <option value="DAMAGE">Damaged / defective cylinders set aside</option>
         </select>
@@ -379,7 +384,7 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
       </Field>
       {viaTruck && (
         <>
-          <Field label={kind === 'RECEIPT' ? 'Received from (supplier / plant)' : 'Sent to (supplier / plant)'}>
+          <Field label="Sent to (supplier / plant)">
             <SupplierSelect value={supplierId} placeholder="Bottling plant (not specified)" onError={onError} onChange={(id) => setSupplierId(id)} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -388,7 +393,7 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
           </div>
         </>
       )}
-      {editor(kind !== 'EMPTY_TO_PLANT', kind !== 'RECEIPT')}
+      {editor(kind === 'DAMAGE')}
       <Field label="Challan / invoice ref"><input value={reference} onChange={(e) => setReference(e.target.value)} className={inputClass} /></Field>
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
     </Modal>

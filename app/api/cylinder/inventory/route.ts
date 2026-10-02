@@ -36,15 +36,16 @@ export const GET = handle(async (request: Request) => {
   });
 });
 
-/** Plant receipt, empties sent for refill, or damaged cylinders at a godown. */
+/** Empties sent to the plant for refill, or damaged cylinders at a godown. Full cylinders come in only through a purchase bill. */
 export const POST = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'inventory.receive', { write: true });
   const body = await readJson(request);
   const kind = String(body.kind || '');
-  if (!['RECEIPT', 'EMPTY_TO_PLANT', 'DAMAGE'].includes(kind)) throw badRequest('Kind must be RECEIPT, EMPTY_TO_PLANT or DAMAGE.');
+  if (kind === 'RECEIPT') throw badRequest('Enter full cylinders received through Books → Purchase bills.');
+  if (!['EMPTY_TO_PLANT', 'DAMAGE'].includes(kind)) throw badRequest('Kind must be EMPTY_TO_PLANT or DAMAGE.');
   await transaction((tx) =>
     recordPlantMovement(tx, auth, {
-      kind: kind as 'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE',
+      kind: kind as 'EMPTY_TO_PLANT' | 'DAMAGE',
       warehouseId: optStr(body.warehouseId) || undefined,
       supplierId: optStr(body.supplierId),
       vehicleNumber: optStr(body.vehicleNumber),

@@ -48,8 +48,9 @@ async function billLines(tx: Tx, tenantId: string, input: PurchaseBillInput, igs
     const description = (i.description || product?.name || '').trim();
     if (!description) throw badRequest('Each line needs a product or a description.');
     const taxable = r2(quantity * rate);
-    const tax = r2((taxable * taxRate) / 100);
-    const half = r2(tax / 2);
+    // CGST and SGST are each rounded on the taxable value, as on the supplier's invoice.
+    const half = r2((taxable * taxRate) / 200);
+    const tax = igst ? r2((taxable * taxRate) / 100) : r2(half * 2);
     lines.push({
       productId: product?.id ?? null,
       description,
@@ -60,7 +61,7 @@ async function billLines(tx: Tx, tenantId: string, input: PurchaseBillInput, igs
       taxRate,
       taxableAmount: taxable,
       cgstAmount: igst ? 0 : half,
-      sgstAmount: igst ? 0 : r2(tax - half),
+      sgstAmount: igst ? 0 : half,
       igstAmount: igst ? tax : 0,
       totalAmount: r2(taxable + tax),
     });

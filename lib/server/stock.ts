@@ -219,14 +219,14 @@ export async function requestAdjustment(tx: Tx, actor: Actor, input: AdjustmentI
 }
 
 /**
- * Plant operations at a warehouse: full cylinders received from the bottling
- * plant, empties dispatched for refill, and damaged cylinders set aside.
+ * Plant operations at a warehouse: empties dispatched for refill and damaged
+ * cylinders set aside. Full cylinders come in only through a purchase bill.
  */
 export async function recordPlantMovement(
   tx: Tx,
   actor: Actor,
   input: {
-    kind: 'RECEIPT' | 'EMPTY_TO_PLANT' | 'DAMAGE';
+    kind: 'EMPTY_TO_PLANT' | 'DAMAGE';
     warehouseId?: string;
     supplierId?: string | null;
     vehicleNumber?: string | null;
@@ -257,9 +257,7 @@ export async function recordPlantMovement(
     performedBy: actor.name,
   };
 
-  if (input.kind === 'RECEIPT') {
-    await moveStock(tx, { ...base, type: 'PURCHASE_RECEIPT', from: plant, to: warehouse, lines: lines.map((l) => ({ ...l, emptyQty: 0 })) });
-  } else if (input.kind === 'EMPTY_TO_PLANT') {
+  if (input.kind === 'EMPTY_TO_PLANT') {
     await moveStock(tx, { ...base, type: 'EMPTY_TO_PLANT', from: warehouse, to: plant, lines: lines.map((l) => ({ ...l, emptyQty: l.emptyQty || l.fullQty, fullQty: 0 })) });
   } else {
     for (const l of lines) {

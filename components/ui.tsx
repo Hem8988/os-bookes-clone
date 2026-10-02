@@ -63,18 +63,18 @@ export const Field: React.FC<{ label: string; hint?: string; children: React.Rea
 
 export const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
-export const Modal: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }> = ({ open, title, onClose, children, footer, wide }) => {
+export const Modal: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean; full?: boolean }> = ({ open, title, onClose, children, footer, wide, full }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className={cx('bg-white w-full rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[92vh]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')} onClick={(e) => e.stopPropagation()}>
+    <div className={cx('fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-center', full ? 'items-stretch p-0' : 'items-end sm:items-center p-0 sm:p-4')} onClick={onClose}>
+      <div className={cx('bg-white w-full shadow-2xl flex flex-col', full ? 'h-full' : cx('rounded-t-2xl sm:rounded-2xl max-h-[92vh]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'))} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
           <h3 className="font-black text-slate-900 text-sm">{title}</h3>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto space-y-4">{children}</div>
+        <div className={cx('p-5 overflow-y-auto space-y-4', full && 'flex-1')}>{children}</div>
         {footer && <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>

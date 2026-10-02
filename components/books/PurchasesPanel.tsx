@@ -35,7 +35,7 @@ interface Bill {
   createdBy: string;
   items: BillItem[];
 }
-interface Product { id: string; name: string; hsnCode: string; unit: string; taxRate: number; purchasePrice?: number }
+interface Product { id: string; name: string; hsnCode: string; unit: string; taxRate: number; purchasePrice?: number; weightVolume?: number | null; weightUnit?: string | null }
 interface Warehouse { id: string; name: string; isDefault: boolean }
 
 const STATUS_TONE: Record<string, 'green' | 'amber' | 'red' | 'slate'> = { Paid: 'green', Partial: 'amber', Unpaid: 'red', Cancelled: 'slate' };
@@ -157,8 +157,12 @@ export default function PurchasesPanel() {
   );
 }
 
-type FormLine = { productId: string; description: string; hsnCode: string; quantity: string; unit: string; rate: string; taxRate: string };
-const emptyLine = (): FormLine => ({ productId: '', description: '', hsnCode: '', quantity: '', unit: 'PCS', rate: '', taxRate: '18' });
+/** Plant invoices quote LPG per tonne; `basis: 'TONNE'` converts that to a per-cylinder rate. */
+type FormLine = { productId: string; description: string; hsnCode: string; quantity: string; unit: string; rate: string; taxRate: string; basis: 'UNIT' | 'TONNE'; tonneRate: string; kg: string };
+const emptyLine = (): FormLine => ({ productId: '', description: '', hsnCode: '', quantity: '', unit: 'PCS', rate: '', taxRate: '18', basis: 'UNIT', tonneRate: '', kg: '' });
+const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const lineRate = (l: FormLine) => (l.basis === 'TONNE' ? ((Number(l.tonneRate) || 0) * (Number(l.kg) || 0)) / 1000 : Number(l.rate) || 0);
+const kgOf = (p?: Product) => (p?.weightVolume && (!p.weightUnit || p.weightUnit.toUpperCase() === 'KG') ? String(p.weightVolume) : '');
 
 function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
   const productsQ = useApiData<Product[]>('/api/products', onError);
@@ -176,20 +180,20 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
   const [driverName, setDriverName] = useState(bill?.driverName || '');
   const [notes, setNotes] = useState(bill?.notes || '');
   const [lines, setLines] = useState<FormLine[]>(
-    bill ? bill.items.map((i) => ({ productId: i.productId || '', description: i.description, hsnCode: i.hsnCode, quantity: String(i.quantity), unit: i.unit, rate: String(i.rate), taxRate: String(i.taxRate) })) : [emptyLine()]
+    bill ? bill.items.map((i) => ({ productId: i.productId || '', description: i.description, hsnCode: i.hsnCode, quantity: String(i.quantity), unit: i.unit, rate: String(i.rate), taxRate: String(i.taxRate), basis: 'UNIT' as const, tonneRate: '', kg: '' })) : [emptyLine()]
   );
   const [busy, setBusy] = useState(false);
   const set = (i: number, patch: Partial<FormLine>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   const pickProduct = (i: number, id: string) => {
     const p = products.find((x) => x.id === id);
-    set(i, p ? { productId: id, description: p.name, hsnCode: p.hsnCode, unit: p.unit, taxRate: String(p.taxRate), rate: lines[i].rate || (p.purchasePrice ? String(p.purchasePrice) : '') } : { productId: '' });
+    set(i, p ? { productId: id, description: p.name, hsnCode: p.hsnCode, unit: p.unit, taxRate: String(p.taxRate), rate: lines[i].rate || (p.purchasePrice ? String(p.purchasePrice) : ''), kg: kgOf(p) } : { productId: '' });
   };
 
   const calc = useMemo(() => {
     const rows = lines.map((l) => {
-      const taxable = (Number(l.quantity) || 0) * (Number(l.rate) || 0);
-      const tax = (taxable * (Number(l.taxRate) || 0)) / 100;
+      const taxable = r2((Number(l.quantity) || 0) * lineRate(l));
+      const tax = 2 * r2((taxable * (Number(l.taxRate) || 0)) / 200);
       return { taxable, tax, total: taxable + tax };
     });
     const exact = sum(rows, (r) => r.total);
@@ -212,7 +216,7 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
           vehicleNumber,
           driverName,
           notes,
-          items: lines.filter((l) => Number(l.quantity) > 0).map((l) => ({ productId: l.productId || null, description: l.description, hsnCode: l.hsnCode, quantity: Number(l.quantity), unit: l.unit, rate: Number(l.rate), taxRate: Number(l.taxRate) })),
+          items: lines.filter((l) => Number(l.quantity) > 0).map((l) => ({ productId: l.productId || null, description: l.description, hsnCode: l.hsnCode, quantity: Number(l.quantity), unit: l.unit, rate: lineRate(l), taxRate: Number(l.taxRate) })),
         },
       });
       onSaved(`Purchase bill ${saved.billNumber} saved.`);
@@ -227,7 +231,7 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
   return (
     <Modal
       open
-      wide
+      full
       title={bill ? `Edit ${bill.billNumber}` : 'New purchase bill'}
       onClose={onClose}
       footer={
@@ -257,7 +261,7 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
               <th className="p-2 w-24 text-left">HSN</th>
               <th className="p-2 w-20 text-right">Qty</th>
               <th className="p-2 w-16 text-left">Unit</th>
-              <th className="p-2 w-28 text-right">Rate (excl. GST)</th>
+              <th className="p-2 w-32 text-right">Rate (excl. GST)</th>
               <th className="p-2 w-20 text-right">GST %</th>
               <th className="p-2 w-28 text-right">Amount</th>
               <th className="p-2 w-8" />
@@ -278,7 +282,24 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
                 <td className="p-1.5"><input value={l.hsnCode} onChange={(e) => set(i, { hsnCode: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs')} /></td>
                 <td className="p-1.5"><input type="number" min={0} value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs text-right')} /></td>
                 <td className="p-1.5"><input value={l.unit} onChange={(e) => set(i, { unit: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs')} /></td>
-                <td className="p-1.5"><input type="number" min={0} step="0.01" value={l.rate} onChange={(e) => set(i, { rate: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs text-right font-mono')} /></td>
+                <td className="p-1.5 space-y-1">
+                  <select value={l.basis} onChange={(e) => set(i, { basis: e.target.value as FormLine['basis'] })} className={cx(inputClass, 'py-1 text-[11px]')}>
+                    <option value="UNIT">per {l.unit || 'unit'}</option>
+                    <option value="TONNE">per tonne (TO)</option>
+                  </select>
+                  {l.basis === 'UNIT' ? (
+                    <input type="number" min={0} step="0.01" value={l.rate} onChange={(e) => set(i, { rate: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs text-right font-mono')} />
+                  ) : (
+                    <>
+                      <input type="number" min={0} step="0.01" value={l.tonneRate} onChange={(e) => set(i, { tonneRate: e.target.value })} placeholder="₹ / tonne" className={cx(inputClass, 'py-1.5 text-xs text-right font-mono')} />
+                      <div className="flex items-center gap-1">
+                        <input type="number" min={0} step="0.1" value={l.kg} onChange={(e) => set(i, { kg: e.target.value })} placeholder="kg" className={cx(inputClass, 'py-1 text-[11px] text-right font-mono')} />
+                        <span className="text-[10px] text-slate-500 whitespace-nowrap">kg / cyl</span>
+                      </div>
+                      <div className="text-[10px] text-right text-slate-500">= {plain(lineRate(l))} / {l.unit || 'unit'}</div>
+                    </>
+                  )}
+                </td>
                 <td className="p-1.5">
                   <select value={l.taxRate} onChange={(e) => set(i, { taxRate: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs')}>
                     {['0', '5', '12', '18', '28'].map((r) => (

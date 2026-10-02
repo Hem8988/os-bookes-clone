@@ -80,7 +80,7 @@ const COLLECTIONS: Record<string, FlatCollection | CustomCollection> = {
     write: 'products.manage',
     fields: {
       ...str(['sku', 'name', 'category', 'productType', 'hsnCode', 'unit']),
-      ...str(['productHindiName', 'gasType', 'brand', 'weightUnit', 'barcode', 'image', 'description', 'termsAndCondition'], 'string?'),
+      ...str(['productHindiName', 'gasType', 'brand', 'weightUnit', 'barcode', 'materialCode', 'image', 'description', 'termsAndCondition'], 'string?'),
       weightVolume: 'float?',
       purchasePrice: 'float',
       salePrice: 'float',

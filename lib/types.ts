@@ -159,6 +159,7 @@ export interface Product {
   minStockAlert: number;
   rackLocation?: string;
   barcode?: string;
+  materialCode?: string; // oil company's code on its invoices, e.g. IOCL M00450
   image?: string;
   description?: string;
   termsAndCondition?: string;

@@ -348,6 +348,7 @@ model Product {
   minStockAlert     Float    @default(0)
   stock             Float    @default(0) // full cylinders across all warehouses (derived)
   barcode           String?
+  materialCode      String? // oil company's material code on its invoices, e.g. IOCL M00450
   image             String?
   description       String?
   termsAndCondition String?
@@ -1347,13 +1348,23 @@ model PurchaseBill {
   totalIgst         Float              @default(0)
   roundOff          Float              @default(0)
   grandTotal        Float              @default(0)
-  paidAmount        Float              @default(0)
+  paidAmount        Float              @default(0) // payments against the bill + advanceAdjusted
+  advanceAdjusted   Float              @default(0) // settled from money already lying with the supplier (plant balance)
   status            String             @default("Unpaid") // Unpaid | Partial | Paid | Cancelled
   itcEligible       Boolean            @default(true)
   stockReceived     Boolean            @default(false)
-  warehouseId       String?
+  warehouseId       String? // godown for whatever the delivery boys didn't take off the truck
+  stockSplit        Json? // [{ deliveryBoyId, productId, qty }] handed out straight from the truck
   vehicleNumber     String?
   driverName        String?
+  // From the plant's e-invoice PDF (when imported)
+  sapDocNo          String?
+  deliveryNo        String?
+  salesOrderNo      String?
+  irn               String?
+  irnDate           String?
+  einvoiceQr        String? // signed QR payload from the GST portal (NIC)
+  invoicePdfUrl     String? // the uploaded invoice PDF (/api/files/…)
   notes             String?
   createdBy         String
   createdAt         DateTime           @default(now())
@@ -1372,6 +1383,7 @@ model PurchaseBillItem {
   productId     String?
   description   String
   hsnCode       String       @default("")
+  materialCode  String?
   quantity      Float        @default(0)
   unit          String       @default("PCS")
   rate          Float        @default(0) // before GST

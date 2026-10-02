@@ -1,6 +1,6 @@
 import { prisma, transaction } from '@/lib/db';
 import { requireAuth } from '@/lib/server/auth';
-import { cancelPurchaseBill, PurchaseBillInput, savePurchaseBill } from '@/lib/server/books/entries';
+import { cancelPurchaseBill, cleanSplit, PurchaseBillInput, savePurchaseBill } from '@/lib/server/books/entries';
 import { handle, ok, optStr, readJson, str } from '@/lib/server/http';
 
 /** Purchase bills, newest first (optionally for one month / supplier). */
@@ -18,7 +18,17 @@ export const GET = handle(async (request: Request) => {
   });
   const ids = [...new Set(bills.map((b) => b.warehouseId).filter((id): id is string => !!id))];
   const godowns = new Map((ids.length ? await prisma.warehouse.findMany({ where: { tenantId: auth.tenantId, id: { in: ids } }, select: { id: true, name: true } }) : []).map((w) => [w.id, w.name]));
-  return ok(bills.map((b) => ({ ...b, warehouseName: b.warehouseId ? godowns.get(b.warehouseId) ?? null : null })));
+  // Delivery boys who took cylinders straight off the truck.
+  const splits = new Map(bills.map((b) => [b.id, cleanSplit(b.stockSplit)]));
+  const boyIds = [...new Set([...splits.values()].flat().map((s) => s.deliveryBoyId))];
+  const boys = new Map((boyIds.length ? await prisma.user.findMany({ where: { tenantId: auth.tenantId, id: { in: boyIds } }, select: { id: true, name: true } }) : []).map((u) => [u.id, u.name]));
+  return ok(
+    bills.map((b) => ({
+      ...b,
+      warehouseName: b.warehouseId ? godowns.get(b.warehouseId) ?? null : null,
+      stockSplit: splits.get(b.id)!.map((s) => ({ ...s, deliveryBoyName: boys.get(s.deliveryBoyId) || 'Delivery boy' })),
+    }))
+  );
 });
 
 /** Create (or edit an unpaid, stock-free) purchase bill. */
@@ -37,8 +47,10 @@ export const POST = handle(async (request: Request) => {
         itcEligible: body.itcEligible !== false,
         receiveStock: body.receiveStock === true,
         warehouseId: optStr(body.warehouseId),
+        stockSplit: Array.isArray(body.stockSplit) ? (body.stockSplit as PurchaseBillInput['stockSplit']) : null,
         vehicleNumber: optStr(body.vehicleNumber),
         driverName: str(body.driverName, 'Driver name', { max: 60 }) || null,
+        einvoice: body.einvoice && typeof body.einvoice === 'object' ? (body.einvoice as PurchaseBillInput['einvoice']) : null,
         notes: optStr(body.notes),
         items: Array.isArray(body.items) ? (body.items as PurchaseBillInput['items']) : [],
       },
@@ -48,12 +60,12 @@ export const POST = handle(async (request: Request) => {
   return ok(bill, `Purchase bill ${bill.billNumber} saved.`);
 });
 
-/** Cancel a bill (reverses the stock it brought in). */
+/** Delete a bill for good (reverses its stock; payments stay as plant balance). */
 export const PATCH = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'books.manage', { write: true });
   const body = await readJson(request);
   const id = str(body.id, 'Bill', { required: true });
   const reason = str(body.reason, 'Reason', { required: true, max: 300 });
   await transaction((tx) => cancelPurchaseBill(tx, auth, id, reason));
-  return ok(null, 'Purchase bill cancelled.');
+  return ok(null, 'Purchase bill deleted.');
 });

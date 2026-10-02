@@ -50,3 +50,4 @@ next-env.d.ts
 /android/*.keystore
 /android/*.jks
 /backups
+/scripts/.tmp

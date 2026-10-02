@@ -1,13 +1,16 @@
 import type { Tx } from '@/lib/db';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { groupOf, GROUPS, MANUAL_VOUCHER_TYPES, VoucherType } from '@/lib/books';
 import { audit, Actor } from '../audit';
 import { assertDayOpen } from '../dayLocks';
 import { addDays, badRequest, conflict, forbidden, notFound } from '../http';
-import { cleanVehicleNumber, getDefaultWarehouse, moveStock, resolveLocation } from '../inventory';
+import { cleanVehicleNumber, getDefaultWarehouse, moveStock, resolveLocation, StockLocation } from '../inventory';
 import { isInterState } from '../pricing';
 import { nextNumber } from '../sequence';
 import { getSetting } from '../settings';
+import { isStoredFile } from '../storage';
 import { partyAccount } from './accounts';
+import { settleFromAdvance, voucherPayments } from './plantBalance';
 import { writeVoucher } from './vouchers';
 
 // Entries made in Books: purchase bills (+ payments against them), expenses,
@@ -30,10 +33,14 @@ export interface PurchaseBillInput {
   itcEligible?: boolean;
   receiveStock?: boolean;
   warehouseId?: string | null;
+  /** Cylinders handed straight from the truck to delivery boys (rest goes to the godown). */
+  stockSplit?: SplitLine[] | null;
   vehicleNumber?: string | null;
   driverName?: string | null;
+  /** From an imported plant e-invoice. */
+  einvoice?: { sapDocNo?: string | null; deliveryNo?: string | null; salesOrderNo?: string | null; irn?: string | null; irnDate?: string | null; einvoiceQr?: string | null; invoicePdfUrl?: string | null } | null;
   notes?: string | null;
-  items: { productId?: string | null; description?: string; hsnCode?: string; quantity: number; unit?: string; rate: number; taxRate: number }[];
+  items: { productId?: string | null; materialCode?: string | null; description?: string; hsnCode?: string; quantity: number; unit?: string; rate: number; taxRate: number }[];
 }
 
 async function billLines(tx: Tx, tenantId: string, input: PurchaseBillInput, igst: boolean) {
@@ -55,6 +62,7 @@ async function billLines(tx: Tx, tenantId: string, input: PurchaseBillInput, igs
       productId: product?.id ?? null,
       description,
       hsnCode: (i.hsnCode || product?.hsnCode || '').trim(),
+      materialCode: i.materialCode?.trim().toUpperCase() || null,
       quantity,
       unit: (i.unit || product?.unit || 'PCS').trim(),
       rate,
@@ -77,30 +85,95 @@ function billTotals(lines: { taxableAmount: number; cgstAmount: number; sgstAmou
   return { subTotal: sum('taxableAmount'), totalCgst: sum('cgstAmount'), totalSgst: sum('sgstAmount'), totalIgst: sum('igstAmount'), roundOff: r2(grandTotal - exact), grandTotal };
 }
 
-async function receiveBillStock(tx: Tx, actor: Actor, bill: { id: string; billNumber: string; supplierId: string; supplierName: string; vehicleNumber: string | null; driverName: string | null }, warehouseId: string | null | undefined, items: { productId: string | null; description: string; quantity: number }[], reverse: boolean) {
-  const cylinderLines = items.filter((i) => i.productId && Number.isInteger(i.quantity));
-  if (!cylinderLines.length) return null;
+export interface SplitLine { deliveryBoyId: string; productId: string; qty: number }
+
+/** Clean a truck split from the request: whole, positive quantities only. */
+export function cleanSplit(v: unknown): SplitLine[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((s) => ({ deliveryBoyId: String((s as SplitLine)?.deliveryBoyId || ''), productId: String((s as SplitLine)?.productId || ''), qty: Number((s as SplitLine)?.qty) || 0 }))
+    .filter((s) => s.deliveryBoyId && s.productId && s.qty > 0)
+    .map((s) => {
+      if (!Number.isInteger(s.qty)) throw badRequest('Cylinders handed to delivery boys must be whole numbers.');
+      return s;
+    });
+}
+
+/**
+ * Bring a bill's cylinders in from the plant (or take them back out when
+ * `reverse`). Cylinders in `split` go straight off the truck to those delivery
+ * boys; the rest goes to the godown. Reversing fails if a delivery boy no
+ * longer holds what he was given.
+ */
+async function receiveBillStock(
+  tx: Tx,
+  actor: Actor,
+  bill: { id: string; billNumber: string; supplierId: string; supplierName: string; vehicleNumber: string | null; driverName: string | null },
+  warehouseId: string | null | undefined,
+  items: { productId: string | null; description: string; quantity: number }[],
+  reverse: boolean,
+  split: SplitLine[] = []
+): Promise<{ received: boolean; warehouseId: string | null }> {
+  const totals = new Map<string, { name: string; qty: number }>();
+  for (const i of items) {
+    if (!i.productId || !Number.isInteger(i.quantity)) continue;
+    const t = totals.get(i.productId);
+    totals.set(i.productId, { name: t?.name || i.description, qty: (t?.qty || 0) + i.quantity });
+  }
+  if (!totals.size) return { received: false, warehouseId: null };
+
+  // Who gets what off the truck; the remainder per product goes to the godown.
+  const byBoy = new Map<string, Map<string, number>>();
+  const handed = new Map<string, number>();
+  for (const s of split) {
+    if (!totals.has(s.productId)) throw badRequest('A cylinder handed to a delivery boy is not on this bill.');
+    const boy = byBoy.get(s.deliveryBoyId) || new Map<string, number>();
+    boy.set(s.productId, (boy.get(s.productId) || 0) + s.qty);
+    byBoy.set(s.deliveryBoyId, boy);
+    handed.set(s.productId, (handed.get(s.productId) || 0) + s.qty);
+  }
+  for (const [productId, qty] of handed) {
+    const t = totals.get(productId)!;
+    if (qty > t.qty) throw badRequest(`${qty} × ${t.name} handed to delivery boys, but the bill has only ${t.qty}.`);
+  }
+
+  // The supplier stands in for the plant so the stock ledger shows who sent the load.
+  const plant = { type: 'PLANT' as const, id: bill.supplierId, name: bill.supplierName };
+  const move = (place: StockLocation, lines: { productId: string; qty: number }[]) =>
+    moveStock(tx, {
+      tenantId: actor.tenantId,
+      type: reverse ? 'REVERSAL' : 'PURCHASE_RECEIPT',
+      from: reverse ? place : plant,
+      to: reverse ? plant : place,
+      lines: lines.map((l) => ({ productId: l.productId, productName: totals.get(l.productId)!.name, fullQty: l.qty, emptyQty: 0 })),
+      referenceType: 'PURCHASE',
+      referenceId: bill.id,
+      referenceNumber: bill.billNumber,
+      reason: reverse ? `Purchase bill ${bill.billNumber} cancelled` : `Purchase bill ${bill.billNumber}${place.type === 'DELIVERY_BOY' ? ' · straight from the truck' : ''}`,
+      vehicleNumber: bill.vehicleNumber,
+      driverName: bill.driverName,
+      performedBy: actor.name,
+    });
+
+  for (const [boyId, lines] of byBoy) {
+    // On reversal the boy may have left since; find him even if inactive.
+    await move(await resolveLocation(tx, actor.tenantId, 'DELIVERY_BOY', boyId), [...lines].map(([productId, qty]) => ({ productId, qty })));
+  }
+  const rest = [...totals].map(([productId, t]) => ({ productId, qty: t.qty - (handed.get(productId) || 0) })).filter((l) => l.qty > 0);
+  if (!rest.length) return { received: true, warehouseId: null };
   const warehouse = warehouseId ? await resolveLocation(tx, actor.tenantId, 'WAREHOUSE', warehouseId) : await (async () => {
     const w = await getDefaultWarehouse(tx, actor.tenantId);
     return { type: 'WAREHOUSE' as const, id: w.id, name: w.name };
   })();
-  // The supplier stands in for the plant so the stock ledger shows who sent the load.
-  const plant = { type: 'PLANT' as const, id: bill.supplierId, name: bill.supplierName };
-  await moveStock(tx, {
-    tenantId: actor.tenantId,
-    type: reverse ? 'REVERSAL' : 'PURCHASE_RECEIPT',
-    from: reverse ? warehouse : plant,
-    to: reverse ? plant : warehouse,
-    lines: cylinderLines.map((l) => ({ productId: l.productId!, productName: l.description, fullQty: l.quantity, emptyQty: 0 })),
-    referenceType: 'PURCHASE',
-    referenceId: bill.id,
-    referenceNumber: bill.billNumber,
-    reason: reverse ? `Purchase bill ${bill.billNumber} cancelled` : `Purchase bill ${bill.billNumber}`,
-    vehicleNumber: bill.vehicleNumber,
-    driverName: bill.driverName,
-    performedBy: actor.name,
-  });
-  return warehouse.id;
+  await move(warehouse, rest);
+  return { received: true, warehouseId: warehouse.id };
+}
+
+/** Remember the oil company's material code on our product, so the next invoice matches by code. */
+async function learnMaterialCodes(tx: Tx, tenantId: string, lines: { productId: string | null; materialCode: string | null }[]) {
+  for (const l of lines) {
+    if (l.productId && l.materialCode) await tx.product.updateMany({ where: { id: l.productId, tenantId, OR: [{ materialCode: null }, { materialCode: '' }] }, data: { materialCode: l.materialCode } });
+  }
 }
 
 export async function savePurchaseBill(tx: Tx, actor: Actor, input: PurchaseBillInput, billId?: string | null) {
@@ -116,7 +189,23 @@ export async function savePurchaseBill(tx: Tx, actor: Actor, input: PurchaseBill
   const totals = billTotals(lines);
   const dup = await tx.purchaseBill.findFirst({ where: { tenantId: actor.tenantId, supplierId: supplier.id, supplierInvoiceNo, status: { not: 'Cancelled' }, NOT: billId ? { id: billId } : undefined } });
   if (dup) throw conflict(`Supplier bill ${supplierInvoiceNo} is already entered as ${dup.billNumber}.`);
+  const ei = input.einvoice;
+  const einvoice = ei
+    ? {
+        sapDocNo: ei.sapDocNo?.trim() || null,
+        deliveryNo: ei.deliveryNo?.trim() || null,
+        salesOrderNo: ei.salesOrderNo?.trim() || null,
+        irn: ei.irn?.trim().toLowerCase() || null,
+        irnDate: ei.irnDate?.trim() || null,
+        einvoiceQr: ei.einvoiceQr?.trim() || null,
+        invoicePdfUrl: isStoredFile(ei.invoicePdfUrl) ? ei.invoicePdfUrl! : null,
+      }
+    : null;
+  // The same e-invoice (IRN / SAP document) can't be entered twice, whatever invoice no. was typed.
+  const sameDoc = einvoice && (einvoice.irn || einvoice.sapDocNo) ? await tx.purchaseBill.findFirst({ where: { tenantId: actor.tenantId, status: { not: 'Cancelled' }, NOT: billId ? { id: billId } : undefined, OR: [einvoice.irn ? { irn: einvoice.irn } : null, einvoice.sapDocNo ? { sapDocNo: einvoice.sapDocNo } : null].filter((x) => x !== null) } }) : null;
+  if (sameDoc) throw conflict(`This invoice (${einvoice!.sapDocNo ? `SAP doc ${einvoice!.sapDocNo}` : 'same IRN'}) is already entered as ${sameDoc.billNumber}.`);
   const header = {
+    ...(einvoice ?? {}),
     supplierId: supplier.id,
     supplierName: supplier.name,
     supplierGstin: supplier.gstin || null,
@@ -136,10 +225,32 @@ export async function savePurchaseBill(tx: Tx, actor: Actor, input: PurchaseBill
     const existing = await tx.purchaseBill.findFirst({ where: { id: billId, tenantId: actor.tenantId }, include: { items: true } });
     if (!existing) throw notFound('Purchase bill not found.');
     if (existing.status === 'Cancelled') throw conflict('A cancelled bill cannot be edited.');
-    if (existing.paidAmount > 0) throw conflict('This bill has payments against it — cancel those payments before editing.');
-    if (existing.stockReceived) throw conflict('Stock was received against this bill — cancel it and enter a new one instead.');
+    await assertDayOpen(tx, actor.tenantId, existing.date);
+    // Payments made against this bill stay with it, so the bill can't drop below them.
+    const viaVoucher = (await voucherPayments(tx, existing.supplierId, [existing.id])).get(existing.id) || 0;
+    if (viaVoucher > 0.01 && existing.supplierId !== supplier.id) throw conflict('Payments are made against this bill to the old supplier — the supplier cannot be changed. Delete the bill and enter a new one.');
+    if (viaVoucher > totals.grandTotal + 0.5) throw conflict(`₹${viaVoucher.toLocaleString('en-IN')} is already paid against this bill — the new total cannot be less than that.`);
+    // Stock: take the old receipt back out and receive the edited lines, unless nothing changed.
+    const keepStock = input.receiveStock ?? existing.stockReceived;
+    const sig = (items: { productId: string | null; quantity: number }[]) => items.filter((i) => i.productId).map((i) => `${i.productId}:${i.quantity}`).sort().join('|');
+    const warehouseId = input.warehouseId || existing.warehouseId;
+    const oldSplit = cleanSplit(existing.stockSplit);
+    const split = input.stockSplit ? cleanSplit(input.stockSplit) : oldSplit;
+    const splitSig = (s: SplitLine[]) => s.map((x) => `${x.deliveryBoyId}:${x.productId}:${x.qty}`).sort().join('|');
+    const stockSame = existing.stockReceived && keepStock && existing.supplierId === supplier.id && warehouseId === existing.warehouseId && sig(existing.items) === sig(lines) && splitSig(split) === splitSig(oldSplit);
+    if (existing.stockReceived && !stockSame) await receiveBillStock(tx, actor, existing, existing.warehouseId, existing.items, true, oldSplit);
     await tx.purchaseBillItem.deleteMany({ where: { billId } });
-    const bill = await tx.purchaseBill.update({ where: { id: billId }, data: { ...header, items: { create: lines } }, include: { items: true } });
+    await tx.purchaseBill.update({ where: { id: billId }, data: { ...header, items: { create: lines } } });
+    if (!stockSame) {
+      const edited = await tx.purchaseBill.findUniqueOrThrow({ where: { id: billId }, include: { items: true } });
+      const got = keepStock ? await receiveBillStock(tx, actor, edited, warehouseId, edited.items, false, split) : { received: false, warehouseId: null };
+      await tx.purchaseBill.update({ where: { id: billId }, data: { stockReceived: got.received, warehouseId: got.warehouseId, stockSplit: got.received && split.length ? (split as unknown as Prisma.InputJsonValue) : Prisma.DbNull } });
+    }
+    // The supplier may have changed: re-spread both suppliers' plant balance.
+    await settleFromAdvance(tx, actor.tenantId, supplier.id);
+    if (existing.supplierId !== supplier.id) await settleFromAdvance(tx, actor.tenantId, existing.supplierId);
+    await learnMaterialCodes(tx, actor.tenantId, lines);
+    const bill = await tx.purchaseBill.findUniqueOrThrow({ where: { id: billId }, include: { items: true } });
     await audit(tx, actor, { action: 'PURCHASE_BILL_EDITED', entityType: 'PurchaseBill', entityId: bill.id, reference: bill.billNumber, oldValue: { total: existing.grandTotal }, newValue: { total: bill.grandTotal } });
     return bill;
   }
@@ -147,9 +258,14 @@ export async function savePurchaseBill(tx: Tx, actor: Actor, input: PurchaseBill
   const billNumber = await nextNumber(tx, actor.tenantId, 'PB');
   let bill = await tx.purchaseBill.create({ data: { tenantId: actor.tenantId, billNumber, createdBy: actor.name, ...header, items: { create: lines } }, include: { items: true } });
   if (input.receiveStock) {
-    const wh = await receiveBillStock(tx, actor, bill, input.warehouseId, bill.items, false);
-    if (wh) bill = await tx.purchaseBill.update({ where: { id: bill.id }, data: { stockReceived: true, warehouseId: wh }, include: { items: true } });
+    const split = cleanSplit(input.stockSplit);
+    const got = await receiveBillStock(tx, actor, bill, input.warehouseId, bill.items, false, split);
+    if (got.received) await tx.purchaseBill.update({ where: { id: bill.id }, data: { stockReceived: true, warehouseId: got.warehouseId, stockSplit: split.length ? (split as unknown as Prisma.InputJsonValue) : Prisma.DbNull } });
   }
+  // Paid straight from the plant balance when money is lying with the supplier.
+  await settleFromAdvance(tx, actor.tenantId, supplier.id);
+  await learnMaterialCodes(tx, actor.tenantId, lines);
+  bill = await tx.purchaseBill.findUniqueOrThrow({ where: { id: bill.id }, include: { items: true } });
   await audit(tx, actor, { action: 'PURCHASE_BILL_CREATED', entityType: 'PurchaseBill', entityId: bill.id, reference: `${bill.billNumber} / ${supplierInvoiceNo}`, newValue: { supplier: supplier.name, total: bill.grandTotal, stockReceived: bill.stockReceived } });
   return bill;
 }
@@ -157,12 +273,24 @@ export async function savePurchaseBill(tx: Tx, actor: Actor, input: PurchaseBill
 export async function cancelPurchaseBill(tx: Tx, actor: Actor, billId: string, reason: string) {
   const bill = await tx.purchaseBill.findFirst({ where: { id: billId, tenantId: actor.tenantId }, include: { items: true } });
   if (!bill) throw notFound('Purchase bill not found.');
-  if (bill.status === 'Cancelled') throw conflict('Bill is already cancelled.');
-  if (bill.paidAmount > 0) throw conflict('Cancel the payments made against this bill first.');
   await assertDayOpen(tx, actor.tenantId, bill.date);
-  if (bill.stockReceived) await receiveBillStock(tx, actor, bill, bill.warehouseId, bill.items, true);
-  await tx.purchaseBill.update({ where: { id: bill.id }, data: { status: 'Cancelled', notes: `${bill.notes ? `${bill.notes} · ` : ''}Cancelled: ${reason}` } });
-  await audit(tx, actor, { action: 'PURCHASE_BILL_CANCELLED', entityType: 'PurchaseBill', entityId: bill.id, reference: bill.billNumber, reason, sensitive: true });
+  const notes = await tx.debitNote.count({ where: { tenantId: actor.tenantId, purchaseBillId: bill.id, status: 'Active' } });
+  if (notes) throw conflict('A debit note (purchase return) is made against this bill — cancel it first.');
+  const tds = await tx.tdsEntry.count({ where: { tenantId: actor.tenantId, referenceType: 'PURCHASE_BILL', referenceId: bill.id, cancelled: false } });
+  if (tds) throw conflict('A TDS entry is made against this bill — cancel it first (Books → TDS).');
+  if (bill.status !== 'Cancelled') {
+    // Money already paid against this bill is not lost: it stays with the supplier as plant balance (advance).
+    await tx.accountVoucher.updateMany({ where: { againstBillId: bill.id }, data: { againstBillId: null } });
+    if (bill.stockReceived) await receiveBillStock(tx, actor, bill, bill.warehouseId, bill.items, true, cleanSplit(bill.stockSplit));
+  }
+  // Deleted for good: the bill, its purchase voucher and its (now netted-out) stock movements.
+  // The audit log keeps a copy of what was deleted.
+  await tx.inventoryTransaction.deleteMany({ where: { tenantId: actor.tenantId, referenceType: 'PURCHASE', referenceId: bill.id } });
+  await tx.accountVoucher.deleteMany({ where: { tenantId: actor.tenantId, sourceType: 'PURCHASE_BILL', sourceId: bill.id } });
+  await tx.purchaseBill.delete({ where: { id: bill.id } });
+  // Advance used on this bill goes back to the plant balance for the other bills.
+  await settleFromAdvance(tx, actor.tenantId, bill.supplierId);
+  await audit(tx, actor, { action: 'PURCHASE_BILL_DELETED', entityType: 'PurchaseBill', entityId: bill.id, reference: `${bill.billNumber} / ${bill.supplierInvoiceNo}`, reason, sensitive: true, oldValue: { supplier: bill.supplierName, date: bill.date, total: bill.grandTotal, status: bill.status, items: bill.items.map((i) => `${i.quantity} × ${i.description} @ ${i.rate}`) } });
 }
 
 // ───────────────────────── Expenses ─────────────────────────
@@ -291,18 +419,21 @@ export async function createManualVoucher(tx: Tx, actor: Actor, input: ManualVou
 
   const partyName = accounts.find((a) => a.partyId)?.name || accounts.find((a) => !MONEY_GROUPS.has(a.groupName))?.name || null;
   const voucher = await writeVoucher(tx, { tenantId: actor.tenantId, voucherType: input.voucherType, date: input.date, partyName, narration: input.narration?.trim() || null, sourceType: 'MANUAL', againstBillId: bill?.id ?? null, createdBy: actor.name, lines });
-  if (bill) await applyBillPayment(tx, bill.id);
+  await settleSuppliers(tx, actor.tenantId, voucher.id);
   await audit(tx, actor, { action: 'VOUCHER_CREATED', entityType: 'AccountVoucher', entityId: voucher.id, reference: voucher.voucherNumber, newValue: { type: voucher.voucherType, amount: voucher.amount, date: voucher.date } });
   return voucher;
 }
 
+/** Refresh a bill's paid amount and status (payments against it, then plant balance). */
 export async function applyBillPayment(tx: Tx, billId: string) {
-  const bill = await tx.purchaseBill.findUnique({ where: { id: billId } });
-  if (!bill) return;
-  const vouchers = await tx.accountVoucher.findMany({ where: { againstBillId: billId, cancelled: false }, include: { lines: { include: { account: true } } } });
-  const paid = r2(vouchers.reduce((s, v) => s + v.lines.filter((l) => l.account.partyId === bill.supplierId).reduce((x, l) => x + l.debit, 0), 0));
-  const status = paid <= 0 ? 'Unpaid' : paid + 0.5 >= bill.grandTotal ? 'Paid' : 'Partial';
-  await tx.purchaseBill.update({ where: { id: billId }, data: { paidAmount: paid, status } });
+  const bill = await tx.purchaseBill.findUnique({ where: { id: billId }, select: { tenantId: true, supplierId: true } });
+  if (bill) await settleFromAdvance(tx, bill.tenantId, bill.supplierId);
+}
+
+/** Re-spread the plant balance of every supplier a voucher touches. */
+async function settleSuppliers(tx: Tx, tenantId: string, voucherId: string) {
+  const lines = await tx.accountVoucherLine.findMany({ where: { voucherId, account: { groupName: 'Sundry Creditors', partyId: { not: null } } }, select: { account: { select: { partyId: true } } } });
+  for (const partyId of new Set(lines.map((l) => l.account.partyId!))) await settleFromAdvance(tx, tenantId, partyId);
 }
 
 export async function cancelManualVoucher(tx: Tx, actor: Actor, voucherId: string, reason: string) {
@@ -312,7 +443,7 @@ export async function cancelManualVoucher(tx: Tx, actor: Actor, voucherId: strin
   if (v.cancelled) throw conflict('Voucher is already cancelled.');
   await assertDayOpen(tx, actor.tenantId, v.date);
   await tx.accountVoucher.update({ where: { id: v.id }, data: { cancelled: true, narration: `${v.narration ? `${v.narration} · ` : ''}Cancelled: ${reason}` } });
-  if (v.againstBillId) await applyBillPayment(tx, v.againstBillId);
+  await settleSuppliers(tx, actor.tenantId, v.id);
   await audit(tx, actor, { action: 'VOUCHER_CANCELLED', entityType: 'AccountVoucher', entityId: v.id, reference: v.voucherNumber, reason, sensitive: true });
 }
 

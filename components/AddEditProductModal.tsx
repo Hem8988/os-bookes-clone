@@ -110,6 +110,9 @@ const ProductForm: React.FC<AddEditProductModalProps> = ({ productToEdit, catego
             <input className={input} list="brand-options" value={form.brand || ''} onChange={(e) => set('brand', e.target.value)} placeholder="Indane / HP / Bharat…" />
             <datalist id="brand-options">{brands.map((b) => <option key={b.id} value={b.name} />)}</datalist>
           </L>
+          <L label="Material code (oil co. invoice)">
+            <input className={`${input} font-mono`} value={form.materialCode || ''} onChange={(e) => set('materialCode', e.target.value.toUpperCase())} placeholder="IOCL e.g. M00450" />
+          </L>
           <L label="Standard rate ₹ (GST incl.) *"><input type="number" step="0.01" className={input} value={form.salePrice || ''} onChange={num('salePrice')} /></L>
           <L label="Purchase price ₹"><input type="number" step="0.01" className={input} value={form.purchasePrice || ''} onChange={num('purchasePrice')} /></L>
           <L label="GST %">

@@ -253,13 +253,14 @@ function InwardRegister({ onError }: { onError: (m: string) => void }) {
   const [search, setSearch] = useState('');
   const q = useApiData<Movement[]>(`/api/cylinder/ledger?inward=1&limit=1000&from=${from}&to=${to}`, onError);
   const rows = (q.data ?? []).map((m) => {
-    const inward = m.toType === 'WAREHOUSE';
+    // Loads come from the plant (into a godown or straight to a delivery boy); empties go back to it.
+    const inward = m.fromType === 'PLANT';
     const sign = m.transactionType === 'REVERSAL' ? -1 : 1;
     return {
       ...m,
       kind: m.transactionType === 'REVERSAL' ? 'Bill cancelled' : inward ? 'Received' : 'Empties sent',
       party: (inward ? m.fromName : m.toName) || '—',
-      godown: (inward ? m.toName : m.fromName) || '—',
+      godown: `${(inward ? m.toName : m.fromName) || '—'}${(inward ? m.toType : m.fromType) === 'DELIVERY_BOY' ? ' (delivery boy, from truck)' : ''}`,
       fullIn: m.transactionType === 'PURCHASE_RECEIPT' ? m.fullQty : m.transactionType === 'REVERSAL' ? sign * m.fullQty : 0,
     };
   });
@@ -295,7 +296,7 @@ function InwardRegister({ onError }: { onError: (m: string) => void }) {
                 <th className="p-2">Supplier / plant</th>
                 <th className="p-2">Truck</th>
                 <th className="p-2">Driver</th>
-                <th className="p-2">Godown</th>
+                <th className="p-2">Godown / delivery boy</th>
                 <th className="p-2">Product</th>
                 <th className="p-2 text-right">Full</th>
                 <th className="p-2 text-right">Empty</th>

@@ -11,12 +11,13 @@ export interface SupplierOption { id: string; name: string; shortName?: string |
 /**
  * Supplier / plant dropdown with an inline "+ New supplier" form, so a missing
  * supplier can be added without leaving the bill, expense or return being entered.
+ * `newSupplier` opens that form pre-filled (e.g. from an imported invoice); remount with a `key` to apply it.
  */
-export function SupplierSelect({ value, onChange, placeholder = 'Choose supplier…', showGstin, onError }: { value: string; onChange: (id: string, supplier: SupplierOption | null) => void; placeholder?: string; showGstin?: boolean; onError?: (m: string) => void }) {
+export function SupplierSelect({ value, onChange, placeholder = 'Choose supplier…', showGstin, onError, newSupplier }: { value: string; onChange: (id: string, supplier: SupplierOption | null) => void; placeholder?: string; showGstin?: boolean; onError?: (m: string) => void; newSupplier?: { name: string; gstin?: string | null; address?: string; city?: string } }) {
   const q = useApiData<SupplierOption[]>('/api/customers?type=Vendor', onError);
   const suppliers = (q.data ?? []).filter((p) => p.type === 'Vendor' && p.status !== 'INACTIVE');
-  const [adding, setAdding] = useState(false);
-  const [v, setV] = useState({ name: '', phone: '', gstin: '', address: '', city: '' });
+  const [adding, setAdding] = useState(!!newSupplier);
+  const [v, setV] = useState({ name: newSupplier?.name || '', phone: '', gstin: newSupplier?.gstin || '', address: newSupplier?.address || '', city: newSupplier?.city || '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 

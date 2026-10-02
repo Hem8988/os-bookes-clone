@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Eye, IndianRupee, PackageCheck, Plus, ShoppingCart, Trash2, XCircle } from 'lucide-react';
+import { Eye, FileUp, IndianRupee, PackageCheck, Plus, ShoppingCart, Trash2, XCircle } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, today, useToast } from '../ui';
@@ -165,6 +165,46 @@ const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const lineRate = (l: FormLine) => (l.basis === 'TONNE' ? ((Number(l.tonneRate) || 0) * (Number(l.kg) || 0)) / 1000 : Number(l.rate) || 0);
 const kgOf = (p?: Product) => (p?.weightVolume && (!p.weightUnit || p.weightUnit.toUpperCase() === 'KG') ? String(p.weightVolume) : '');
 
+interface ImportedLine { description: string; quantity: number; kgPerUnit: number | null; tonneRate: number | null; taxable: number; taxRate: number; hsnCode: string }
+interface ImportedInvoice {
+  invoiceNo: string | null;
+  date: string | null;
+  vehicleNumber: string | null;
+  supplierGstin: string | null;
+  supplierName: string;
+  supplierAddress: string;
+  supplierCity: string;
+  supplierId: string | null;
+  duplicateOf: string | null;
+  lines: ImportedLine[];
+  total: number | null;
+}
+
+/** Cylinder product for an invoice line: same weight first, then "19 kg" in the name. */
+function matchProduct(products: Product[], l: ImportedLine) {
+  const kg = l.kgPerUnit ?? Number(l.description.match(/(\d+(?:\.\d+)?)\s*kg/i)?.[1]);
+  if (!kg) return undefined;
+  const byWeight = products.filter((p) => kgOf(p) && Number(kgOf(p)) === kg);
+  const byName = products.filter((p) => new RegExp(`(^|[^\\d.])${String(kg).replace('.', '\\.')}\\s*kg`, 'i').test(p.name));
+  return byWeight[0] || byName[0];
+}
+
+/** What the import found, and whether our total agrees with the invoice. */
+function ImportCheck({ imported, grand, lines }: { imported: ImportedInvoice; grand: number; lines: FormLine[] }) {
+  const unmatched = lines.filter((l) => !l.productId).length;
+  const totalOk = imported.total != null && Math.abs(imported.total - grand) < 1;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs space-y-1">
+      <div className={cx('font-bold', totalOk ? 'text-emerald-700' : 'text-rose-700')}>
+        {imported.total == null ? '⚠️ Invoice total not found — check the lines.' : totalOk ? `✅ Total matches the invoice: ${money(imported.total)}` : `❌ Invoice total ${money(imported.total)} but this bill is ${money(grand)} — check the lines.`}
+      </div>
+      {imported.duplicateOf && <div className="font-bold text-rose-700">❌ Invoice {imported.invoiceNo} is already entered as {imported.duplicateOf}.</div>}
+      {!imported.supplierId && <div className="text-amber-700">Supplier with GSTIN {imported.supplierGstin || '—'} is not in your list — fill mobile no. below and press &quot;Add supplier&quot;.</div>}
+      {unmatched > 0 && <div className="text-amber-700">{unmatched} line(s) did not match a product — choose the cylinder, otherwise stock will not be added.</div>}
+    </div>
+  );
+}
+
 function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
   const productsQ = useApiData<Product[]>('/api/products', onError);
   const warehousesQ = useApiData<Warehouse[]>('/api/cylinder/warehouses', onError);
@@ -184,7 +224,48 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
     bill ? bill.items.map((i) => ({ productId: i.productId || '', description: i.description, hsnCode: i.hsnCode, quantity: String(i.quantity), unit: i.unit, rate: String(i.rate), taxRate: String(i.taxRate), basis: 'UNIT' as const, tonneRate: '', kg: '' })) : [emptyLine()]
   );
   const [busy, setBusy] = useState(false);
+  const [imported, setImported] = useState<ImportedInvoice | null>(null);
+  const [importing, setImporting] = useState(false);
   const set = (i: number, patch: Partial<FormLine>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  /** Fill the form from the plant's invoice PDF; the user still reviews and saves. */
+  const importPdf = async (file: File) => {
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/books/purchases/import', { method: 'POST', body: form, credentials: 'same-origin' });
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: ImportedInvoice; error?: string };
+      if (!res.ok || !json.data) throw new Error(json.error || 'Could not read the invoice.');
+      const inv = json.data;
+      setImported(inv);
+      if (inv.supplierId) setSupplierId(inv.supplierId);
+      if (inv.invoiceNo) setInvoiceNo(inv.invoiceNo);
+      if (inv.date) setDate(inv.date);
+      if (inv.vehicleNumber) setVehicleNumber(inv.vehicleNumber);
+      setLines(
+        inv.lines.map((l) => {
+          const p = matchProduct(products, l);
+          return {
+            productId: p?.id || '',
+            description: p?.name || l.description,
+            hsnCode: p?.hsnCode || l.hsnCode,
+            quantity: String(l.quantity),
+            unit: p?.unit || 'PCS',
+            rate: l.tonneRate ? '' : String(l.quantity ? l.taxable / l.quantity : 0),
+            taxRate: String(l.taxRate),
+            basis: l.tonneRate ? 'TONNE' : 'UNIT',
+            tonneRate: l.tonneRate ? String(l.tonneRate) : '',
+            kg: l.kgPerUnit ? String(l.kgPerUnit) : kgOf(p),
+          };
+        })
+      );
+    } catch (e) {
+      onError(errorMessage(e));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const pickProduct = (i: number, id: string) => {
     const p = products.find((x) => x.id === id);
@@ -242,9 +323,37 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
         </>
       }
     >
+      {!bill && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-sky-300 bg-sky-50 px-3 py-2">
+          <label className={cx('inline-flex items-center gap-2 rounded-lg bg-sky-700 px-3 py-1.5 text-xs font-bold text-white', importing || !productsQ.data ? 'opacity-60' : 'cursor-pointer hover:bg-sky-800')}>
+            <FileUp className="h-4 w-4" /> {importing ? 'Reading invoice…' : 'Upload invoice PDF'}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              disabled={importing || !productsQ.data}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void importPdf(file);
+              }}
+            />
+          </label>
+          <span className="text-[11px] text-sky-900">Indian Oil (Indane) tax invoice PDF from the plant: fills supplier, invoice no., date, truck and cylinders.</span>
+        </div>
+      )}
+      {imported && <ImportCheck imported={imported} grand={calc.grand} lines={lines} />}
+
       <div className="grid sm:grid-cols-4 gap-3">
         <Field label="Supplier / plant" className="sm:col-span-2">
-          <SupplierSelect value={supplierId} showGstin onError={onError} onChange={(id) => setSupplierId(id)} />
+          <SupplierSelect
+            key={imported && !imported.supplierId ? `new-${imported.supplierGstin}` : 'select'}
+            value={supplierId}
+            showGstin
+            onError={onError}
+            onChange={(id) => setSupplierId(id)}
+            newSupplier={imported && !imported.supplierId && !supplierId ? { name: imported.supplierName, gstin: imported.supplierGstin, address: imported.supplierAddress, city: imported.supplierCity } : undefined}
+          />
         </Field>
         <Field label="Supplier's invoice no.">
           <input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} className={inputClass} placeholder="e.g. IOCL/2345" />

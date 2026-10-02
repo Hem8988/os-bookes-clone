@@ -31,7 +31,12 @@ export function fail(error: unknown) {
   if (prismaCode === 'P2002') return NextResponse.json({ success: false, error: 'This record already exists (duplicate value).', code: 'DUPLICATE' }, { status: 409 });
   if (prismaCode === 'P2025') return NextResponse.json({ success: false, error: 'Record not found.', code: 'NOT_FOUND' }, { status: 404 });
   if ((error as Error)?.name === 'PrismaClientValidationError') {
-    return NextResponse.json({ success: false, error: 'Some fields are missing or invalid.', code: 'INVALID' }, { status: 400 });
+    // Prisma's last line names the field, e.g. "Unknown argument `vehicleNumber`" when the
+    // server still runs a client generated before a schema change (restart it).
+    const detail = (error as Error).message.trim().split('\n').pop() || '';
+    console.error('[api] invalid query:', detail);
+    const hint = process.env.NODE_ENV === 'production' ? '' : ` (${detail}${/Unknown (argument|field)/.test(detail) ? ' — restart the server after a database update' : ''})`;
+    return NextResponse.json({ success: false, error: `Some fields are missing or invalid.${hint}`, code: 'INVALID' }, { status: 400 });
   }
   console.error('[api] unexpected error', error);
   return NextResponse.json({ success: false, error: 'Something went wrong. Please try again.' }, { status: 500 });

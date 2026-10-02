@@ -620,6 +620,7 @@ model StockTransfer {
   approvedAt      DateTime?
   rejectionReason String?
   notes           String?
+  vehicleNumber   String? // vehicle the cylinders went in
   createdAt       DateTime            @default(now())
   items           StockTransferItem[]
 

@@ -46,6 +46,7 @@ export const POST = handle(async (request: Request) => {
         toId: str(body.toId, 'To', { required: true }),
         items: Array.isArray(body.items) ? (body.items as { productId: string; fullQty?: number; emptyQty?: number }[]) : [],
         notes: optStr(body.notes),
+        vehicleNumber: optStr(body.vehicleNumber),
       },
       effects
     )

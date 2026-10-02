@@ -18,7 +18,7 @@ interface Overview {
   deliveryBoys: { id: string; name: string; status: string; stock: StockRow[]; cash: number }[];
   customerHoldings: { productId: string; productName: string; held: number; delivered: number; emptiesReceived: number }[];
 }
-interface Transfer { id: string; transferNumber: string; transferType: string; fromName: string; toName: string; status: string; requestedBy: string; approvedBy: string | null; rejectionReason: string | null; createdAt: string; items: { productName: string; fullQty: number; emptyQty: number }[] }
+interface Transfer { id: string; transferNumber: string; transferType: string; fromName: string; toName: string; vehicleNumber?: string | null; status: string; requestedBy: string; approvedBy: string | null; rejectionReason: string | null; createdAt: string; items: { productName: string; fullQty: number; emptyQty: number }[] }
 interface Movement { id: string; transactionType: string; fromType: string | null; toType: string | null; vehicleNumber: string | null; driverName: string | null; fromName: string | null; toName: string | null; productName: string; fullQty: number; emptyQty: number; defectiveQty: number; referenceNumber: string | null; reason: string | null; performedBy: string; createdAt: string }
 
 type Tab = 'overview' | 'transfers' | 'movements' | 'inward' | 'warehouses';
@@ -164,7 +164,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                 {transfers.map((t) => (
                   <tr key={t.id} className="border-t border-slate-100">
                     <td className="p-2 font-mono font-bold">{t.transferNumber}<div className="text-[10px] text-slate-400">{dateTime(t.createdAt)}</div></td>
-                    <td className="p-2">{t.fromName} → {t.toName}</td>
+                    <td className="p-2">{t.fromName} → {t.toName}{t.vehicleNumber && <div className="text-[10px] text-slate-500">🚚 {t.vehicleNumber}</div>}</td>
                     <td className="p-2">{t.items.map((i) => `${i.productName}: ${i.fullQty}F / ${i.emptyQty}E`).join(', ')}</td>
                     <td className="p-2"><StatusBadge status={t.status} />{t.rejectionReason && <div className="text-[10px] text-rose-600">{t.rejectionReason}</div>}</td>
                     <td className="p-2">{t.requestedBy}{t.approvedBy && <div className="text-[10px] text-slate-400">approved: {t.approvedBy}</div>}</td>
@@ -458,7 +458,7 @@ function useTruckLocations(warehouses: Overview['warehouses'], onError: (m: stri
   ];
   /** Turn a `new:<number>` choice into the truck's godown id (opening it on first use). */
   const resolve = async (id: string) => (id.startsWith('new:') ? (await api<{ id: string }>('/api/cylinder/trucks', { body: { vehicleNumber: id.slice(4) } })).id : id);
-  return { trucks, resolve };
+  return { trucks, resolve, vehicles: q.data ?? [] };
 }
 
 type TransferChoice = 'WAREHOUSE_TO_DRIVER' | 'TRUCK_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE' | 'DRIVER_TO_TRUCK' | 'DRIVER_TO_DRIVER' | 'WAREHOUSE_TO_TRUCK' | 'TRUCK_TO_WAREHOUSE' | 'WAREHOUSE_TO_WAREHOUSE';
@@ -480,12 +480,19 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [notes, setNotes] = useState('');
+  const [vehicle, setVehicle] = useState('');
   const [busy, setBusy] = useState(false);
   // What the chosen source holds of a product (undefined until a real source is chosen).
   const available = (productId: string) => (fromId && !fromId.startsWith('new:') ? ([...data.warehouses, ...data.deliveryBoys].find((x) => x.id === fromId)?.stock.find((r) => r.productId === productId) ?? null) : undefined);
   const { items, editor, over } = useTransferLines(data.products, available);
-  const { trucks, resolve } = useTruckLocations(data.warehouses, onError);
+  const { trucks, resolve, vehicles } = useTruckLocations(data.warehouses, onError);
   const [fromKind, toKind] = type.split('_TO_') as [Side, Side];
+  /** Picking a delivery boy fills in the vehicle he drives (Operations → Vehicles). */
+  const pickBoy = (id: string) => {
+    const boy = data.deliveryBoys.find((b) => b.id === id);
+    const own = boy && vehicles.find((v) => v.own && v.driverName && v.driverName.trim().toLowerCase() === boy.name.trim().toLowerCase());
+    if (own) setVehicle(own.number);
+  };
   const options = (kind: Side) =>
     kind === 'WAREHOUSE'
       ? data.warehouses.filter((w) => !w.code.startsWith('TRK-')).map((w) => ({ id: w.id, name: w.name }))
@@ -497,7 +504,7 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
     try {
       const [from, to] = [await resolve(fromId), await resolve(toId)];
       if (from === to) throw new Error('From and To must be different.');
-      await api('/api/cylinder/transfers', { body: { transferType: SERVER_TYPE[type], fromId: from, toId: to, items, notes } });
+      await api('/api/cylinder/transfers', { body: { transferType: SERVER_TYPE[type], fromId: from, toId: to, items, notes, vehicleNumber: vehicle.trim() || null } });
       onDone('Transfer sent for approval.');
     } catch (e) {
       onError(errorMessage(e));
@@ -526,19 +533,23 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
       {(fromKind === 'TRUCK' || toKind === 'TRUCK') && trucks.length === 0 && <p className="text-xs font-semibold text-amber-700">No trucks yet — add your truck in Operations → Vehicles first.</p>}
       <div className="grid grid-cols-2 gap-2">
         <Field label="From">
-          <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
+          <select value={fromId} onChange={(e) => { setFromId(e.target.value); if (fromKind === 'DRIVER') pickBoy(e.target.value); }} className={inputClass}>
             <option value="">Select…</option>
             {options(fromKind).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         </Field>
         <Field label="To">
-          <select value={toId} onChange={(e) => setToId(e.target.value)} className={inputClass}>
+          <select value={toId} onChange={(e) => { setToId(e.target.value); if (toKind === 'DRIVER') pickBoy(e.target.value); }} className={inputClass}>
             <option value="">Select…</option>
             {options(toKind).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         </Field>
       </div>
       {editor}
+      <Field label="Vehicle (gaadi)" hint="Filled in from the delivery boy's vehicle — pick or type another if needed.">
+        <input list="transfer-vehicles" value={vehicle} onChange={(e) => setVehicle(e.target.value.toUpperCase())} placeholder="e.g. MH14LL3611" className={inputClass} />
+        <datalist id="transfer-vehicles">{vehicles.map((v) => <option key={v.number} value={v.number}>{v.driverName || ''}</option>)}</datalist>
+      </Field>
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
     </Modal>
   );

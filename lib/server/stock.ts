@@ -46,7 +46,7 @@ async function productLines(tx: Tx, tenantId: string, items: { productId: string
 export async function requestTransfer(
   tx: Tx,
   actor: Actor,
-  input: { transferType: TransferType; fromId: string; toId: string; items: { productId: string; fullQty?: number; emptyQty?: number }[]; notes?: string | null },
+  input: { transferType: TransferType; fromId: string; toId: string; items: { productId: string; fullQty?: number; emptyQty?: number }[]; notes?: string | null; vehicleNumber?: string | null },
   effects: Effects
 ) {
   if (!ENDPOINTS[input.transferType]) throw badRequest('Invalid transfer type.');
@@ -70,6 +70,7 @@ export async function requestTransfer(
       toName: to.name,
       requestedBy: actor.name,
       notes: input.notes || null,
+      vehicleNumber: cleanVehicleNumber(input.vehicleNumber),
       items: { create: lines },
     },
     include: { items: true },
@@ -81,7 +82,7 @@ export async function requestTransfer(
       type: 'STOCK_TRANSFER',
       referenceType: 'STOCK_TRANSFER',
       referenceId: transfer.id,
-      title: `${transfer.transferNumber} · ${from.name} → ${to.name}`,
+      title: `${transfer.transferNumber} · ${from.name} → ${to.name}${transfer.vehicleNumber ? ` · 🚚 ${transfer.vehicleNumber}` : ''}`,
       summary: lines.map((l) => `${l.productName}: ${l.fullQty} full / ${l.emptyQty} empty`).join(', '),
       requestedById: actor.userId,
       requestedByName: actor.name,
@@ -105,6 +106,7 @@ export async function approveTransfer(tx: Tx, actor: Actor, transferId: string) 
     referenceId: transfer.id,
     referenceNumber: transfer.transferNumber,
     reason: transfer.notes || `Stock transfer ${transfer.transferNumber}`,
+    vehicleNumber: transfer.vehicleNumber,
     performedBy: actor.name,
   });
   await tx.stockTransfer.update({ where: { id: transfer.id }, data: { status: 'APPROVED', approvedBy: actor.name, approvedAt: new Date() } });

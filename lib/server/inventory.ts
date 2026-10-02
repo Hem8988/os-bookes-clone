@@ -259,6 +259,21 @@ export async function getDefaultWarehouse(db: Db, tenantId: string) {
   return db.warehouse.create({ data: { tenantId, code: 'MAIN', name: 'Main Godown', isDefault: true } });
 }
 
+/** Our own truck used as a mobile godown: a warehouse coded TRK-<number>. */
+export const TRUCK_CODE_PREFIX = 'TRK-';
+export const truckCode = (vehicleNumber: string) => `${TRUCK_CODE_PREFIX}${vehicleNumber.replace(/[\s-]+/g, '').toUpperCase()}`;
+
+/** The stock location of one of our vehicles, created (or re-activated) on first use. */
+export async function truckGodown(db: Db, tenantId: string, vehicleNumber: string) {
+  const code = truckCode(vehicleNumber);
+  if (code.length <= TRUCK_CODE_PREFIX.length || code.length > 20) throw badRequest('Enter a valid truck number.');
+  const vehicle = await db.vehicle.findFirst({ where: { tenantId, number: code.slice(TRUCK_CODE_PREFIX.length) } });
+  if (!vehicle) throw badRequest('Add this truck in Vehicles first — only your own trucks can hold stock.');
+  const existing = await db.warehouse.findFirst({ where: { tenantId, code } });
+  if (existing) return existing.active ? existing : db.warehouse.update({ where: { id: existing.id }, data: { active: true } });
+  return db.warehouse.create({ data: { tenantId, code, name: `Truck ${vehicle.number}`, address: `${vehicle.type} · mobile godown` } });
+}
+
 export async function stockAt(db: Db, tenantId: string, type: 'WAREHOUSE' | 'DELIVERY_BOY', id: string) {
   return db.stockBalance.findMany({ where: { tenantId, locationType: type, locationId: id }, orderBy: { productName: 'asc' } });
 }

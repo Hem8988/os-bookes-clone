@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { Eye, FileUp, Pencil, IndianRupee, Landmark, PackageCheck, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
+import { useSession } from '../../lib/auth';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Column, LedgerOption, money, PeriodBar, plain, ReportTable, sum, usePeriod } from './shared';
 import { SupplierSelect } from './SupplierSelect';
@@ -49,7 +50,7 @@ interface Bill {
   items: BillItem[];
 }
 interface Product { id: string; name: string; hsnCode: string; unit: string; taxRate: number; purchasePrice?: number; weightVolume?: number | null; weightUnit?: string | null; materialCode?: string | null }
-interface Warehouse { id: string; name: string; isDefault: boolean }
+interface Warehouse { id: string; code?: string; name: string; isDefault: boolean; active?: boolean }
 
 const STATUS_TONE: Record<string, 'green' | 'amber' | 'red' | 'slate'> = { Paid: 'green', Partial: 'amber', Unpaid: 'red', Cancelled: 'slate' };
 
@@ -372,70 +373,23 @@ function ImportCheck({ imported, grand, lines }: { imported: ImportedInvoice; gr
   );
 }
 
-/** Hand cylinders straight off the truck to delivery boys; whatever is left goes to the godown. */
-function TruckSplit({ direct, onDirect, boys, products, split, onChange, godownName }: {
-  direct: boolean;
-  onDirect: (v: boolean) => void;
-  boys: { id: string; name: string }[];
-  products: { productId: string; name: string; qty: number }[];
-  split: Record<string, Record<string, string>>;
-  onChange: (s: Record<string, Record<string, string>>) => void;
-  godownName: string;
-}) {
-  const given = (productId: string) => boys.reduce((s, b) => s + (Number(split[b.id]?.[productId]) || 0), 0);
+type StockMode = 'GODOWN' | 'TRUCK';
+
+/** Where the load went: the godown, or our own truck kept as a mobile godown. */
+function StockPlace({ mode, onMode, truckNumber, total }: { mode: StockMode; onMode: (v: StockMode) => void; truckNumber: string; total: number }) {
   return (
     <div className="rounded-xl border border-slate-200 p-3 space-y-2 text-xs">
       <div className="font-bold text-slate-700">Where did the truck&apos;s cylinders go?</div>
       <div className="flex flex-wrap gap-4 font-semibold">
-        <label className="flex items-center gap-2"><input type="radio" checked={!direct} onChange={() => onDirect(false)} /> All into the godown</label>
-        <label className="flex items-center gap-2"><input type="radio" checked={direct} onChange={() => onDirect(true)} /> Handed out from the truck to delivery boys</label>
+        <label className="flex items-center gap-2"><input type="radio" checked={mode === 'GODOWN'} onChange={() => onMode('GODOWN')} /> Into the godown</label>
+        <label className={cx('flex items-center gap-2', !truckNumber && 'opacity-50')}>
+          <input type="radio" disabled={!truckNumber} checked={mode === 'TRUCK'} onChange={() => onMode('TRUCK')} /> Keep it in my truck {truckNumber ? <span className="font-mono">{truckNumber}</span> : '(choose the truck no. above)'} — the truck is my godown
+        </label>
       </div>
-      {direct && (
-        boys.length === 0 ? (
-          <p className="text-amber-700">No active delivery boys yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="text-xs min-w-[360px]">
-              <thead className="text-slate-500">
-                <tr>
-                  <th className="p-1.5 text-left">Delivery boy</th>
-                  {products.map((p) => <th key={p.productId} className="p-1.5 text-right whitespace-nowrap">{p.name}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {boys.map((b) => (
-                  <tr key={b.id} className="border-t border-slate-100">
-                    <td className="p-1.5 font-semibold whitespace-nowrap">{b.name}</td>
-                    {products.map((p) => (
-                      <td key={p.productId} className="p-1">
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={split[b.id]?.[p.productId] ?? ''}
-                          onChange={(e) => onChange({ ...split, [b.id]: { ...split[b.id], [p.productId]: e.target.value } })}
-                          className={cx(inputClass, 'w-24 py-1 text-xs text-right font-mono')}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                <tr className="border-t border-slate-200 bg-slate-50">
-                  <td className="p-1.5 font-bold">{godownName} (rest)</td>
-                  {products.map((p) => {
-                    const rest = p.qty - given(p.productId);
-                    return <td key={p.productId} className={cx('p-1.5 text-right font-mono font-bold', rest < 0 && 'text-rose-600')}>{rest}</td>;
-                  })}
-                </tr>
-                <tr className="border-t border-slate-200">
-                  <td className="p-1.5 font-bold">On the bill</td>
-                  {products.map((p) => <td key={p.productId} className="p-1.5 text-right font-mono">{p.qty}</td>)}
-                </tr>
-              </tbody>
-            </table>
-            {products.some((p) => given(p.productId) > p.qty) && <p className="text-rose-600 font-semibold mt-1">More cylinders handed out than the bill has — reduce the quantities.</p>}
-          </div>
-        )
+      {mode === 'TRUCK' && (
+        <p className="rounded-lg bg-sky-50 border border-sky-100 px-3 py-2 text-sky-900">
+          All {total} cylinders stay in truck <strong className="font-mono">{truckNumber}</strong> as its stock (a new truck is added to Vehicles). Hand them out later with Inventory → Stock transfer → <strong>Truck → Delivery boy</strong> (needs approval).
+        </p>
       )}
     </div>
   );
@@ -445,7 +399,13 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
   const productsQ = useApiData<Product[]>('/api/products', onError);
   const warehousesQ = useApiData<Warehouse[]>('/api/cylinder/warehouses', onError);
   const products = productsQ.data ?? [];
-  const warehouses = warehousesQ.data ?? [];
+  const warehouses = (warehousesQ.data ?? []).filter((w) => w.active !== false);
+  // Our own trucks can take the load as a mobile godown; `new:<number>` opens one on save.
+  const ownTrucks = (useApiData<{ number: string; own: boolean; godownId: string | null }[]>('/api/cylinder/trucks', onError).data ?? []).filter((t) => t.own);
+  const truckOptions = [
+    ...warehouses.filter((w) => w.code?.startsWith('TRK-')).map((w) => ({ id: w.id, name: `🚚 ${w.name}` })),
+    ...ownTrucks.filter((t) => !t.godownId).map((t) => ({ id: `new:${t.number}`, name: `🚚 Truck ${t.number}` })),
+  ];
   const [supplierId, setSupplierId] = useState(bill?.supplierId || '');
   const [invoiceNo, setInvoiceNo] = useState(bill?.supplierInvoiceNo || '');
   const [date, setDate] = useState(bill?.date || today());
@@ -453,15 +413,8 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
   const [itc, setItc] = useState(bill ? bill.itcEligible : true);
   const [receive, setReceive] = useState(bill ? bill.stockReceived : true);
   const [warehouseId, setWarehouseId] = useState(bill?.warehouseId || '');
-  // Cylinders handed straight from the truck to delivery boys: { boyId: { productId: qty } }.
-  const [direct, setDirect] = useState(!!bill?.stockSplit?.length);
-  const [split, setSplit] = useState<Record<string, Record<string, string>>>(() => {
-    const s: Record<string, Record<string, string>> = {};
-    for (const x of bill?.stockSplit || []) s[x.deliveryBoyId] = { ...s[x.deliveryBoyId], [x.productId]: String(x.qty) };
-    return s;
-  });
-  const boysQ = useApiData<{ deliveryBoys: { id: string; name: string; status: string }[] }>('/api/cylinder/inventory', onError);
-  const boys = (boysQ.data?.deliveryBoys ?? []).filter((b) => b.status === 'ACTIVE' || split[b.id]);
+  // Godown, or our own truck kept as a mobile godown.
+  const [mode, setMode] = useState<StockMode>(bill?.warehouseName?.startsWith('Truck ') ? 'TRUCK' : 'GODOWN');
   const [vehicleNumber, setVehicleNumber] = useState(bill?.vehicleNumber || '');
   const [driverName, setDriverName] = useState(bill?.driverName || '');
   const [notes, setNotes] = useState(bill?.notes || '');
@@ -513,6 +466,50 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
     }
   };
 
+  /** A cylinder on the invoice that isn't in Products yet: add it from the line (Super Admin). */
+  const [creating, setCreating] = useState<number | null>(null);
+  const canAddProduct = useSession().can('products.manage');
+  const createProduct = async (i: number) => {
+    const l = lines[i];
+    const kg = Number(l.kg) || Number(l.description.match(/(\d+(?:\.\d+)?)\s*kg/i)?.[1]) || null;
+    const name = kg ? `${kg} KG LPG Cylinder` : l.description.trim();
+    setCreating(i);
+    try {
+      const p = await api<Product>('/api/collections/products', {
+        body: {
+          action: 'create',
+          item: {
+            sku: l.materialCode || `LPG-${kg ?? Date.now()}`,
+            name,
+            category: 'LPG',
+            productType: 'REFILLABLE_CYLINDER',
+            gasType: 'LPG',
+            brand: 'Indane',
+            hsnCode: l.hsnCode || '27111900',
+            unit: 'PCS',
+            weightVolume: kg,
+            weightUnit: 'KG',
+            materialCode: l.materialCode || null,
+            taxRate: Number(l.taxRate) || 18,
+            gstApplicable: true,
+            purchasePrice: r2(lineRate(l)),
+            salePrice: 0,
+            emptyDepositValue: 0,
+            minStockAlert: 0,
+            productTags: [],
+            active: true,
+          },
+        },
+      });
+      productsQ.reload();
+      set(i, { productId: p.id, description: p.name, unit: 'PCS', kg: kg ? String(kg) : l.kg });
+    } catch (e) {
+      onError(errorMessage(e));
+    } finally {
+      setCreating(null);
+    }
+  };
+
   const pickProduct = (i: number, id: string) => {
     const p = products.find((x) => x.id === id);
     set(i, p ? { productId: id, description: p.name, hsnCode: p.hsnCode, unit: p.unit, taxRate: String(p.taxRate), rate: lines[i].rate || (p.purchasePrice ? String(p.purchasePrice) : ''), kg: kgOf(p) } : { productId: '' });
@@ -531,6 +528,13 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
   const save = async () => {
     setBusy(true);
     try {
+      // First use of one of our trucks as a godown opens its stock location.
+      const whId =
+        mode === 'TRUCK' && vehicleNumber.trim()
+          ? (await api<{ id: string }>('/api/cylinder/trucks', { body: { vehicleNumber: vehicleNumber.trim(), addVehicle: true } })).id
+          : warehouseId.startsWith('new:')
+            ? (await api<{ id: string }>('/api/cylinder/trucks', { body: { vehicleNumber: warehouseId.slice(4) } })).id
+            : warehouseId;
       const saved = await api<{ billNumber: string }>('/api/books/purchases', {
         body: {
           id: bill?.id,
@@ -540,8 +544,7 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
           dueDate: dueDate || null,
           itcEligible: itc,
           receiveStock: hasCylinders && receive,
-          warehouseId: warehouseId || null,
-          stockSplit: hasCylinders && receive ? splitLines : [],
+          warehouseId: whId || null,
           vehicleNumber,
           driverName,
           notes,
@@ -568,8 +571,6 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
     }
     return [...m.values()];
   }, [lines]);
-  const splitLines = direct ? Object.entries(split).flatMap(([deliveryBoyId, row]) => Object.entries(row).map(([productId, q]) => ({ deliveryBoyId, productId, qty: Number(q) || 0 })).filter((s) => s.qty > 0 && cylinderTotals.some((p) => p.productId === s.productId))) : [];
-  const overSplit = cylinderTotals.some((p) => splitLines.filter((s) => s.productId === p.productId).reduce((a, s) => a + s.qty, 0) > p.qty);
   return (
     <Modal
       open
@@ -579,7 +580,7 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
       footer={
         <>
           <Button tone="secondary" onClick={onClose}>Close</Button>
-          <Button busy={busy} disabled={!supplierId || !invoiceNo.trim() || calc.grand <= 0 || overSplit} onClick={save}>Save bill · {money(calc.grand)}</Button>
+          <Button busy={busy} disabled={!supplierId || !invoiceNo.trim() || calc.grand <= 0} onClick={save}>Save bill · {money(calc.grand)}</Button>
         </>
       }
     >
@@ -649,6 +650,15 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
                   </select>
                   {!l.productId && <input value={l.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="Description, e.g. Freight" className={cx(inputClass, 'py-1.5 text-xs')} />}
                   {l.materialCode && <div className="text-[10px] text-slate-500">Material code <span className="font-mono font-bold">{l.materialCode}</span></div>}
+                  {!l.productId && (l.materialCode || l.basis === 'TONNE') && (
+                    canAddProduct ? (
+                      <Button size="sm" tone="secondary" busy={creating === i} onClick={() => void createProduct(i)}>
+                        <Plus className="h-3.5 w-3.5" /> Add this cylinder to Products
+                      </Button>
+                    ) : (
+                      <div className="text-[10px] font-semibold text-amber-700">Not in Products — ask the Super Admin to add it, then choose it here.</div>
+                    )
+                  )}
                 </td>
                 <td className="p-1.5"><input value={l.hsnCode} onChange={(e) => set(i, { hsnCode: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs')} /></td>
                 <td className="p-1.5"><input type="number" min={0} value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs text-right')} /></td>
@@ -715,26 +725,28 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
         {hasCylinders && (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={receive} onChange={(e) => setReceive(e.target.checked)} />
-            <PackageCheck className="h-4 w-4 text-sky-700" /> Receive the full cylinders {direct ? '— what the boys don’t take goes to' : 'into'}
-            <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} disabled={!receive} className={cx(inputClass, 'w-44 py-1 text-xs')}>
+            <PackageCheck className="h-4 w-4 text-sky-700" /> Receive the full cylinders {mode === 'TRUCK' ? <>into truck <strong className="font-mono">{vehicleNumber.trim()}</strong></> : 'into'}
+            {mode !== 'TRUCK' && <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} disabled={!receive} className={cx(inputClass, 'w-44 py-1 text-xs')}>
               <option value="">{warehouses.find((w) => w.isDefault)?.name || warehouses[0]?.name || 'Main Godown'} (default)</option>
-              {warehouses.map((w) => (
+              {warehouses.filter((w) => !w.code?.startsWith('TRK-')).map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
-            </select>
+              {truckOptions.length > 0 && (
+                <optgroup label="Our trucks (mobile godown)">
+                  {truckOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </optgroup>
+              )}
+            </select>}
           </label>
         )}
       </div>
       {hasCylinders && receive && (
-        <TruckSplit
-          direct={direct}
-          onDirect={setDirect}
-          boys={boys}
-          products={cylinderTotals}
-          split={split}
-          onChange={setSplit}
-          godownName={warehouses.find((w) => w.id === warehouseId)?.name || warehouses.find((w) => w.isDefault)?.name || 'Godown'}
-        />
+        <StockPlace mode={mode} onMode={setMode} truckNumber={vehicleNumber.trim()} total={cylinderTotals.reduce((s, p) => s + p.qty, 0)} />
+      )}
+      {!hasCylinders && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+          No cylinder product is chosen on this bill, so no stock will be added (godown or delivery boys). Choose the cylinder in the line above{canAddProduct ? ', or press "Add this cylinder to Products"' : ''}.
+        </p>
       )}
     </Modal>
   );

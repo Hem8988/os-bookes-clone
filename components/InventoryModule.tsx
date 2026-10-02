@@ -399,19 +399,54 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
   );
 }
 
+/** Own trucks used as stock locations: `id` is the truck's godown, or `new:<number>` until first used. */
+function useTruckLocations(warehouses: Overview['warehouses'], onError: (m: string) => void) {
+  const q = useApiData<{ number: string; own: boolean; godownId: string | null; driverName: string | null }[]>('/api/cylinder/trucks', onError);
+  const own = (q.data ?? []).filter((t) => t.own);
+  const trucks = [
+    ...warehouses.filter((w) => w.code.startsWith('TRK-')).map((w) => ({ id: w.id, name: `🚚 ${w.name}` })),
+    ...own.filter((t) => !t.godownId).map((t) => ({ id: `new:${t.number}`, name: `🚚 Truck ${t.number}` })),
+  ];
+  /** Turn a `new:<number>` choice into the truck's godown id (opening it on first use). */
+  const resolve = async (id: string) => (id.startsWith('new:') ? (await api<{ id: string }>('/api/cylinder/trucks', { body: { vehicleNumber: id.slice(4) } })).id : id);
+  return { trucks, resolve };
+}
+
+type TransferChoice = 'WAREHOUSE_TO_DRIVER' | 'TRUCK_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE' | 'DRIVER_TO_TRUCK' | 'DRIVER_TO_DRIVER' | 'WAREHOUSE_TO_TRUCK' | 'TRUCK_TO_WAREHOUSE' | 'WAREHOUSE_TO_WAREHOUSE';
+type Side = 'WAREHOUSE' | 'TRUCK' | 'DRIVER';
+// A truck is a godown underneath, so truck transfers use the godown transfer types (and the same approval).
+const SERVER_TYPE: Record<TransferChoice, 'WAREHOUSE_TO_DRIVER' | 'DRIVER_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE' | 'WAREHOUSE_TO_WAREHOUSE'> = {
+  WAREHOUSE_TO_DRIVER: 'WAREHOUSE_TO_DRIVER',
+  TRUCK_TO_DRIVER: 'WAREHOUSE_TO_DRIVER',
+  DRIVER_TO_WAREHOUSE: 'DRIVER_TO_WAREHOUSE',
+  DRIVER_TO_TRUCK: 'DRIVER_TO_WAREHOUSE',
+  DRIVER_TO_DRIVER: 'DRIVER_TO_DRIVER',
+  WAREHOUSE_TO_TRUCK: 'WAREHOUSE_TO_WAREHOUSE',
+  TRUCK_TO_WAREHOUSE: 'WAREHOUSE_TO_WAREHOUSE',
+  WAREHOUSE_TO_WAREHOUSE: 'WAREHOUSE_TO_WAREHOUSE',
+};
+
 function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
-  const [type, setType] = useState<'WAREHOUSE_TO_DRIVER' | 'DRIVER_TO_DRIVER' | 'DRIVER_TO_WAREHOUSE' | 'WAREHOUSE_TO_WAREHOUSE'>('WAREHOUSE_TO_DRIVER');
+  const [type, setType] = useState<TransferChoice>('WAREHOUSE_TO_DRIVER');
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const { items, editor } = useLines(data.products);
-  const [fromKind, toKind] = type.split('_TO_') as ['WAREHOUSE' | 'DRIVER', 'WAREHOUSE' | 'DRIVER'];
-  const options = (kind: 'WAREHOUSE' | 'DRIVER') => (kind === 'WAREHOUSE' ? data.warehouses.map((w) => ({ id: w.id, name: w.name })) : data.deliveryBoys.map((b) => ({ id: b.id, name: b.name })));
+  const { trucks, resolve } = useTruckLocations(data.warehouses, onError);
+  const [fromKind, toKind] = type.split('_TO_') as [Side, Side];
+  const options = (kind: Side) =>
+    kind === 'WAREHOUSE'
+      ? data.warehouses.filter((w) => !w.code.startsWith('TRK-')).map((w) => ({ id: w.id, name: w.name }))
+      : kind === 'TRUCK'
+        ? trucks
+        : data.deliveryBoys.map((b) => ({ id: b.id, name: b.name }));
   const submit = async () => {
     setBusy(true);
     try {
-      await api('/api/cylinder/transfers', { body: { transferType: type, fromId, toId, items, notes } });
+      const [from, to] = [await resolve(fromId), await resolve(toId)];
+      if (from === to) throw new Error('From and To must be different.');
+      await api('/api/cylinder/transfers', { body: { transferType: SERVER_TYPE[type], fromId: from, toId: to, items, notes } });
       onDone('Transfer sent for approval.');
     } catch (e) {
       onError(errorMessage(e));
@@ -419,16 +454,26 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
       setBusy(false);
     }
   };
+  const held = (id: string) => [...data.warehouses, ...data.deliveryBoys].find((x) => x.id === id)?.stock ?? [];
   return (
     <Modal open title="Stock transfer (needs approval)" onClose={onClose} footer={<Button busy={busy} disabled={!items.length || !fromId || !toId} onClick={submit}>Submit</Button>}>
       <Field label="Transfer">
-        <select value={type} onChange={(e) => { setType(e.target.value as typeof type); setFromId(''); setToId(''); }} className={inputClass}>
-          <option value="WAREHOUSE_TO_DRIVER">Godown → Delivery boy (issue)</option>
-          <option value="DRIVER_TO_WAREHOUSE">Delivery boy → Godown (return)</option>
+        <select value={type} onChange={(e) => { setType(e.target.value as TransferChoice); setFromId(''); setToId(''); }} className={inputClass}>
+          <optgroup label="Godown">
+            <option value="WAREHOUSE_TO_DRIVER">Godown → Delivery boy (issue)</option>
+            <option value="DRIVER_TO_WAREHOUSE">Delivery boy → Godown (return)</option>
+            <option value="WAREHOUSE_TO_WAREHOUSE">Godown → Godown</option>
+          </optgroup>
+          <optgroup label="Truck (mobile godown)">
+            <option value="TRUCK_TO_DRIVER">Truck → Delivery boy (issue)</option>
+            <option value="DRIVER_TO_TRUCK">Delivery boy → Truck (return)</option>
+            <option value="WAREHOUSE_TO_TRUCK">Godown → Truck (load)</option>
+            <option value="TRUCK_TO_WAREHOUSE">Truck → Godown (unload)</option>
+          </optgroup>
           <option value="DRIVER_TO_DRIVER">Delivery boy → Delivery boy</option>
-          <option value="WAREHOUSE_TO_WAREHOUSE">Godown → Godown</option>
         </select>
       </Field>
+      {(fromKind === 'TRUCK' || toKind === 'TRUCK') && trucks.length === 0 && <p className="text-xs font-semibold text-amber-700">No trucks yet — add your truck in Operations → Vehicles first.</p>}
       <div className="grid grid-cols-2 gap-2">
         <Field label="From">
           <select value={fromId} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
@@ -443,6 +488,9 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
           </select>
         </Field>
       </div>
+      {fromId && !fromId.startsWith('new:') && (
+        <p className="text-[11px] text-slate-500">Available: {held(fromId).map((s) => `${s.productName} ${s.fullQty} full / ${s.emptyQty} empty`).join(' · ') || 'nothing'}</p>
+      )}
       {editor()}
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
     </Modal>

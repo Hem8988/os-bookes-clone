@@ -658,7 +658,7 @@ function WarehouseModal({ onClose, onDone, onError }: { onClose: () => void; onD
   };
   return (
     <Modal open title="Add godown" onClose={onClose} footer={<Button busy={busy} onClick={submit}>Save</Button>}>
-      <Field label="Code"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={inputClass} /></Field>
+      <Field label="Code" hint="Leave blank — made from the name"><input placeholder="Auto" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={inputClass} /></Field>
       <Field label="Name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} /></Field>
       <Field label="Address"><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputClass} /></Field>
     </Modal>

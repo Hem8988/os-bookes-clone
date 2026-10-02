@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { audit } from '@/lib/server/audit';
 import { requireAuth } from '@/lib/server/auth';
-import { conflict, handle, ok, optStr, readJson, str } from '@/lib/server/http';
+import { autoCode, conflict, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 
 export const GET = handle(async (request: Request) => {
   // Delivery boys need the list to request stock issue / return.
@@ -13,9 +13,10 @@ export const GET = handle(async (request: Request) => {
 export const POST = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'settings.manage', { write: true });
   const body = await readJson(request);
-  const code = str(body.code, 'Code', { required: true, max: 20 }).toUpperCase();
-  const data = { code, name: str(body.name, 'Name', { required: true, max: 100 }), address: optStr(body.address), active: body.active !== false };
   const id = optStr(body.id);
+  const name = str(body.name, 'Name', { required: true, max: 100 });
+  const code = await autoCode(body.code, name, async (c) => !!(await prisma.warehouse.findFirst({ where: { tenantId: auth.tenantId, code: c, NOT: id ? { id } : undefined } })));
+  const data = { code, name, address: optStr(body.address), active: body.active !== false };
   const clash = await prisma.warehouse.findFirst({ where: { tenantId: auth.tenantId, code, NOT: id ? { id } : undefined } });
   if (clash) throw conflict(`Warehouse code ${code} already exists.`);
   const warehouse = id

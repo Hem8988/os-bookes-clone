@@ -142,3 +142,18 @@ export function financialYear(date: string): string {
   const start = m >= 4 ? y : y - 1;
   return `${String(start).slice(2)}-${String(start + 1).slice(2)}`;
 }
+
+/**
+ * A master's short code: the one typed, or (left blank) one made from the name —
+ * "Chakan MIDC" → CHAKANMIDC, with a number added if that code is taken.
+ */
+export async function autoCode(typed: unknown, name: string, taken: (code: string) => Promise<boolean>): Promise<string> {
+  const given = String(typed ?? '').trim().toUpperCase();
+  if (given) return given.slice(0, 20);
+  const base = name.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 16) || 'NEW';
+  for (let n = 1; n < 1000; n++) {
+    const code = n === 1 ? base : `${base.slice(0, 16)}${n}`;
+    if (!(await taken(code))) return code;
+  }
+  throw badRequest('Enter a code.');
+}

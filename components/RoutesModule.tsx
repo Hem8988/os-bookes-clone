@@ -79,7 +79,7 @@ export default function RoutesModule() {
         {routeForm && (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Code"><input value={routeForm.code || ''} onChange={(e) => setRouteForm({ ...routeForm, code: e.target.value })} className={inputClass} /></Field>
+              <Field label="Code" hint="Leave blank — made from the name"><input placeholder="Auto" value={routeForm.code || ''} onChange={(e) => setRouteForm({ ...routeForm, code: e.target.value })} className={inputClass} /></Field>
               <Field label="Name"><input value={routeForm.name || ''} onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })} className={inputClass} /></Field>
             </div>
             <Field label="Default delivery boy">
@@ -96,7 +96,7 @@ export default function RoutesModule() {
         {areaForm && (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Code"><input value={areaForm.code || ''} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} className={inputClass} /></Field>
+              <Field label="Code" hint="Leave blank — made from the name"><input placeholder="Auto" value={areaForm.code || ''} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} className={inputClass} /></Field>
               <Field label="Name"><input value={areaForm.name || ''} onChange={(e) => setAreaForm({ ...areaForm, name: e.target.value })} className={inputClass} /></Field>
             </div>
             <Field label="Route">

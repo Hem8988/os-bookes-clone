@@ -6,6 +6,7 @@ import { api, errorMessage } from '../lib/api';
 import { Customer, Product, PartyRate } from '../lib/types';
 import { CUSTOMER_SEGMENTS, PAYMENT_TERMS } from '../lib/settings';
 import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
+import { AddableSelect } from './AddableSelect';
 
 interface AddEditVendorModalProps {
   isOpen: boolean;
@@ -14,6 +15,19 @@ interface AddEditVendorModalProps {
   products?: Product[];
   onClose: () => void;
   onSave: (customer: Customer) => void;
+}
+
+/** Create an area / route from just a name; its code is made from the name. */
+async function saveMaster<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  const base = String(body.name).toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 12) || 'NEW';
+  for (let n = 0; n < 20; n++) {
+    const code = n ? `${base.slice(0, 10)}${n + 1}` : base;
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ ...body, code }) });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok && json.success !== false) return json.data as T;
+    if (res.status !== 409 || !/code/i.test(json.error || '')) throw new Error(json.error || 'Could not save.');
+  }
+  throw new Error('Could not pick a free code — add it from Masters instead.');
 }
 
 export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
@@ -304,7 +318,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       phone: mobileNumber.trim(),
       whatsappNumber: whatsappNumber.trim() || mobileNumber.trim(),
       email: emailAddress.trim(),
-      gstin: gstin.trim().toUpperCase() || undefined,
+      gstin: gstApplicable === 'NON-GST' ? undefined : gstin.trim().toUpperCase() || undefined,
       address: address.trim(),
       deliveryAddresses: deliveryAddress.trim() || deliveryContactPerson.trim() || deliveryPhone.trim() ? [{ 
         label: 'Delivery Address', 
@@ -322,7 +336,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       openingEmptyCylinderQty: Number(openingEmptyQty) || 0,
       internalNotes: internalNotes.trim() || undefined,
       state: stateName.trim(),
-      stateCode: (gstin.trim().length >= 2 && /^\d{2}/.test(gstin.trim()) ? gstin.trim().slice(0, 2) : stateCodeOf(stateName)) || undefined,
+      stateCode: (gstApplicable !== 'NON-GST' && gstin.trim().length >= 2 && /^\d{2}/.test(gstin.trim()) ? gstin.trim().slice(0, 2) : stateCodeOf(stateName)) || undefined,
       balance: finalBalance,
       openingBalance: numericOpBal,
       openingBalanceType,
@@ -544,7 +558,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   autoComplete="off"
                   placeholder="Search your delivery boys or type a name"
                   value={deliveryContactPerson}
-                  onChange={(e) => setDeliveryContactPerson(e.target.value)}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setDeliveryContactPerson(name);
+                    // Picking one of your delivery boys fills in his mobile (unless a different number is typed already).
+                    const boy = deliveryBoys.find((b) => b.name.trim().toLowerCase() === name.trim().toLowerCase());
+                    if (boy?.mobile && (!deliveryPhone.trim() || deliveryBoys.some((b) => b.mobile === deliveryPhone.trim()))) setDeliveryPhone(boy.mobile);
+                  }}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
                 />
               </div>
@@ -587,34 +607,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
           )}
 
-          {/* Row 6: Pin Code, Gstin, Gst Applicable */}
+          {/* Row 6: Gst Applicable, Gstin (hidden for non-GST parties), Pin Code */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Pin Code</label>
-              <PinInput
-                value={pinCode}
-                onChange={setPinCode}
-                onFound={(info) => {
-                  if (info.state) setStateName(info.state);
-                  if (info.city) {
-                    setCity((c) => c || info.city!);
-                    setDeliveryCity((c) => c || info.city!);
-                  }
-                }}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Gstin</label>
-              <input
-                type="text"
-                placeholder="Enter Gst Number"
-                value={gstin}
-                onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
-              />
-            </div>
-
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Gst Applicable</label>
               <div className="relative">
@@ -630,6 +624,34 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 </select>
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               </div>
+            </div>
+
+            {gstApplicable !== 'NON-GST' && (
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Gstin</label>
+              <input
+                type="text"
+                placeholder="Enter Gst Number"
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+              />
+            </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Pin Code</label>
+              <PinInput
+                value={pinCode}
+                onChange={setPinCode}
+                onFound={(info) => {
+                  if (info.state) setStateName(info.state);
+                  if (info.city) {
+                    setCity((c) => c || info.city!);
+                    setDeliveryCity((c) => c || info.city!);
+                  }
+                }}
+              />
             </div>
           </div>
 
@@ -698,11 +720,20 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
               <div className="space-y-1">
                 <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Area</label>
-                <select
+                <AddableSelect
                   value={areaName}
-                  onChange={(e) => {
-                    setAreaName(e.target.value);
-                    const area = areas.find((a) => a.name === e.target.value);
+                  addLabel="New area"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                  options={areas.map((a) => ({ value: a.name, label: a.name }))}
+                  onAdd={async (name) => {
+                    const route = routes.find((r) => r.name === routeName);
+                    const area = await saveMaster<{ id: string; name: string; route: { name: string } | null }>('/api/areas', { name, routeId: route?.id || null });
+                    setAreas((list) => [...list, area].sort((x, y) => x.name.localeCompare(y.name)));
+                    return area.name;
+                  }}
+                  onChange={(v) => {
+                    setAreaName(v);
+                    const area = areas.find((a) => a.name === v);
                     if (area?.route) {
                       setRouteName(area.route.name);
                       const route = routes.find((r) => r.name === area.route?.name);
@@ -712,31 +743,33 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                       }
                     }
                   }}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
-                >
-                  <option value="">—</option>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.name}>{a.name}</option>
-                  ))}
-                </select>
+                />
               </div>
               <div className="space-y-1">
                 <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Route</label>
-                <select value={routeName} onChange={(e) => setRouteName(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900">
-                  <option value="">—</option>
-                  {routes.map((r) => (
-                    <option key={r.id} value={r.name}>{r.name}</option>
-                  ))}
-                </select>
+                <AddableSelect
+                  value={routeName}
+                  onChange={setRouteName}
+                  addLabel="New route"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                  options={routes.map((r) => ({ value: r.name, label: r.name }))}
+                  onAdd={async (name) => {
+                    const route = await saveMaster<{ id: string; name: string; defaultDeliveryBoyId: string | null }>('/api/routes', { name, defaultDeliveryBoyId: defaultDeliveryBoyId || null });
+                    setRoutes((list) => [...list, route].sort((x, y) => x.name.localeCompare(y.name)));
+                    return route.name;
+                  }}
+                />
               </div>
               <div className="space-y-1">
                 <label className="font-extrabold text-slate-900 dark:text-slate-100 block">Customer type</label>
-                <select value={segment} onChange={(e) => setSegment(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900">
-                  <option value="">—</option>
-                  {CUSTOMER_SEGMENTS.map((seg) => (
-                    <option key={seg} value={seg}>{seg}</option>
-                  ))}
-                </select>
+                <AddableSelect
+                  value={segment}
+                  onChange={setSegment}
+                  addLabel="New customer type"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                  options={[...CUSTOMER_SEGMENTS].map((seg) => ({ value: seg, label: seg }))}
+                  onAdd={async (name) => name}
+                />
               </div>
             </div>
 

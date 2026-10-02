@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { EmployeeMaster } from '../lib/types';
+import { CityInput } from './PlaceFields';
 
 interface AddEditEmployeeModalProps {
   isOpen: boolean;
@@ -166,13 +167,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
             </div>
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">City</label>
-              <input
-                type="text"
-                placeholder="Enter City"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
-              />
+              <CityInput value={city} onChange={setCity} />
             </div>
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Staff Role / Assignment</label>

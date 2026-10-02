@@ -5,6 +5,7 @@ import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2, L
 import { api, errorMessage } from '../lib/api';
 import { Customer, Product, PartyRate } from '../lib/types';
 import { CUSTOMER_SEGMENTS, PAYMENT_TERMS } from '../lib/settings';
+import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
 
 interface AddEditVendorModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [gstApplicable, setGstApplicable] = useState('GST');
 
   // State, Email, Party Type
-  const [stateName, setStateName] = useState('Telangana');
+  const [stateName, setStateName] = useState('');
   const [emailAddress, setEmailAddress] = useState('');
   const [partyType, setPartyType] = useState(defaultType === 'Vendor' ? 'vendor' : 'customer');
 
@@ -321,7 +322,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       openingEmptyCylinderQty: Number(openingEmptyQty) || 0,
       internalNotes: internalNotes.trim() || undefined,
       state: stateName.trim(),
-      stateCode: '23',
+      stateCode: (gstin.trim().length >= 2 && /^\d{2}/.test(gstin.trim()) ? gstin.trim().slice(0, 2) : stateCodeOf(stateName)) || undefined,
       balance: finalBalance,
       openingBalance: numericOpBal,
       openingBalanceType,
@@ -492,26 +493,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Billing City</label>
-                <div className="relative">
-                  <select
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                  >
-                    <option value="">Select / Search City...</option>
-                    <option value="Hyderabad">Hyderabad</option>
-                    <option value="Indore">Indore</option>
-                    <option value="Bhopal">Bhopal</option>
-                    <option value="Mumbai">Mumbai</option>
-                    <option value="Delhi">Delhi</option>
-                    <option value="Bangalore">Bangalore</option>
-                    <option value="Chennai">Chennai</option>
-                  </select>
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400">
-                    {city && <X className="h-3 w-3 cursor-pointer pointer-events-auto" onClick={() => setCity('')} />}
-                    <ChevronDown className="h-4 w-4" />
-                  </div>
-                </div>
+                <CityInput value={city} onChange={setCity} />
               </div>
             </div>
           </div>
@@ -558,13 +540,19 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Contact Person</label>
                 <input
                   type="text"
-                  placeholder="e.g. Rahul Manager"
+                  list="delivery-contact-people"
+                  autoComplete="off"
+                  placeholder="Search your delivery boys or type a name"
                   value={deliveryContactPerson}
                   onChange={(e) => setDeliveryContactPerson(e.target.value)}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
                 />
               </div>
             </div>
+
+            <datalist id="delivery-contact-people">
+              {deliveryBoys.map((b) => <option key={b.id} value={b.name}>{b.mobile || 'Delivery boy'}</option>)}
+            </datalist>
 
             {/* Row 2: Delivery Address */}
             <div className="space-y-1">
@@ -593,26 +581,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery City</label>
-                <div className="relative">
-                  <select
-                    value={deliveryCity}
-                    onChange={(e) => setDeliveryCity(e.target.value)}
-                    className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                  >
-                    <option value="">Select / Search City...</option>
-                    <option value="Hyderabad">Hyderabad</option>
-                    <option value="Indore">Indore</option>
-                    <option value="Bhopal">Bhopal</option>
-                    <option value="Mumbai">Mumbai</option>
-                    <option value="Delhi">Delhi</option>
-                    <option value="Bangalore">Bangalore</option>
-                    <option value="Chennai">Chennai</option>
-                  </select>
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400">
-                    {deliveryCity && <X className="h-3 w-3 cursor-pointer pointer-events-auto" onClick={() => setDeliveryCity('')} />}
-                    <ChevronDown className="h-4 w-4" />
-                  </div>
-                </div>
+                <CityInput value={deliveryCity} onChange={setDeliveryCity} />
               </div>
             </div>
           </div>
@@ -622,12 +591,16 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Pin Code</label>
-              <input
-                type="text"
-                placeholder="Enter Pin Code"
+              <PinInput
                 value={pinCode}
-                onChange={(e) => setPinCode(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                onChange={setPinCode}
+                onFound={(info) => {
+                  if (info.state) setStateName(info.state);
+                  if (info.city) {
+                    setCity((c) => c || info.city!);
+                    setDeliveryCity((c) => c || info.city!);
+                  }
+                }}
               />
             </div>
 
@@ -665,22 +638,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">State</label>
               <div className="relative">
-                <select
-                  value={stateName}
-                  onChange={(e) => setStateName(e.target.value)}
-                  className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                >
-                  <option value="Telangana">Telangana</option>
-                  <option value="Madhya Pradesh">Madhya Pradesh</option>
-                  <option value="Maharashtra">Maharashtra</option>
-                  <option value="Gujarat">Gujarat</option>
-                  <option value="Delhi">Delhi</option>
-                  <option value="Karnataka">Karnataka</option>
-                </select>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-slate-400">
-                  <X className="h-3 w-3 cursor-pointer pointer-events-auto" onClick={() => setStateName('')} />
-                  <ChevronDown className="h-4 w-4" />
-                </div>
+                <StateSelect value={stateName} onChange={(name) => setStateName(name)} />
               </div>
             </div>
 

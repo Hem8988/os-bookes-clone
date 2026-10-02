@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
+import { CityInput } from '../PlaceFields';
 import { Button, cx, inputClass } from '../ui';
 
 export interface SupplierOption { id: string; name: string; shortName?: string | null; type: string; gstin?: string | null; status?: string }
@@ -67,7 +68,7 @@ export function SupplierSelect({ value, onChange, placeholder = 'Choose supplier
             {f('name', 'Name *')}
             {f('phone', 'Mobile * (10 digits)')}
             {f('gstin', 'GSTIN (for input credit)')}
-            {f('city', 'City')}
+            <CityInput value={v.city} onChange={(city) => setV({ ...v, city })} placeholder="City" className={cx(inputClass, 'py-1.5 text-xs')} />
             {f('address', 'Address *')}
           </div>
           {error && <div className="text-[11px] font-semibold text-rose-600">{error}</div>}

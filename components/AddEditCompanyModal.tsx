@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Building2, Save } from 'lucide-react';
 import { CompanyMaster } from '../lib/types';
+import { CityInput, PinInput } from './PlaceFields';
 
 interface AddEditCompanyModalProps {
   isOpen: boolean;
@@ -25,9 +26,9 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
-  const [state, setState] = useState('Madhya Pradesh');
-  const [stateCode, setStateCode] = useState('23');
-  const [pincode, setPincode] = useState('452001');
+  const [state, setState] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [pincode, setPincode] = useState('');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
@@ -40,9 +41,9 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
       setEmail(companyToEdit.email || '');
       setAddress(companyToEdit.address || '');
       setCity(companyToEdit.city || '');
-      setState(companyToEdit.state || 'Madhya Pradesh');
-      setStateCode(companyToEdit.stateCode || '23');
-      setPincode(companyToEdit.pincode || '452001');
+      setState(companyToEdit.state || '');
+      setStateCode(companyToEdit.stateCode || '');
+      setPincode(companyToEdit.pincode || '');
       setIsMainBranch(Boolean(companyToEdit.isMainBranch));
     } else {
       setCompanyName('');
@@ -55,7 +56,7 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
       setCity('');
       setState('Madhya Pradesh');
       setStateCode('23');
-      setPincode('452001');
+      setPincode('');
       setIsMainBranch(false);
     }
   }, [companyToEdit, isOpen]);
@@ -79,9 +80,9 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
       email: email.trim(),
       address: address.trim() || 'Commercial Center',
       city: city.trim(),
-      state: state.trim() || 'Madhya Pradesh',
-      stateCode: stateCode.trim() || '23',
-      pincode: pincode.trim() || '452001',
+      state: state.trim(),
+      stateCode: stateCode.trim() || (gstin.trim().match(/^\d{2}/)?.[0] ?? ''),
+      pincode: pincode.trim(),
       isMainBranch,
     };
 
@@ -210,13 +211,13 @@ export const AddEditCompanyModal: React.FC<AddEditCompanyModalProps> = ({
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                 City
               </label>
-              <input
-                type="text"
-                placeholder="e.g. Bhopal"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              <CityInput value={city} onChange={setCity} className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+
+            {/* PIN code */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">PIN code</label>
+              <PinInput value={pincode} onChange={setPincode} className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500" onFound={(info) => { if (info.state) setState(info.state); if (info.stateCode) setStateCode(info.stateCode); if (info.city) setCity((c) => c || info.city!); }} />
             </div>
 
             {/* State */}

@@ -7,6 +7,7 @@ import { useApiData } from '../lib/useApiData';
 import { ROLE_LABELS, Role } from '../lib/permissions';
 import { CompanyProfile, OperationsPolicy, OwnerReportPolicy, SecurityPolicy } from '../lib/settings';
 import { refreshCompany } from '../lib/useCompany';
+import { CityInput, PinInput } from './PlaceFields';
 import { Button, Card, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
 
 type Tab = 'company' | 'email' | 'owner' | 'security' | 'operations' | 'ip';
@@ -227,8 +228,8 @@ function CompanyFields({ value, onChange }: { value: CompanyProfile; onChange: (
         {f('pan', 'PAN')}
         {f('stateCode', 'State code', 'Two digits, e.g. 27 — decides CGST/SGST vs IGST')}
         {f('address', 'Address')}
-        {f('city', 'City / place', 'Needed for e-invoice & e-way bill')}
-        {f('pincode', 'PIN code')}
+        <Field label="PIN code" hint="Fills city and state code"><PinInput value={value.pincode} className={inputClass} onChange={(pincode) => onChange({ ...value, pincode })} onFound={(info) => onChange({ ...value, pincode: info.pincode, city: value.city || info.city || '', stateCode: value.stateCode || info.stateCode || '' })} /></Field>
+        <Field label="City / place" hint="Needed for e-invoice & e-way bill"><CityInput value={value.city} className={inputClass} onChange={(city) => onChange({ ...value, city })} /></Field>
         {f('phone', 'Phone')}
         {f('supportPhone', 'Support number (sent to customers)')}
         {f('email', 'Email')}

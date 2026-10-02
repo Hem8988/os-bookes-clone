@@ -6,6 +6,7 @@ import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
 import { SupplierSelect } from './books/SupplierSelect';
+import { TruckPicker } from './TruckPicker';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
 
 // Three-tier cylinder inventory (SRS §10): godowns → delivery boys → customers.
@@ -369,7 +370,7 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
     }
   };
   return (
-    <Modal open title="Empties to plant / damaged cylinders" onClose={onClose} footer={<Button busy={busy} disabled={!items.length} onClick={submit}><PackagePlus className="h-4 w-4" /> Save</Button>}>
+    <Modal open full title="Empties to plant / damaged cylinders" onClose={onClose} footer={<Button busy={busy} disabled={!items.length} onClick={submit}><PackagePlus className="h-4 w-4" /> Save</Button>}>
       <p className="text-xs rounded-xl bg-sky-50 border border-sky-100 text-sky-800 px-3 py-2">Full cylinders from the plant are added through <strong>Books → Purchase bills</strong>, so the stock, the supplier&apos;s account and GST are entered together.</p>
       <Field label="Type">
         <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={inputClass}>
@@ -387,10 +388,7 @@ function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
           <Field label="Sent to (supplier / plant)">
             <SupplierSelect value={supplierId} placeholder="Bottling plant (not specified)" onError={onError} onChange={(id) => setSupplierId(id)} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Truck no."><input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())} maxLength={20} placeholder="MH12 AB 1234" className={cx(inputClass, 'font-mono')} /></Field>
-            <Field label="Driver name"><input value={driverName} onChange={(e) => setDriverName(e.target.value)} maxLength={60} className={inputClass} /></Field>
-          </div>
+          <TruckPicker vehicleNumber={vehicleNumber} driverName={driverName} onError={onError} onChange={(t) => { setVehicleNumber(t.vehicleNumber); setDriverName(t.driverName); }} />
         </>
       )}
       {editor(kind === 'DAMAGE')}

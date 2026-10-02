@@ -7,6 +7,7 @@ import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Column, LedgerOption, money, PeriodBar, plain, ReportTable, sum, usePeriod } from './shared';
 import { SupplierSelect } from './SupplierSelect';
+import { TruckPicker } from '../TruckPicker';
 
 interface BillItem { id: string; productId: string | null; description: string; hsnCode: string; quantity: number; unit: string; rate: number; taxRate: number; taxableAmount: number; cgstAmount: number; sgstAmount: number; igstAmount: number; totalAmount: number }
 interface Bill {
@@ -332,12 +333,9 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
         <Field label="Due date (optional)">
           <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
         </Field>
-        <Field label="Truck no.">
-          <input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())} maxLength={20} className={cx(inputClass, 'font-mono')} placeholder="MH12 AB 1234" />
-        </Field>
-        <Field label="Driver name">
-          <input value={driverName} onChange={(e) => setDriverName(e.target.value)} maxLength={60} className={inputClass} />
-        </Field>
+        <div className="sm:col-span-2">
+          <TruckPicker vehicleNumber={vehicleNumber} driverName={driverName} onError={onError} onChange={(t) => { setVehicleNumber(t.vehicleNumber); setDriverName(t.driverName); }} />
+        </div>
         <Field label="Notes">
           <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} placeholder="e.g. load 180 cylinders" />
         </Field>

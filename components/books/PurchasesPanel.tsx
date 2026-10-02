@@ -30,6 +30,7 @@ interface Bill {
   status: string;
   itcEligible: boolean;
   stockReceived: boolean;
+  warehouseName?: string | null;
   vehicleNumber: string | null;
   driverName: string | null;
   notes: string | null;
@@ -83,7 +84,7 @@ export default function PurchasesPanel() {
       render: (b) => (
         <div className="flex flex-wrap gap-1">
           <Badge tone={STATUS_TONE[b.status] || 'slate'}>{b.status}</Badge>
-          {b.stockReceived && b.status !== 'Cancelled' && <Badge tone="blue">Stock in</Badge>}
+          {b.stockReceived && b.status !== 'Cancelled' && <Badge tone="blue">Stock in{b.warehouseName ? ` · ${b.warehouseName}` : ''}</Badge>}
           {!b.itcEligible && <Badge tone="amber">No ITC</Badge>}
         </div>
       ),
@@ -91,9 +92,13 @@ export default function PurchasesPanel() {
     {
       label: '',
       render: (b) => (
-        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => setViewing(b)} title="View" className="p-1 text-slate-500 hover:text-slate-900"><Eye className="h-4 w-4" /></button>
-          {b.status !== 'Cancelled' && b.status !== 'Paid' && <button onClick={() => setPaying(b)} title="Pay" className="p-1 text-emerald-700 hover:text-emerald-900"><IndianRupee className="h-4 w-4" /></button>}
+          {b.status !== 'Cancelled' && b.status !== 'Paid' && (
+            <button onClick={() => setPaying(b)} title="Record a payment to the supplier" className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700">
+              <IndianRupee className="h-3.5 w-3.5" /> Pay
+            </button>
+          )}
           {b.status !== 'Cancelled' && b.paidAmount === 0 && <button onClick={() => setCancelling(b)} title="Cancel" className="p-1 text-rose-600 hover:text-rose-800"><XCircle className="h-4 w-4" /></button>}
         </div>
       ),
@@ -456,7 +461,7 @@ function BillForm({ bill, onClose, onSaved, onError }: { bill: Bill | null; onCl
             <input type="checkbox" checked={receive} onChange={(e) => setReceive(e.target.checked)} />
             <PackageCheck className="h-4 w-4 text-sky-700" /> Receive the full cylinders into
             <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} disabled={!receive} className={cx(inputClass, 'w-44 py-1 text-xs')}>
-              <option value="">default godown</option>
+              <option value="">{warehouses.find((w) => w.isDefault)?.name || warehouses[0]?.name || 'Main Godown'} (default)</option>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
@@ -494,7 +499,7 @@ function BillView({ bill, onClose, onEdit }: { bill: Bill; onClose: () => void; 
       <div className="text-right text-sm font-black">Round off {plain(bill.roundOff)} · Bill total {money(bill.grandTotal)}</div>
       {(bill.vehicleNumber || bill.driverName) && <p className="text-xs text-slate-600">Truck <strong className="font-mono">{bill.vehicleNumber || '—'}</strong>{bill.driverName ? ` · driver ${bill.driverName}` : ''}</p>}
       {bill.notes && <p className="text-xs text-slate-500">{bill.notes}</p>}
-      <p className="text-[11px] text-slate-400">Entered by {bill.createdBy}{bill.stockReceived ? ' · cylinders received into the godown' : ''}{bill.itcEligible ? ' · ITC claimed' : ' · ITC not claimed'}</p>
+      <p className="text-[11px] text-slate-400">Entered by {bill.createdBy}{bill.stockReceived ? ` · cylinders received into ${bill.warehouseName || 'the godown'}` : ''}{bill.itcEligible ? ' · ITC claimed' : ' · ITC not claimed'}</p>
     </Modal>
   );
 }

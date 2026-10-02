@@ -16,7 +16,9 @@ export const GET = handle(async (request: Request) => {
     orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     take: 500,
   });
-  return ok(bills);
+  const ids = [...new Set(bills.map((b) => b.warehouseId).filter((id): id is string => !!id))];
+  const godowns = new Map((ids.length ? await prisma.warehouse.findMany({ where: { tenantId: auth.tenantId, id: { in: ids } }, select: { id: true, name: true } }) : []).map((w) => [w.id, w.name]));
+  return ok(bills.map((b) => ({ ...b, warehouseName: b.warehouseId ? godowns.get(b.warehouseId) ?? null : null })));
 });
 
 /** Create (or edit an unpaid, stock-free) purchase bill. */

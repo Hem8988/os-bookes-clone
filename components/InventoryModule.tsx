@@ -347,6 +347,55 @@ function useLines(products: Overview['products']) {
   return { items, editor };
 }
 
+/**
+ * Transfer lines: one product row to start, "+ Add product" for more. Each row
+ * shows what the source holds of that product, and turns red past it.
+ */
+function useTransferLines(products: Overview['products'], available: (productId: string) => StockRow | null | undefined) {
+  const [lines, setLines] = useState([{ productId: products[0]?.id || '', full: '', empty: '' }]);
+  const items = lines.filter((l) => l.productId && (Number(l.full) > 0 || Number(l.empty) > 0)).map((l) => ({ productId: l.productId, fullQty: Number(l.full) || 0, emptyQty: Number(l.empty) || 0 }));
+  const set = (i: number, patch: Partial<(typeof lines)[number]>) => setLines(lines.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const over = lines.some((l) => {
+    const a = available(l.productId);
+    return a !== undefined && ((Number(l.full) || 0) > (a?.fullQty || 0) || (Number(l.empty) || 0) > (a?.emptyQty || 0));
+  });
+  const editor = (
+    <div className="space-y-2">
+      {lines.map((l, i) => {
+        const a = available(l.productId);
+        const taken = new Set(lines.filter((_, j) => j !== i).map((x) => x.productId));
+        const tooMuch = (q: string, max: number) => a !== undefined && (Number(q) || 0) > max;
+        return (
+          <div key={i} className="grid grid-cols-12 gap-2 items-center">
+            <div className="col-span-6 space-y-1">
+              <select value={l.productId} onChange={(e) => set(i, { productId: e.target.value })} className={cx(inputClass, 'py-1.5 text-xs')}>
+                {products.filter((p) => p.id === l.productId || !taken.has(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              {a !== undefined && (
+                <span className={cx('inline-block rounded-md px-2 py-0.5 text-[11px] font-bold', (a?.fullQty || 0) + (a?.emptyQty || 0) > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500')}>
+                  Available: {a?.fullQty || 0} full · {a?.emptyQty || 0} empty
+                </span>
+              )}
+            </div>
+            <input type="number" min={0} placeholder="Full" value={l.full} onChange={(e) => set(i, { full: e.target.value })} className={cx(inputClass, 'col-span-3', tooMuch(l.full, a?.fullQty || 0) && 'border-rose-400 text-rose-600')} />
+            <div className="col-span-3 flex items-center gap-1">
+              <input type="number" min={0} placeholder="Empty" value={l.empty} onChange={(e) => set(i, { empty: e.target.value })} className={cx(inputClass, tooMuch(l.empty, a?.emptyQty || 0) && 'border-rose-400 text-rose-600')} />
+              {lines.length > 1 && <button type="button" onClick={() => setLines(lines.filter((_, j) => j !== i))} title="Remove" className="text-slate-400 hover:text-rose-600 text-lg leading-none px-1">×</button>}
+            </div>
+          </div>
+        );
+      })}
+      {lines.length < products.length && (
+        <button type="button" onClick={() => setLines([...lines, { productId: products.find((p) => !lines.some((l) => l.productId === p.id))?.id || '', full: '', empty: '' }])} className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+          <PackagePlus className="h-3.5 w-3.5" /> Add product
+        </button>
+      )}
+      {over && <p className="text-xs font-semibold text-rose-600">More than the source holds — reduce the red quantities.</p>}
+    </div>
+  );
+  return { items, editor, over };
+}
+
 function PlantModal({ data, onClose, onDone, onError }: ModalProps) {
   const [kind, setKind] = useState<'EMPTY_TO_PLANT' | 'DAMAGE'>('EMPTY_TO_PLANT');
   const [warehouseId, setWarehouseId] = useState(data.warehouses[0]?.id || '');
@@ -432,7 +481,9 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
   const [toId, setToId] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
-  const { items, editor } = useLines(data.products);
+  // What the chosen source holds of a product (undefined until a real source is chosen).
+  const available = (productId: string) => (fromId && !fromId.startsWith('new:') ? ([...data.warehouses, ...data.deliveryBoys].find((x) => x.id === fromId)?.stock.find((r) => r.productId === productId) ?? null) : undefined);
+  const { items, editor, over } = useTransferLines(data.products, available);
   const { trucks, resolve } = useTruckLocations(data.warehouses, onError);
   const [fromKind, toKind] = type.split('_TO_') as [Side, Side];
   const options = (kind: Side) =>
@@ -454,9 +505,8 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
       setBusy(false);
     }
   };
-  const held = (id: string) => [...data.warehouses, ...data.deliveryBoys].find((x) => x.id === id)?.stock ?? [];
   return (
-    <Modal open title="Stock transfer (needs approval)" onClose={onClose} footer={<Button busy={busy} disabled={!items.length || !fromId || !toId} onClick={submit}>Submit</Button>}>
+    <Modal open title="Stock transfer (needs approval)" onClose={onClose} footer={<Button busy={busy} disabled={!items.length || !fromId || !toId || over} onClick={submit}>Submit</Button>}>
       <Field label="Transfer">
         <select value={type} onChange={(e) => { setType(e.target.value as TransferChoice); setFromId(''); setToId(''); }} className={inputClass}>
           <optgroup label="Godown">
@@ -488,10 +538,7 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
           </select>
         </Field>
       </div>
-      {fromId && !fromId.startsWith('new:') && (
-        <p className="text-[11px] text-slate-500">Available: {held(fromId).map((s) => `${s.productName} ${s.fullQty} full / ${s.emptyQty} empty`).join(' · ') || 'nothing'}</p>
-      )}
-      {editor()}
+      {editor}
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
     </Modal>
   );

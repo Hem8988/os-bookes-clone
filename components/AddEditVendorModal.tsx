@@ -21,6 +21,14 @@ interface AddEditVendorModalProps {
 /** Placeholder id for a new party until the server gives it one. */
 const tempPartyId = () => `party-${Date.now()}`;
 
+/** Credit days read from a term's name: "45 days" → 45, "2 weeks" → 14, "1 month" → 30, "Advance" → 0. */
+const termDays = (name: string) => {
+  const n = Number(name.match(/\d+/)?.[0] || 0);
+  if (/week/i.test(name)) return (n || 1) * 7;
+  if (/month/i.test(name)) return (n || 1) * 30;
+  return n;
+};
+
 /** Create an area / route from just a name; its code is made from the name. */
 async function saveMaster<T>(url: string, body: Record<string, unknown>): Promise<T> {
   const base = String(body.name).toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 12) || 'NEW';
@@ -120,6 +128,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [areas, setAreas] = useState<{ id: string; name: string; route: { name: string } | null }[]>([]);
   const [routes, setRoutes] = useState<{ id: string; name: string; defaultDeliveryBoyId: string | null }[]>([]);
   const [paymentTerms, setPaymentTerms] = useState('COD');
+  // Terms the business made itself ("45 days", "Advance"…), shared across parties.
+  const [customTerms, setCustomTerms] = useState<{ value: string; label: string; days: number }[]>([]);
+  useEffect(() => {
+    if (!isOpen) return;
+    api<{ value: string; label: string; days: number }[]>('/api/payment-terms').then(setCustomTerms).catch(() => {});
+  }, [isOpen]);
+  const allTerms = [...PAYMENT_TERMS, ...customTerms.filter((c) => !PAYMENT_TERMS.some((p) => p.value === c.value))];
   const [segment, setSegment] = useState('');
 
   // Limits & Numbers
@@ -519,18 +534,29 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               {/* Due Days */}
               <div className="md:col-span-3 space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Payment terms</label>
-                <select
+                <AddableSelect
                   value={paymentTerms}
-                  onChange={(e) => {
-                    setPaymentTerms(e.target.value);
-                    setDueDays(PAYMENT_TERMS.find((p) => p.value === e.target.value)?.days ?? 0);
+                  onChange={(v) => {
+                    const term = allTerms.find((p) => p.value === v);
+                    setPaymentTerms(v || 'COD');
+                    setDueDays(term ? term.days : termDays(v));
+                  }}
+                  options={allTerms.map((p) => ({ value: p.value, label: p.days && !/\d/.test(p.label) ? `${p.label} (${p.days} days)` : p.label }))}
+                  addLabel="New term (e.g. 45 days, Advance)"
+                  onAdd={async (name) => {
+                    const days = termDays(name);
+                    setCustomTerms((cur) => (cur.some((t) => t.value === name) ? cur : [...cur, { value: name, label: name, days }]));
+                    setDueDays(days);
+                    return name;
                   }}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-                >
-                  {PAYMENT_TERMS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </select>
+                />
+                {!PAYMENT_TERMS.some((p) => p.value === paymentTerms) && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    Credit days
+                    <input type="number" min={0} value={dueDays} onChange={(e) => setDueDays(e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value))))} className="w-16 px-1.5 py-0.5 rounded border border-slate-300 text-right font-bold text-slate-900" />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -934,7 +960,15 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                           }}
                           className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
                         />
-                        <span className="text-xs">{displayName}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs">{displayName}</span>
+                          {/* Security deposit for this cylinder (set in Masters → Products); none = free. */}
+                          {Number(prod.emptyDepositValue) > 0 ? (
+                            <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Deposit ₹{Number(prod.emptyDepositValue).toLocaleString('en-IN')}</span>
+                          ) : (
+                            <span className="mt-1 inline-block rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">Free · no deposit</span>
+                          )}
+                        </span>
                       </label>
                     );
                   });

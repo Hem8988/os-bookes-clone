@@ -4,7 +4,7 @@ import { createApproval, cancelPendingApprovals } from './approvals';
 import { audit, Actor } from './audit';
 import type { Effects } from './effects';
 import { badRequest, businessDate, conflict, dateStr, forbidden, notFound, round2 } from './http';
-import { notifyCustomer, notifyUsers } from './notify';
+import { notifyCustomer, notifyRoles, notifyUsers } from './notify';
 import { resolveRate } from './pricing';
 import { nextNumber } from './sequence';
 import { getSetting } from './settings';
@@ -218,7 +218,7 @@ export async function assignOrders(tx: Tx, actor: Actor, orders: Order[], delive
   }
   await audit(tx, actor, { action: 'ORDERS_ASSIGNED', entityType: 'Order', reference: orders.map((o) => o.orderNumber).join(', '), newValue: { deliveryBoy: boy.name } });
   effects.add('notify delivery boy', () =>
-    notifyUsers(actor.tenantId, [boy.id], { title: 'New delivery assigned', body: `${orders.length} order(s): ${orders.map((o) => o.orderNumber).join(', ')}`, link: '/delivery' })
+    notifyUsers(actor.tenantId, [boy.id], { title: 'New delivery assigned', body: `${orders.length} order(s): ${orders.map((o) => o.orderNumber).join(', ')}`, link: '/delivery', whatsapp: true })
   );
 }
 
@@ -226,6 +226,21 @@ export async function acceptOrder(tx: Tx, actor: Actor, order: Order) {
   if (order.assignedDeliveryBoyId !== actor.userId) throw forbidden('This order is not assigned to you.');
   if (order.status !== 'ASSIGNED') throw conflict('Only newly assigned orders can be accepted.');
   await setOrderStatus(tx, order, 'ACCEPTED', actor.name, undefined, { acceptedAt: new Date() });
+}
+
+/**
+ * The delivery boy turns down an order assigned to him (no stock, too far…):
+ * it goes back to "To assign" for the office to give to someone else.
+ */
+export async function declineOrder(tx: Tx, actor: Actor, order: Order, reason: string, effects: Effects) {
+  if (order.assignedDeliveryBoyId !== actor.userId) throw forbidden('This order is not assigned to you.');
+  if (!['ASSIGNED', 'ACCEPTED'].includes(order.status)) throw conflict('Only orders not yet out for delivery can be declined.');
+  if (!reason.trim()) throw badRequest('Give a reason for declining.');
+  await setOrderStatus(tx, order, 'APPROVED', actor.name, `Declined by ${actor.name}: ${reason}`, { assignedDeliveryBoyId: null, assignedDeliveryBoyName: null, assignedAt: null, acceptedAt: null });
+  await audit(tx, actor, { action: 'ORDER_DECLINED', entityType: 'Order', entityId: order.id, reference: order.orderNumber, reason });
+  effects.add('notify office', () =>
+    notifyRoles(actor.tenantId, ['MANAGER', 'SUPER_ADMIN'], { title: 'Order declined by delivery boy', body: `${order.orderNumber} (${order.customerName}) — ${actor.name}: ${reason}. Assign it again.`, link: '/admin?tab=orders', whatsapp: true })
+  );
 }
 
 export async function dispatchOrder(tx: Tx, actor: Actor, order: Order, effects: Effects) {
@@ -245,4 +260,64 @@ export async function cancelOrder(tx: Tx, actor: Actor, order: Order, reason: st
   await setOrderStatus(tx, order, 'CANCELLED', actor.name, reason, { rejectionReason: reason });
   await cancelPendingApprovals(tx, actor.tenantId, 'ORDER', order.id, actor.name, `Order cancelled: ${reason}`);
   await audit(tx, actor, { action: 'ORDER_CANCELLED', entityType: 'Order', entityId: order.id, reference: order.orderNumber, reason });
+}
+
+/** Orders that can still be changed: nothing has gone out for delivery yet. */
+export const EDITABLE_ORDER = ['WHATSAPP_RECEIVED', 'PENDING_APPROVAL', 'APPROVED', 'ASSIGNED', 'ACCEPTED'];
+
+/**
+ * Change an order before it is delivered: cylinders and quantities (re-priced
+ * at the customer's rate), delivery date, priority, address and notes.
+ */
+export async function editOrder(tx: Tx, actor: Actor, order: Order, input: { items: { productId: string; qty: number }[]; requestedDeliveryDate?: string; priority?: string; deliveryAddressId?: string | null; notes?: string | null }, effects: Effects) {
+  if (!EDITABLE_ORDER.includes(order.status)) throw conflict('This order is already out for delivery or done — it cannot be edited.');
+  const customer = await tx.customer.findFirst({ where: { id: order.customerId, tenantId: actor.tenantId } });
+  if (!customer) throw notFound('Customer not found.');
+  const lines = (input.items || []).filter((i) => Number(i.qty) > 0);
+  if (!lines.length) throw badRequest('Add at least one product with quantity.');
+  const deliveryDate = input.requestedDeliveryDate ? dateStr(input.requestedDeliveryDate, 'Delivery date') : order.requestedDeliveryDate;
+  if (deliveryDate !== order.requestedDeliveryDate && deliveryDate < businessDate()) throw badRequest('Delivery date cannot be in the past.');
+  const items: { productId: string; productName: string; orderedQty: number; unitPrice: number; taxRate: number; totalAmount: number }[] = [];
+  for (const line of lines) {
+    const qty = Number(line.qty);
+    if (!Number.isInteger(qty) || qty < 1) throw badRequest('Quantity must be a whole number of at least 1.');
+    const product = await tx.product.findFirst({ where: { id: line.productId, tenantId: actor.tenantId, active: true } });
+    if (!product) throw badRequest('One of the products is not available.');
+    const unitPrice = await resolveRate(tx, customer.id, product, deliveryDate);
+    items.push({ productId: product.id, productName: product.name, orderedQty: qty, unitPrice, taxRate: product.taxRate, totalAmount: round2(qty * unitPrice) });
+  }
+  const totalAmount = round2(items.reduce((s, i) => s + i.totalAmount, 0));
+  let address = order.deliveryAddress;
+  let addressId = order.deliveryAddressId;
+  if (input.deliveryAddressId !== undefined && input.deliveryAddressId !== order.deliveryAddressId) {
+    if (input.deliveryAddressId) {
+      const a = await tx.customerAddress.findFirst({ where: { id: input.deliveryAddressId, customerId: customer.id } });
+      if (!a) throw badRequest('Delivery address not found.');
+      address = a.address;
+    } else address = customer.address;
+    addressId = input.deliveryAddressId || null;
+  }
+  const before = await tx.order.findUnique({ where: { id: order.id }, include: { items: true } });
+  await tx.orderItem.deleteMany({ where: { orderId: order.id } });
+  await tx.order.update({
+    where: { id: order.id },
+    data: {
+      requestedDeliveryDate: deliveryDate,
+      priority: input.priority === 'URGENT' ? 'URGENT' : input.priority === 'NORMAL' ? 'NORMAL' : order.priority,
+      deliveryAddressId: addressId,
+      deliveryAddress: address,
+      notes: input.notes === undefined ? order.notes : input.notes?.trim() || null,
+      totalAmount,
+      isCreditOverLimit: customer.creditLimit > 0 && customer.balance + totalAmount > customer.creditLimit,
+      items: { create: items },
+      statusLogs: { create: { fromStatus: order.status, toStatus: order.status, actorName: actor.name, note: `Edited: ${items.map((i) => `${i.productName} × ${i.orderedQty}`).join(', ')} · deliver ${deliveryDate}` } },
+    },
+  });
+  // Keep a still-pending approval in step with the new quantities.
+  await tx.approvalRequest.updateMany({ where: { tenantId: actor.tenantId, referenceType: 'ORDER', referenceId: order.id, status: 'PENDING' }, data: { summary: `${items.map((i) => `${i.productName} × ${i.orderedQty}`).join(', ')} · ₹${totalAmount.toLocaleString('en-IN')} · deliver ${deliveryDate} (edited)` } });
+  await audit(tx, actor, { action: 'ORDER_EDITED', entityType: 'Order', entityId: order.id, reference: order.orderNumber, oldValue: { items: before?.items.map((i) => `${i.productName} × ${i.orderedQty}`), date: order.requestedDeliveryDate, total: order.totalAmount }, newValue: { items: items.map((i) => `${i.productName} × ${i.orderedQty}`), date: deliveryDate, total: totalAmount } });
+  if (order.assignedDeliveryBoyId) {
+    const boyId = order.assignedDeliveryBoyId;
+    effects.add('notify delivery boy of edit', () => notifyUsers(actor.tenantId, [boyId], { title: `Order ${order.orderNumber} changed`, body: `${order.customerName}: ${items.map((i) => `${i.productName} × ${i.orderedQty}`).join(', ')} · ${deliveryDate}`, link: '/delivery', whatsapp: true }));
+  }
 }

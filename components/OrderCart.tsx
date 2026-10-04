@@ -5,7 +5,7 @@ import { History, X } from 'lucide-react';
 import { api, inr } from '../lib/api';
 import { cue } from '../lib/feedback';
 import { useT } from '../lib/i18n';
-import { ProductTile } from './pos';
+import { ProductTile, SearchPick } from './pos';
 
 // Order cart shared by the delivery boy app, the office New order and the
 // customer portal: product tiles for the customer's own cylinders, prefilled
@@ -82,6 +82,8 @@ type Cart = ReturnType<typeof useOrderCart>;
 /** Product tiles for the cart, with the "filled from last order" strip. */
 export function OrderTiles({ cart, showPrice = true, cols = 2 }: { cart: Cart; showPrice?: boolean; cols?: 2 | 3 }) {
   const { t } = useT();
+  const many = cart.choices.length > 8;
+  const shown = many ? cart.choices.filter((p) => cart.qty[p.id]) : cart.choices;
   return (
     <div className="space-y-2">
       {cart.prefilled && cart.last && (
@@ -93,12 +95,22 @@ export function OrderTiles({ cart, showPrice = true, cols = 2 }: { cart: Cart; s
           </button>
         </div>
       )}
+      {/* Many cylinders: search to add, tiles only for the ones in the cart. */}
+      {many && (
+        <SearchPick
+          placeholder={t('Search cylinder to add…')}
+          items={cart.choices.filter((p) => !cart.qty[p.id]).map((p) => ({ id: p.id, label: p.name, sub: showPrice && p.salePrice ? inr(p.salePrice) : undefined }))}
+          onPick={(id) => {
+            cart.set(id, 1);
+          }}
+        />
+      )}
       <div className={cols === 3 ? 'grid grid-cols-2 sm:grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
-        {cart.choices.map((p) => (
+        {shown.map((p) => (
           <ProductTile key={p.id} name={p.name} sub={showPrice && p.salePrice ? inr(p.salePrice) : undefined} qty={cart.qty[p.id] || 0} onChange={(n) => cart.set(p.id, n)} />
         ))}
       </div>
-      {cart.choices.length > 0 && cart.count === 0 && <p className="text-center text-[11px] font-semibold text-slate-400">{t('Tap a cylinder to add it')}</p>}
+      {cart.choices.length > 0 && cart.count === 0 && <p className="text-center text-[11px] font-semibold text-slate-400">{t(many ? 'Search above and tap a cylinder to add it' : 'Tap a cylinder to add it')}</p>}
     </div>
   );
 }

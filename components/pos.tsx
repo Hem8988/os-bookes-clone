@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Delete, Minus, Plus, Volume2, VolumeX } from 'lucide-react';
+import { Check, ChevronDown, Cylinder, Delete, Minus, Plus, Search, Volume2, VolumeX, X } from 'lucide-react';
 import { cue, useSound } from '../lib/feedback';
-import { cx } from './ui';
+import { cx, Modal } from './ui';
 
-// POS kit: big tap targets for quick entry on phones and at the counter.
+// POS kit: quick, tap-friendly entry on phones and at the counter.
 // Every tap gives a short sound + vibration (lib/feedback), switchable off.
 
 const clampQty = (n: number, min: number, max?: number) => Math.max(min, max != null ? Math.min(max, n) : n);
 
-/** − [n] + with big buttons; the number can still be typed. */
+/** Pill stepper: (−) n (+); the number can still be typed. */
 export function Stepper({ value, onChange, min = 0, max, size = 'md', invalid, label }: { value: number; onChange: (n: number) => void; min?: number; max?: number; size?: 'md' | 'lg'; invalid?: boolean; label?: string }) {
   const step = (d: number) => {
     const next = clampQty(value + d, min, max);
@@ -18,13 +18,13 @@ export function Stepper({ value, onChange, min = 0, max, size = 'md', invalid, l
     cue(d > 0 ? 'tap' : 'remove');
     onChange(next);
   };
-  const h = size === 'lg' ? 'h-12' : 'h-10';
+  const btn = size === 'lg' ? 'h-10 w-10' : 'h-8 w-8';
   return (
     <div className="space-y-1">
-      {label && <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</div>}
-      <div className={cx('flex items-stretch rounded-xl border overflow-hidden bg-white', invalid ? 'border-rose-400' : 'border-slate-300')}>
-        <button type="button" onClick={() => step(-1)} className={cx(h, 'w-11 shrink-0 flex items-center justify-center bg-slate-100 text-slate-700 active:bg-slate-200')} aria-label="Less">
-          <Minus className="h-4 w-4" />
+      {label && <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>}
+      <div className={cx('flex items-center gap-1 rounded-full p-1 transition', invalid ? 'bg-rose-50 ring-1 ring-rose-300' : value > 0 ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-100')}>
+        <button type="button" onClick={() => step(-1)} disabled={value <= min} className={cx(btn, 'shrink-0 rounded-full bg-white text-slate-600 shadow-sm flex items-center justify-center active:scale-90 transition disabled:opacity-40')} aria-label="Less">
+          <Minus className="h-3.5 w-3.5" />
         </button>
         <input
           inputMode="numeric"
@@ -32,17 +32,17 @@ export function Stepper({ value, onChange, min = 0, max, size = 'md', invalid, l
           placeholder="0"
           onChange={(e) => onChange(clampQty(Number(e.target.value.replace(/\D/g, '')) || 0, min, max))}
           onFocus={(e) => e.target.select()}
-          className={cx(h, 'w-full min-w-0 text-center font-black text-lg outline-none', invalid ? 'text-rose-600' : 'text-slate-900')}
+          className={cx('w-full min-w-0 bg-transparent text-center font-bold tabular-nums outline-none placeholder-slate-300', size === 'lg' ? 'text-lg' : 'text-base', invalid ? 'text-rose-600' : 'text-slate-900')}
         />
-        <button type="button" onClick={() => step(1)} className={cx(h, 'w-11 shrink-0 flex items-center justify-center bg-emerald-600 text-white active:bg-emerald-700')} aria-label="More">
-          <Plus className="h-4 w-4" />
+        <button type="button" onClick={() => step(1)} className={cx(btn, 'shrink-0 rounded-full bg-emerald-600 text-white shadow-sm shadow-emerald-200 flex items-center justify-center active:scale-90 transition')} aria-label="More">
+          <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
   );
 }
 
-/** Product card: tap the card for +1, − / + appear once it is in the cart. */
+/** Product card: tap the card for +1, the stepper appears once it is in the cart. */
 export function ProductTile({ name, sub, qty, onChange, max, note }: { name: string; sub?: React.ReactNode; qty: number; onChange: (n: number) => void; max?: number; note?: React.ReactNode }) {
   const add = () => {
     if (max != null && qty >= max) return cue('error');
@@ -50,33 +50,47 @@ export function ProductTile({ name, sub, qty, onChange, max, note }: { name: str
     onChange(qty + 1);
   };
   return (
-    <div className={cx('relative rounded-2xl border-2 bg-white transition select-none', qty > 0 ? 'border-emerald-500 shadow-md shadow-emerald-100' : 'border-slate-200')}>
-      <button type="button" onClick={add} className="w-full text-left p-3 pb-2 min-h-[84px] active:scale-[0.98] transition">
-        <div className="pr-9 text-sm font-black text-slate-900 leading-tight">{name}</div>
-        {sub && <div className="mt-1 text-[11px] font-semibold text-slate-500">{sub}</div>}
-        {note && <div className="mt-1 text-[10px] font-bold">{note}</div>}
+    <div className={cx('relative rounded-xl border bg-white transition select-none', qty > 0 ? 'border-emerald-400 ring-1 ring-emerald-400 bg-emerald-50/40' : 'border-slate-200 shadow-sm')}>
+      <button type="button" onClick={add} className="w-full text-left p-3 pb-2 flex items-start gap-2.5 active:scale-[0.98] transition">
+        <span className={cx('h-8 w-8 shrink-0 rounded-lg flex items-center justify-center', qty > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500')}>
+          <Cylinder className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1 pr-6">
+          <span className="block text-[13px] font-bold text-slate-900 leading-snug">{name}</span>
+          {sub && <span className="block mt-0.5 text-[11px] font-medium text-slate-500">{sub}</span>}
+          {note && <span className="block mt-0.5 text-[10px] font-bold">{note}</span>}
+        </span>
       </button>
-      {qty > 0 && <span className="absolute top-2 right-2 min-w-8 h-8 px-2 rounded-full bg-emerald-600 text-white text-sm font-black flex items-center justify-center">{qty}</span>}
-      {qty > 0 && (
-        <div className="px-2 pb-2">
-          <Stepper value={qty} onChange={onChange} max={max} />
-        </div>
-      )}
+      {qty > 0 && <span className="absolute top-2 right-2 min-w-6 h-6 px-1.5 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">{qty}</span>}
+      <div className="px-2.5 pb-2.5">
+        {qty > 0 ? <Stepper value={qty} onChange={onChange} max={max} /> : <button type="button" onClick={add} className="w-full h-8 rounded-full border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 flex items-center justify-center gap-1 active:bg-slate-50"><Plus className="h-3 w-3" /> Add</button>}
+      </div>
     </div>
   );
 }
 
 /** Full / empty counts for one product, with what the source holds. */
-export function StockTile({ name, available, full, empty, onFull, onEmpty, showFull = true, showEmpty = true, labels = { full: 'Full', empty: 'Empty' } }: { name: string; available?: { full: number; empty: number } | null; full: number; empty: number; onFull: (n: number) => void; onEmpty: (n: number) => void; showFull?: boolean; showEmpty?: boolean; labels?: { full: string; empty: string } }) {
+export function StockTile({ name, available, full, empty, onFull, onEmpty, showFull = true, showEmpty = true, labels = { full: 'Full', empty: 'Empty' }, onRemove }: { name: string; available?: { full: number; empty: number } | null; full: number; empty: number; onFull: (n: number) => void; onEmpty: (n: number) => void; showFull?: boolean; showEmpty?: boolean; labels?: { full: string; empty: string }; onRemove?: () => void }) {
   const overFull = !!available && full > available.full;
   const overEmpty = !!available && empty > available.empty;
+  const active = full > 0 || empty > 0;
   return (
-    <div className={cx('rounded-2xl border-2 bg-white p-3 space-y-2', overFull || overEmpty ? 'border-rose-400' : full || empty ? 'border-emerald-500' : 'border-slate-200')}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-sm font-black text-slate-900 leading-tight">{name}</div>
-        {available && <span className={cx('shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold', available.full + available.empty > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500')}>{available.full} {labels.full.toLowerCase()} · {available.empty} {labels.empty.toLowerCase()}</span>}
+    <div className={cx('rounded-xl border bg-white p-3 space-y-2.5 transition', overFull || overEmpty ? 'border-rose-300 ring-1 ring-rose-300' : active ? 'border-emerald-400 ring-1 ring-emerald-400 bg-emerald-50/30' : 'border-slate-200 shadow-sm')}>
+      <div className="flex items-center gap-2.5">
+        <span className={cx('h-8 w-8 shrink-0 rounded-lg flex items-center justify-center', active ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500')}>
+          <Cylinder className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold text-slate-900 leading-snug truncate">{name}</div>
+          {available && <div className={cx('text-[10px] font-semibold', available.full + available.empty > 0 ? 'text-emerald-700' : 'text-slate-400')}>{available.full} {labels.full.toLowerCase()} · {available.empty} {labels.empty.toLowerCase()} available</div>}
+        </div>
+        {onRemove && (
+          <button type="button" onClick={() => { cue('remove'); onRemove(); }} className="h-7 w-7 shrink-0 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-rose-50 hover:text-rose-600" aria-label="Remove">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
-      <div className={cx('grid gap-2', showFull && showEmpty ? 'grid-cols-2' : 'grid-cols-1')}>
+      <div className={cx('grid gap-3', showFull && showEmpty ? 'grid-cols-2' : 'grid-cols-1')}>
         {showFull && <Stepper label={labels.full} value={full} onChange={onFull} invalid={overFull} />}
         {showEmpty && <Stepper label={labels.empty} value={empty} onChange={onEmpty} invalid={overEmpty} />}
       </div>
@@ -86,20 +100,22 @@ export function StockTile({ name, available, full, empty, onFull, onEmpty, showF
 
 export interface Choice<T extends string> { value: T; label: React.ReactNode; icon?: React.ComponentType<{ className?: string }>; tone?: 'emerald' | 'rose' | 'sky' | 'amber' | 'slate' }
 const CHOICE_ON: Record<NonNullable<Choice<string>['tone']>, string> = {
-  emerald: 'bg-emerald-600 border-emerald-600 text-white',
-  rose: 'bg-rose-600 border-rose-600 text-white',
-  sky: 'bg-sky-600 border-sky-600 text-white',
-  amber: 'bg-amber-500 border-amber-500 text-white',
-  slate: 'bg-slate-900 border-slate-900 text-white',
+  emerald: 'bg-emerald-50 border-emerald-500 ring-emerald-500 text-emerald-800',
+  rose: 'bg-rose-50 border-rose-500 ring-rose-500 text-rose-800',
+  sky: 'bg-sky-50 border-sky-500 ring-sky-500 text-sky-800',
+  amber: 'bg-amber-50 border-amber-500 ring-amber-500 text-amber-800',
+  slate: 'bg-slate-50 border-slate-800 ring-slate-800 text-slate-900',
 };
+const CHECK_ON: Record<NonNullable<Choice<string>['tone']>, string> = { emerald: 'bg-emerald-600', rose: 'bg-rose-600', sky: 'bg-sky-600', amber: 'bg-amber-500', slate: 'bg-slate-800' };
 
-/** Big one-tap choices (payment mode, priority…). */
+/** One-tap choices (payment mode, priority, godown…). */
 export function ChoiceTiles<T extends string>({ value, onChange, options, cols }: { value: T; onChange: (v: T) => void; options: Choice<T>[]; cols?: number }) {
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols ?? options.length}, minmax(0, 1fr))` }}>
       {options.map((o) => {
         const Icon = o.icon;
         const on = o.value === value;
+        const tone = o.tone || 'emerald';
         return (
           <button
             key={o.value}
@@ -108,10 +124,15 @@ export function ChoiceTiles<T extends string>({ value, onChange, options, cols }
               cue('tap');
               onChange(o.value);
             }}
-            className={cx('min-h-[52px] rounded-xl border-2 px-2 py-2 text-xs font-black flex flex-col items-center justify-center gap-1 active:scale-[0.97] transition', on ? CHOICE_ON[o.tone || 'emerald'] : 'bg-white border-slate-200 text-slate-700')}
+            className={cx('relative min-h-[44px] rounded-xl border px-2.5 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97] transition', Icon && 'flex-col gap-1', on ? cx('ring-1 font-bold', CHOICE_ON[tone]) : 'bg-white border-slate-200 text-slate-600 shadow-sm')}
           >
-            {Icon && <Icon className="h-5 w-5" />}
-            {o.label}
+            {on && (
+              <span className={cx('absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full text-white flex items-center justify-center', CHECK_ON[tone])}>
+                <Check className="h-2.5 w-2.5" strokeWidth={3} />
+              </span>
+            )}
+            {Icon && <Icon className="h-4 w-4" />}
+            <span className="truncate max-w-full">{o.label}</span>
           </button>
         );
       })}
@@ -119,7 +140,7 @@ export function ChoiceTiles<T extends string>({ value, onChange, options, cols }
   );
 }
 
-/** Amount entry: big ₹ display, quick amounts and a numpad. */
+/** Amount entry: ₹ display, quick amounts and a numpad. */
 export function AmountPad({ value, onChange, quick = [], label }: { value: string; onChange: (v: string) => void; quick?: { label: string; value: number }[]; label?: string }) {
   const press = (k: string) => {
     cue(k === 'del' ? 'remove' : 'tap');
@@ -131,9 +152,9 @@ export function AmountPad({ value, onChange, quick = [], label }: { value: strin
   const shown = Number(value) || 0;
   return (
     <div className="space-y-2">
-      <div className="rounded-2xl bg-slate-900 text-white px-4 py-3 flex items-end justify-between">
-        <span className="text-[10px] font-black uppercase opacity-70">{label}</span>
-        <span className="text-3xl font-black font-mono">₹{shown.toLocaleString('en-IN')}</span>
+      <div className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white px-4 py-3 flex items-end justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+        <span className="text-2xl font-bold tabular-nums">₹{shown.toLocaleString('en-IN')}</span>
       </div>
       {quick.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -145,18 +166,18 @@ export function AmountPad({ value, onChange, quick = [], label }: { value: strin
                 cue('tap');
                 onChange(String(q.value));
               }}
-              className={cx('px-3 py-2 rounded-xl border text-xs font-black active:scale-95', Number(value) === q.value ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300 text-slate-700')}
+              className={cx('px-3 py-1.5 rounded-full border text-[11px] font-semibold active:scale-95 transition', Number(value) === q.value ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-200 text-slate-700 shadow-sm')}
             >
               {q.label}
             </button>
           ))}
-          <button type="button" onClick={() => { cue('remove'); onChange(''); }} className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-black text-rose-600 active:scale-95">C</button>
+          <button type="button" onClick={() => { cue('remove'); onChange(''); }} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-rose-600 shadow-sm active:scale-95">Clear</button>
         </div>
       )}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1.5">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'del'].map((k) => (
-          <button key={k} type="button" onClick={() => press(k)} className="h-12 rounded-xl bg-white border border-slate-200 text-lg font-black text-slate-900 flex items-center justify-center active:bg-slate-100 active:scale-95">
-            {k === 'del' ? <Delete className="h-5 w-5" /> : k}
+          <button key={k} type="button" onClick={() => press(k)} className="h-11 rounded-lg bg-white text-lg font-semibold text-slate-800 shadow-sm flex items-center justify-center active:bg-slate-50 active:scale-95 transition">
+            {k === 'del' ? <Delete className="h-5 w-5 text-slate-500" /> : k}
           </button>
         ))}
       </div>
@@ -174,14 +195,17 @@ export function PosTotal({ lines, action }: { lines: React.ReactNode; action: Re
   );
 }
 
-/** Big main action button for PosTotal. */
+/** Main action button for PosTotal. */
 export function PosButton({ busy, disabled, onClick, children, tone = 'emerald' }: { busy?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; tone?: 'emerald' | 'slate' }) {
   return (
     <button
       type="button"
       disabled={disabled || busy}
       onClick={onClick}
-      className={cx('min-h-[52px] px-5 rounded-2xl text-sm font-black text-white flex items-center justify-center gap-2 shadow-lg active:scale-[0.97] transition disabled:opacity-40 disabled:shadow-none', tone === 'emerald' ? 'bg-emerald-600 shadow-emerald-200' : 'bg-slate-900 shadow-slate-300')}
+      className={cx(
+        'h-11 px-5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 shadow-md active:scale-[0.97] transition disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none',
+        tone === 'emerald' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-slate-900 hover:bg-slate-800 shadow-slate-300'
+      )}
     >
       {busy ? <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : null}
       {children}
@@ -253,13 +277,93 @@ export function RecentChips({ items, onPick, title }: { items: RecentItem[]; onP
               cue('tap');
               onPick(r);
             }}
-            className="shrink-0 max-w-[180px] text-left px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 active:bg-emerald-100"
+            className="shrink-0 max-w-[180px] text-left px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-sm active:bg-emerald-50"
           >
-            <span className="block text-xs font-black text-emerald-900 truncate">{r.label}</span>
-            {r.sub && <span className="block text-[10px] text-emerald-700 truncate">{r.sub}</span>}
+            <span className="block text-xs font-bold text-slate-900 truncate">{r.label}</span>
+            {r.sub && <span className="block text-[10px] text-slate-500 truncate">{r.sub}</span>}
           </button>
         ))}
       </div>
     </div>
+  );
+}
+
+export interface PickItem { id: string; label: string; sub?: string; icon?: React.ComponentType<{ className?: string }> }
+
+/**
+ * Search box with a short list of matches; tapping one picks it. Scales to
+ * hundreds of entries: only `limit` rows are drawn (the first ones when empty).
+ */
+export function SearchPick({ items, onPick, placeholder = 'Search…', limit = 6, autoFocus }: { items: PickItem[]; onPick: (id: string) => void; placeholder?: string; limit?: number; autoFocus?: boolean }) {
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const matches = (q ? items.filter((i) => i.label.toLowerCase().includes(q) || (i.sub || '').toLowerCase().includes(q)) : items).slice(0, limit);
+  const more = (q ? items.filter((i) => i.label.toLowerCase().includes(q) || (i.sub || '').toLowerCase().includes(q)).length : items.length) - matches.length;
+  return (
+    <div className="space-y-1.5">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <input autoFocus={autoFocus} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder} className="w-full h-10 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+      </div>
+      {matches.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+          {matches.map((i) => {
+            const Icon = i.icon || Cylinder;
+            return (
+              <button
+                key={i.id}
+                type="button"
+                onClick={() => {
+                  cue('tap');
+                  setQuery('');
+                  onPick(i.id);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-emerald-50 hover:bg-slate-50"
+              >
+                <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-semibold text-slate-900 truncate">{i.label}</span>
+                  {i.sub && <span className="block text-[10px] text-slate-500 truncate">{i.sub}</span>}
+                </span>
+                <Plus className="h-4 w-4 shrink-0 text-emerald-600" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {more > 0 && <div className="text-center text-[10px] text-slate-400">+{more} more — type to search</div>}
+      {q && matches.length === 0 && <div className="text-center text-[11px] text-slate-400 py-2">No match for “{query}”.</div>}
+    </div>
+  );
+}
+
+/**
+ * Choose one entry: tiles when there are only a few, otherwise a field that
+ * opens a searchable list (for 100s of godowns, customers…).
+ */
+export function PickerField({ value, onChange, options, title = 'Select', placeholder = 'Select…', tiles = 4 }: { value: string; onChange: (id: string) => void; options: PickItem[]; title?: string; placeholder?: string; tiles?: number }) {
+  const [open, setOpen] = useState(false);
+  if (options.length <= tiles) return <ChoiceTiles value={value} onChange={onChange} cols={Math.min(options.length, 2) || 1} options={options.map((o) => ({ value: o.id, label: o.label, icon: o.icon }))} />;
+  const current = options.find((o) => o.id === value);
+  const Icon = current?.icon;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="w-full h-11 flex items-center gap-2.5 px-3 rounded-xl border border-slate-200 bg-white shadow-sm text-left">
+        {Icon && <Icon className="h-4 w-4 text-emerald-600" />}
+        <span className={cx('flex-1 truncate text-sm', current ? 'font-semibold text-slate-900' : 'text-slate-400')}>{current?.label || placeholder}</span>
+        <ChevronDown className="h-4 w-4 text-slate-400" />
+      </button>
+      <Modal open={open} title={title} onClose={() => setOpen(false)}>
+        <SearchPick
+          autoFocus
+          limit={30}
+          items={options}
+          onPick={(id) => {
+            onChange(id);
+            setOpen(false);
+          }}
+        />
+      </Modal>
+    </>
   );
 }

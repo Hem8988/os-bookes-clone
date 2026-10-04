@@ -57,7 +57,20 @@ export const GET = handle(async (request: Request) => {
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     take: Math.min(Number(url.searchParams.get('limit')) || 200, 500),
   });
-  return ok(await withShortNames(auth.tenantId, orders));
+  // Office list: the delivery boy's mobile and the vehicle he drives (Operations → Vehicles).
+  const boyIds = [...new Set(orders.map((o) => o.assignedDeliveryBoyId).filter(Boolean) as string[])];
+  const [boys, vehicles] = boyIds.length && auth.role !== 'CUSTOMER'
+    ? await Promise.all([
+        prisma.user.findMany({ where: { id: { in: boyIds } }, select: { id: true, mobile: true } }),
+        prisma.vehicle.findMany({ where: { tenantId: auth.tenantId, active: true, driverUserId: { in: boyIds } }, select: { driverUserId: true, number: true } }),
+      ])
+    : [[], []];
+  const withBoy = orders.map((o) => ({
+    ...o,
+    deliveryBoyMobile: boys.find((b) => b.id === o.assignedDeliveryBoyId)?.mobile ?? null,
+    vehicleNumber: vehicles.find((v) => v.driverUserId === o.assignedDeliveryBoyId)?.number ?? null,
+  }));
+  return ok(await withShortNames(auth.tenantId, withBoy));
 });
 
 export const POST = handle(async (request: Request) => {

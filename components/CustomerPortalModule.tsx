@@ -200,7 +200,7 @@ function NewOrder({ customerId, defaultProductIds, onClose, onDone, onError }: {
       onClose={onClose}
       footer={
         <PosTotal
-          lines={<div className="text-lg font-black text-slate-900">{t('{n} cylinders', { n: cart.count })}{cart.estimate ? ` · ${inr(cart.estimate)}` : ''}</div>}
+          lines={<div className="text-base font-bold text-slate-900">{t('{n} cylinders', { n: cart.count })}{cart.estimate ? ` · ${inr(cart.estimate)}` : ''}</div>}
           action={<PosButton busy={busy} disabled={!cart.items.length} onClick={submit}>{t('Place order')}</PosButton>}
         />
       }

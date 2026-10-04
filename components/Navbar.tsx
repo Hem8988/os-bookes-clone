@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2,
+  LayoutGrid,
   Search,
   UserCheck,
   LogOut,
@@ -68,6 +69,8 @@ interface NavbarProps {
   customers?: Customer[];
   products?: Product[];
   invoices?: Invoice[];
+  /** Opens the mega menu with every page. */
+  onOpenMenu?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -79,6 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   customers = [],
   products = [],
   invoices = [],
+  onOpenMenu,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -155,6 +159,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-30 flex h-14 md:h-16 w-full items-center justify-between gap-2 border-b border-slate-200 bg-white/95 backdrop-blur px-3 md:px-6 shadow-sm pt-[env(safe-area-inset-top)]">
       {/* Left section: Firm/Branch dropdown */}
       <div className="flex items-center gap-3 min-w-0">
+        {onOpenMenu && (
+          <button onClick={onOpenMenu} title="All menus" className="hidden md:flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm">
+            <LayoutGrid className="h-4 w-4 text-emerald-600" /> Menu
+          </button>
+        )}
         <div className="flex items-center gap-2 min-w-0 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 md:px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800">
           <Building2 className="h-4 w-4 shrink-0 text-emerald-600" />
           <span className="font-bold truncate">{company.name}</span>

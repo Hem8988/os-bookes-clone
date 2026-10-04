@@ -168,7 +168,7 @@ function PaymentEntryModal({ onClose, onDone, onError }: { onClose: () => void; 
       onClose={onClose}
       footer={
         <PosTotal
-          lines={<div className="text-lg font-black text-slate-900">{inr(Number(form.amount) || 0)}{selected ? <span className="block text-[11px] font-semibold text-slate-500">{selected.name}</span> : null}</div>}
+          lines={<div className="text-base font-bold text-slate-900">{inr(Number(form.amount) || 0)}{selected ? <span className="block text-[11px] font-semibold text-slate-500">{selected.name}</span> : null}</div>}
           action={<PosButton busy={busy} disabled={!selected || !(Number(form.amount) > 0)} onClick={submit}>Save for verification</PosButton>}
         />
       }

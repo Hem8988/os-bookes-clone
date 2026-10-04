@@ -25,8 +25,10 @@ import {
   Truck,
   UploadCloud,
   Wallet,
+  Warehouse,
   Wifi,
   WifiOff,
+  XCircle,
 } from 'lucide-react';
 import { api, errorMessage, inr, uploadFile } from '../lib/api';
 import { useT } from '../lib/i18n';
@@ -40,7 +42,7 @@ import { NotificationBell } from './NotificationBell';
 import { Badge, Button, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 import { DateInput } from './DateInput';
 import { cue } from '../lib/feedback';
-import { AmountPad, ChoiceTiles, PosButton, PosTotal, RecentChips, SoundToggle, Stepper, StockTile, useRecent } from './pos';
+import { AmountPad, ChoiceTiles, PickerField, PosButton, PosTotal, RecentChips, SearchPick, SoundToggle, Stepper, StockTile, useRecent } from './pos';
 import { CartProduct, OrderTiles, useOrderCart } from './OrderCart';
 
 // Delivery boy PWA (SRS §9, §14.2): Start Day → Stock → Today's Orders →
@@ -256,7 +258,7 @@ export default function DeliveryBoyModule() {
           />
         )}
         {tab === 'orders' && (
-          <OrdersTab orders={orders} pendingIds={pendingIds} dayStarted={summary?.status === 'STARTED'} onOpen={setOpenOrder} onRefresh={refresh} onNew={() => setCreating(true)} />
+          <OrdersTab orders={orders} pendingIds={pendingIds} dayStarted={summary?.status === 'STARTED'} onOpen={setOpenOrder} onRefresh={refresh} onNew={() => setCreating(true)} toast={showToast} />
         )}
         {tab === 'wallet' && <WalletTab toast={showToast} />}
         {tab === 'stock' && <StockTab userId={session?.user.id || ''} stock={stock} onChanged={refresh} toast={showToast} />}
@@ -481,15 +483,20 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
 const Tile = ({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) => (
   <div className="rounded-2xl bg-white border border-slate-200 p-3">
     <div className="text-[10px] font-bold uppercase text-slate-500">{label}</div>
-    <div className="text-lg font-black text-slate-900">{value}</div>
+    <div className="text-base font-bold text-slate-900">{value}</div>
     {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
   </div>
 );
 
 // ───────────────────────── Orders ─────────────────────────
 
-function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew }: { orders: Order[]; pendingIds: Set<string>; dayStarted: boolean; onOpen: (o: Order) => void; onRefresh: () => Promise<void>; onNew: () => void }) {
+const DECLINE_REASONS = ['No stock with me', 'Too far / not on my route', 'Vehicle problem', 'Shop closed / customer not available'];
+
+function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew, toast }: { orders: Order[]; pendingIds: Set<string>; dayStarted: boolean; onOpen: (o: Order) => void; onRefresh: () => Promise<void>; onNew: () => void; toast: (m: string, t?: 'ok' | 'error') => void }) {
   const { t, status } = useT();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [declining, setDeclining] = useState<Order | null>(null);
+  const [reason, setReason] = useState('');
   const groups = [
     { title: 'Sent back for correction', statuses: ['SENT_BACK'] },
     { title: 'To deliver', statuses: ['ASSIGNED', 'ACCEPTED', 'OUT_FOR_DELIVERY'] },
@@ -497,14 +504,63 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew }:
     { title: 'Waiting for accounts', statuses: ['DELIVERED', 'PENDING_VERIFICATION'] },
     { title: 'Rejected by office', statuses: ['REJECTED'] },
   ];
+  const newlyAssigned = orders.filter((o) => o.status === 'ASSIGNED' && !pendingIds.has(o.id));
+
+  /** Accept / out for delivery / decline straight from the list. */
+  const act = async (o: Order, action: 'accept' | 'dispatch' | 'decline', why?: string) => {
+    setBusyId(o.id);
+    try {
+      await api(`/api/cylinder/orders/${o.id}`, { body: { action, reason: why } });
+      cue(action === 'decline' ? 'remove' : 'success');
+      toast(action === 'accept' ? 'Order accepted.' : action === 'dispatch' ? 'Customer notified: out for delivery.' : 'Order declined — sent back to the office.');
+      await onRefresh();
+      return true;
+    } catch (e) {
+      cue('error');
+      toast(errorMessage(e), 'error');
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const acceptAll = async () => {
+    setBusyId('all');
+    let done = 0;
+    for (const o of newlyAssigned) {
+      try {
+        await api(`/api/cylinder/orders/${o.id}`, { body: { action: 'accept' } });
+        done++;
+      } catch {
+        /* reported below */
+      }
+    }
+    setBusyId(null);
+    cue(done === newlyAssigned.length ? 'success' : 'error');
+    toast(t('{n} order(s) accepted.', { n: done }), done === newlyAssigned.length ? 'ok' : 'error');
+    await onRefresh();
+  };
+  const decline = async () => {
+    if (!declining || !reason.trim()) return;
+    if (await act(declining, 'decline', reason.trim())) {
+      setDeclining(null);
+      setReason('');
+    }
+  };
+
   return (
     <>
       {!dayStarted && <div className="rounded-xl p-3 bg-sky-50 text-sky-800 text-xs font-bold">{t('Start your day to deliver orders.')}</div>}
       <div className="flex justify-between gap-2">
         <Button size="sm" onClick={onNew}>
           <Plus className="h-3.5 w-3.5" />{t('New order')}</Button>
-        <Button tone="secondary" size="sm" onClick={() => void onRefresh()}>
-          <RefreshCw className="h-3.5 w-3.5" />{t('Refresh')}</Button>
+        <div className="flex gap-2">
+          {newlyAssigned.length > 1 && (
+            <Button size="sm" tone="secondary" busy={busyId === 'all'} onClick={() => void acceptAll()}>
+              <CheckCircle2 className="h-3.5 w-3.5" />{t('Accept all ({n})', { n: newlyAssigned.length })}</Button>
+          )}
+          <Button tone="secondary" size="sm" onClick={() => void onRefresh()}>
+            <RefreshCw className="h-3.5 w-3.5" />{t('Refresh')}</Button>
+        </div>
       </div>
       {groups.map((g) => {
         const list = orders.filter((o) => g.statuses.includes(o.status));
@@ -512,28 +568,83 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew }:
         return (
           <div key={g.title} className="space-y-2">
             <div className="text-[11px] font-black uppercase text-slate-500">{t(g.title)} ({list.length})</div>
-            {list.map((o) => (
-              <button key={o.id} onClick={() => onOpen(o)} className="w-full text-left rounded-2xl bg-white border border-slate-200 p-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-slate-900 truncate">{partyLabel(o.customerShortName, o.customerName)}</span>
-                    {o.priority === 'URGENT' && <Badge tone="red">{t('Urgent')}</Badge>}
-                  </div>
-                  <div className="text-[11px] text-slate-500 truncate">{o.deliveryAddress || o.area}</div>
-                  <div className="text-[11px] text-slate-700 font-semibold">{o.items.map((i) => `${i.productName} × ${i.orderedQty}`).join(', ')}</div>
-                  {o.status === 'REJECTED' && o.rejectionReason && <div className="text-[11px] text-rose-700 font-semibold">{t('Reason: {reason}', { reason: o.rejectionReason })}</div>}
-                  <div className="mt-1 flex gap-1">
-                    <StatusBadge status={o.status} label={status(o.status)} />
-                    {pendingIds.has(o.id) && <Badge tone="amber">{t('Pending sync')}</Badge>}
-                  </div>
+            {list.map((o) => {
+              const queued = pendingIds.has(o.id);
+              const busy = busyId === o.id || busyId === 'all';
+              return (
+                <div key={o.id} className={cx('rounded-2xl bg-white border overflow-hidden', o.status === 'ASSIGNED' ? 'border-sky-300' : 'border-slate-200')}>
+                  <button onClick={() => onOpen(o)} className="w-full text-left p-3 flex items-center gap-3 active:bg-slate-50">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-900 truncate">{partyLabel(o.customerShortName, o.customerName)}</span>
+                        {o.priority === 'URGENT' && <Badge tone="red">{t('Urgent')}</Badge>}
+                      </div>
+                      <div className="text-[11px] text-slate-500 truncate">{o.deliveryAddress || o.area}</div>
+                      <div className="text-[11px] text-slate-700 font-semibold">{o.items.map((i) => `${i.productName} × ${i.orderedQty}`).join(', ')}</div>
+                      {o.status === 'REJECTED' && o.rejectionReason && <div className="text-[11px] text-rose-700 font-semibold">{t('Reason: {reason}', { reason: o.rejectionReason })}</div>}
+                      <div className="mt-1 flex gap-1">
+                        <StatusBadge status={o.status} label={status(o.status)} />
+                        {queued && <Badge tone="amber">{t('Pending sync')}</Badge>}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-slate-300" />
+                  </button>
+                  {!queued && o.status === 'ASSIGNED' && (
+                    <div className="flex justify-end gap-2 px-3 pb-2.5 -mt-1">
+                      <button disabled={busy} onClick={() => { setReason(''); setDeclining(o); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-xs font-black text-rose-700 active:scale-95 disabled:opacity-50">
+                        <XCircle className="h-3.5 w-3.5" />{t('Decline')}
+                      </button>
+                      <button disabled={busy} onClick={() => void act(o, 'accept')} className="flex items-center gap-1 px-4 py-1.5 rounded-lg bg-emerald-600 text-xs font-black text-white active:scale-95 disabled:opacity-50">
+                        <CheckCircle2 className="h-3.5 w-3.5" />{t('Accept')}
+                      </button>
+                    </div>
+                  )}
+                  {!queued && o.status === 'ACCEPTED' && (
+                    <div className="flex justify-end gap-2 px-3 pb-2.5 -mt-1">
+                      <button disabled={busy} onClick={() => { setReason(''); setDeclining(o); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-xs font-black text-rose-700 active:scale-95 disabled:opacity-50">
+                        <XCircle className="h-3.5 w-3.5" />{t('Decline')}
+                      </button>
+                      <button disabled={busy || !dayStarted} onClick={() => void act(o, 'dispatch')} className="flex items-center gap-1 px-4 py-1.5 rounded-lg bg-violet-600 text-xs font-black text-white active:scale-95 disabled:opacity-50">
+                        <Truck className="h-3.5 w-3.5" />{t('Out for delivery')}
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <ChevronRight className="h-5 w-5 text-slate-300" />
-              </button>
-            ))}
+              );
+            })}
           </div>
         );
       })}
       {orders.length === 0 && <Empty>{t('No orders assigned right now.')}</Empty>}
+
+      <Modal
+        open={!!declining}
+        title={t('Decline order')}
+        onClose={() => setDeclining(null)}
+        footer={
+          <>
+            <Button tone="secondary" onClick={() => setDeclining(null)}>{t('Back')}</Button>
+            <Button tone="danger" busy={!!declining && busyId === declining.id} disabled={!reason.trim()} onClick={() => void decline()}>{t('Decline & send back')}</Button>
+          </>
+        }
+      >
+        {declining && (
+          <>
+            <div className="text-sm font-black">{declining.orderNumber} · {partyLabel(declining.customerShortName, declining.customerName)}</div>
+            <div className="grid gap-2">
+              {DECLINE_REASONS.map((r) => (
+                <button key={r} type="button" onClick={() => { cue('tap'); setReason(t(r)); }} className={cx('text-left px-3 py-2.5 rounded-xl border-2 text-sm font-bold', reason === t(r) ? 'border-rose-500 bg-rose-50 text-rose-800' : 'border-slate-200 text-slate-700')}>
+                  {t(r)}
+                </button>
+              ))}
+            </div>
+            <Field label={t('Or write the reason')}>
+              <input value={reason} onChange={(e) => setReason(e.target.value)} className={inputClass} />
+            </Field>
+            <p className="text-[11px] text-slate-500">{t('The order goes back to the office to give to another delivery boy.')}</p>
+          </>
+        )}
+      </Modal>
     </>
   );
 }
@@ -632,7 +743,7 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
           <PosTotal
             lines={
               <>
-                <div className="text-lg font-black text-slate-900">{t('{n} cylinders', { n: cart.count })}</div>
+                <div className="text-base font-bold text-slate-900">{t('{n} cylinders', { n: cart.count })}</div>
                 <button type="button" disabled={busy || !cart.items.length} onClick={() => submit(true)} className="text-[11px] font-black text-emerald-700 disabled:opacity-40">
                   {t('Send & next order')}
                 </button>
@@ -653,7 +764,7 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
           <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search name, mobile or code')} className={cx(inputClass, 'py-3 text-base')} />
           <div className="max-h-[55vh] overflow-y-auto space-y-1.5 pr-1">
             {matches === null && <div className="py-4 text-center text-[11px] text-slate-400">{t('Loading…')}</div>}
-            {matches?.length === 0 && <div className="py-4 text-center text-[11px] text-slate-400">{t('No customer found.')}</div>}
+            {matches?.length === 0 && <div className="py-4 text-center text-[11px] text-slate-400">{t(query.trim() ? 'No customer found.' : 'No customers are assigned to you yet. Ask the office to set you as their delivery boy.')}</div>}
             {matches?.map((c) => (
               <button key={c.id} onClick={() => pick(c)} className="w-full flex items-center gap-3 text-left px-3 py-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 active:bg-emerald-100">
                 <span className="h-10 w-10 shrink-0 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-base font-black">{(partyLabel(c.shortName, c.name) || '?').trim().charAt(0).toUpperCase()}</span>
@@ -1233,7 +1344,7 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
         onClose={() => setForm(null)}
         footer={
           <PosTotal
-            lines={<div className="text-lg font-black text-slate-900">{t('{n} cylinders', { n: transferItems.reduce((s, i) => s + i.fullQty + i.emptyQty, 0) })}</div>}
+            lines={<div className="text-base font-bold text-slate-900">{t('{n} cylinders', { n: transferItems.reduce((s, i) => s + i.fullQty + i.emptyQty, 0) })}</div>}
             action={
               <PosButton busy={busy} disabled={!transferItems.length || !form?.warehouseId || overReturn} onClick={submitTransfer}>
                 <Send className="h-4 w-4" />{t('Send for approval')}
@@ -1245,32 +1356,51 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
         {form && (
           <>
             <Field label={t('Godown')}>
-              {warehouses.length <= 4 ? (
-                <ChoiceTiles value={form.warehouseId} onChange={(id) => setForm({ ...form, warehouseId: id })} cols={2} options={warehouses.map((w) => ({ value: w.id, label: w.name, tone: 'slate' as const }))} />
-              ) : (
-                <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className={inputClass}>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              )}
+              <PickerField
+                title={t('Godown')}
+                placeholder={t('Select…')}
+                value={form.warehouseId}
+                onChange={(id) => setForm({ ...form, warehouseId: id })}
+                options={warehouses.map((w) => ({ id: w.id, label: w.name, icon: /^truck/i.test(w.name) ? Truck : Warehouse }))}
+              />
             </Field>
-            <div className="space-y-2">
-              {products.map((p) => {
-                const mine = stock.find((s) => s.productId === p.id);
-                const q = form.qty[p.id] || { full: 0, empty: 0 };
-                return (
-                  <StockTile
-                    key={p.id}
-                    name={p.name}
-                    available={form.kind === 'RETURN' ? { full: mine?.fullQty ?? 0, empty: mine?.emptyQty ?? 0 } : undefined}
-                    full={q.full}
-                    empty={q.empty}
-                    onFull={(n) => setQty(p.id, { full: n })}
-                    onEmpty={(n) => setQty(p.id, { empty: n })}
-                    labels={{ full: t('Full'), empty: t('Empty') }}
-                  />
-                );
-              })}
-            </div>
+            {(() => {
+              // Few products: a tile for each. Many: search to add, tiles only for the ones added.
+              const many = products.length > 6;
+              const holding = (id: string) => stock.find((s) => s.productId === id);
+              const shown = many ? products.filter((p) => p.id in form.qty) : products;
+              // Returning: what he holds comes first in the search list.
+              const addable = products
+                .filter((p) => !(p.id in form.qty))
+                .map((p) => {
+                  const h = holding(p.id);
+                  return { id: p.id, label: p.name, sub: form.kind === 'RETURN' ? t('With me: {full} full · {empty} empty', { full: h?.fullQty ?? 0, empty: h?.emptyQty ?? 0 }) : undefined, held: (h?.fullQty ?? 0) + (h?.emptyQty ?? 0) };
+                })
+                .sort((a, b) => (form.kind === 'RETURN' ? b.held - a.held : 0));
+              return (
+                <div className="space-y-2">
+                  {many && <SearchPick placeholder={t('Search cylinder to add…')} items={addable} onPick={(id) => setQty(id, {})} />}
+                  {shown.map((p) => {
+                    const mine = holding(p.id);
+                    const q = form.qty[p.id] || { full: 0, empty: 0 };
+                    return (
+                      <StockTile
+                        key={p.id}
+                        name={p.name}
+                        available={form.kind === 'RETURN' ? { full: mine?.fullQty ?? 0, empty: mine?.emptyQty ?? 0 } : undefined}
+                        full={q.full}
+                        empty={q.empty}
+                        onFull={(n) => setQty(p.id, { full: n })}
+                        onEmpty={(n) => setQty(p.id, { empty: n })}
+                        labels={{ full: t('Full'), empty: t('Empty') }}
+                        onRemove={many ? () => { const next = { ...form.qty }; delete next[p.id]; setForm({ ...form, qty: next }); } : undefined}
+                      />
+                    );
+                  })}
+                  {many && shown.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 py-6 text-center text-[11px] font-semibold text-slate-400">{t('Search above and tap a cylinder to add it')}</div>}
+                </div>
+              );
+            })()}
             {overReturn && <p className="text-xs font-semibold text-rose-600">{t('More than you hold — reduce the red quantities.')}</p>}
           </>
         )}

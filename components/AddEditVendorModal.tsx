@@ -498,8 +498,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               />
             </div>
             
-            {/* Row 3: Mobile Number & City */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Row 3: Mobile Number, PIN code & City (the PIN fills city and state) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Billing Mobile Number</label>
                 <input
@@ -508,6 +508,22 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   value={mobileNumber}
                   onChange={(e) => setMobileNumber(e.target.value)}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Billing Pin Code</label>
+                <PinInput
+                  value={pinCode}
+                  onChange={setPinCode}
+                  onFound={(info) => {
+                    if (info.state) setStateName(info.state);
+                    if (info.city) {
+                      // The billing PIN decides the billing city; the delivery city only if it is still empty.
+                      setCity(info.city);
+                      setDeliveryCity((c) => c || info.city!);
+                    }
+                  }}
                 />
               </div>
 
@@ -618,8 +634,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
           )}
 
-          {/* Row 6: Gst Applicable, Gstin (hidden for non-GST parties), Pin Code */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Row 6: Gst Applicable, Gstin (hidden for non-GST parties) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Gst Applicable</label>
               <div className="relative">
@@ -650,20 +666,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             </div>
             )}
 
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Pin Code</label>
-              <PinInput
-                value={pinCode}
-                onChange={setPinCode}
-                onFound={(info) => {
-                  if (info.state) setStateName(info.state);
-                  if (info.city) {
-                    setCity((c) => c || info.city!);
-                    setDeliveryCity((c) => c || info.city!);
-                  }
-                }}
-              />
-            </div>
           </div>
 
           {/* Row 7: State, Email Address, Party Type */}

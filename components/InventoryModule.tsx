@@ -8,7 +8,7 @@ import { useSession } from '../lib/auth';
 import { SupplierSelect } from './books/SupplierSelect';
 import { Combobox } from './Combobox';
 import { TruckPicker } from './TruckPicker';
-import { StockTile } from './pos';
+import { SearchPick, StockTile } from './pos';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
 
 // Three-tier cylinder inventory (SRS §10): godowns → delivery boys → customers.
@@ -335,23 +335,66 @@ type ModalProps = { data: Overview; onClose: () => void; onDone: (m: string) => 
 type Qty = Record<string, { full: number; empty: number }>;
 const qtyItems = (qty: Qty) => Object.entries(qty).filter(([, q]) => q.full > 0 || q.empty > 0).map(([productId, q]) => ({ productId, fullQty: q.full, emptyQty: q.empty }));
 const patchQty = (qty: Qty, productId: string, patch: Partial<{ full: number; empty: number }>): Qty => ({ ...qty, [productId]: { ...(qty[productId] ?? { full: 0, empty: 0 }), ...patch } });
+const dropQty = (qty: Qty, productId: string): Qty => {
+  const next = { ...qty };
+  delete next[productId];
+  return next;
+};
+/** Above this many products the editor switches to "search to add". */
+const MANY_PRODUCTS = 6;
 
-/** One tile per product with full / empty steppers. */
+/**
+ * Product tiles with full / empty steppers. With many products only the ones
+ * added through the search box get a tile.
+ */
+function TileEditor({ products, qty, setQty, available, showFull = true, showEmpty = true }: { products: Overview['products']; qty: Qty; setQty: React.Dispatch<React.SetStateAction<Qty>>; available?: (productId: string) => StockRow | null | undefined; showFull?: boolean; showEmpty?: boolean }) {
+  const many = products.length > MANY_PRODUCTS;
+  const shown = many ? products.filter((p) => p.id in qty) : products;
+  const held = (id: string) => available?.(id);
+  // Products the source actually holds come first in the search list.
+  const addable = products
+    .filter((p) => !(p.id in qty))
+    .map((p) => {
+      const a = held(p.id);
+      return { id: p.id, label: p.name, sub: a === undefined ? undefined : `${a?.fullQty || 0} full · ${a?.emptyQty || 0} empty available`, n: (a?.fullQty || 0) + (a?.emptyQty || 0) };
+    })
+    .sort((x, y) => y.n - x.n);
+  return (
+    <div className="space-y-2">
+      {many && <SearchPick placeholder="Search cylinder to add…" items={addable} onPick={(id) => setQty((q) => patchQty(q, id, {}))} />}
+      <div className="grid sm:grid-cols-2 gap-2">
+        {shown.map((p) => {
+          const a = held(p.id);
+          return (
+            <StockTile
+              key={p.id}
+              name={p.name}
+              available={a === undefined ? undefined : { full: a?.fullQty || 0, empty: a?.emptyQty || 0 }}
+              full={qty[p.id]?.full || 0}
+              empty={qty[p.id]?.empty || 0}
+              onFull={(n) => setQty((q) => patchQty(q, p.id, { full: n }))}
+              onEmpty={(n) => setQty((q) => patchQty(q, p.id, { empty: n }))}
+              showFull={showFull}
+              showEmpty={showEmpty}
+              onRemove={many ? () => setQty((q) => dropQty(q, p.id)) : undefined}
+            />
+          );
+        })}
+      </div>
+      {many && shown.length === 0 && <div className="rounded-xl border border-dashed border-slate-300 py-6 text-center text-[11px] font-semibold text-slate-400">Search above and tap a cylinder to add it.</div>}
+    </div>
+  );
+}
+
 function useLines(products: Overview['products']) {
   const [qty, setQty] = useState<Qty>({});
   const items = qtyItems(qty);
-  const editor = (showFull = true, showEmpty = true) => (
-    <div className="grid sm:grid-cols-2 gap-2">
-      {products.map((p) => (
-        <StockTile key={p.id} name={p.name} full={qty[p.id]?.full || 0} empty={qty[p.id]?.empty || 0} onFull={(n) => setQty((q) => patchQty(q, p.id, { full: n }))} onEmpty={(n) => setQty((q) => patchQty(q, p.id, { empty: n }))} showFull={showFull} showEmpty={showEmpty} />
-      ))}
-    </div>
-  );
+  const editor = (showFull = true, showEmpty = true) => <TileEditor products={products} qty={qty} setQty={setQty} showFull={showFull} showEmpty={showEmpty} />;
   return { items, editor };
 }
 
 /**
- * Transfer tiles: one per product, each showing what the source holds of it;
+ * Transfer tiles, each showing what the source holds of that product;
  * a count past that turns the tile red and blocks submitting.
  */
 function useTransferLines(products: Overview['products'], available: (productId: string) => StockRow | null | undefined) {
@@ -363,22 +406,7 @@ function useTransferLines(products: Overview['products'], available: (productId:
   });
   const editor = (
     <div className="space-y-2">
-      <div className="grid sm:grid-cols-2 gap-2">
-        {products.map((p) => {
-          const a = available(p.id);
-          return (
-            <StockTile
-              key={p.id}
-              name={p.name}
-              available={a === undefined ? undefined : { full: a?.fullQty || 0, empty: a?.emptyQty || 0 }}
-              full={qty[p.id]?.full || 0}
-              empty={qty[p.id]?.empty || 0}
-              onFull={(n) => setQty((q) => patchQty(q, p.id, { full: n }))}
-              onEmpty={(n) => setQty((q) => patchQty(q, p.id, { empty: n }))}
-            />
-          );
-        })}
-      </div>
+      <TileEditor products={products} qty={qty} setQty={setQty} available={available} />
       {over && <p className="text-xs font-semibold text-rose-600">More than the source holds — reduce the red quantities.</p>}
     </div>
   );

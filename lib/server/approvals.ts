@@ -35,7 +35,7 @@ export async function createApproval(tx: Tx, input: NewApproval, effects?: Effec
     },
   });
   effects?.add('notify approvers', () =>
-    notifyRoles(input.tenantId, [...config.approvers], { title: `${config.label}: ${input.title}`, body: input.summary || input.title, link: '/admin?tab=approval-queue' })
+    notifyRoles(input.tenantId, [...config.approvers], { title: `${config.label}: ${input.title}`, body: input.summary || input.title, link: '/admin?tab=approval-queue', whatsapp: true })
   );
   return request;
 }

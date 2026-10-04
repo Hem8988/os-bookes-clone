@@ -68,6 +68,8 @@ export interface OperationsPolicy {
   emptyOverdueDays: number;
   /** WhatsApp customers when they are due for their usual refill. */
   refillReminders: boolean;
+  /** Also WhatsApp staff the important alerts (approvals, decisions, new deliveries) so they reach them with the app closed. */
+  staffWhatsapp: boolean;
   /** Day of month (1–28) the monthly statement is sent; 0 = off. */
   statementDay: number;
 }
@@ -174,6 +176,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     blockLockWithPendingItems: true,
     emptyOverdueDays: 30,
     refillReminders: false,
+    staffWhatsapp: true,
     statementDay: 0,
   },
   budgets: { heads: {} },

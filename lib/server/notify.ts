@@ -49,13 +49,15 @@ export async function notifyCustomer(tenantId: string, customer: CustomerContact
   }
 }
 
-/** In-app + web-push notification to all active staff with the given roles. */
-export async function notifyRoles(tenantId: string, roles: Role[], message: { title: string; body: string; link?: string }) {
+/** A staff alert (in-app + web push, plus WhatsApp when `whatsapp` is set). */
+type StaffMessage = { title: string; body: string; link?: string; /** important: also WhatsApp it to the staff member */ whatsapp?: boolean };
+
+export async function notifyRoles(tenantId: string, roles: Role[], message: StaffMessage) {
   const users = await prisma.user.findMany({ where: { tenantId, role: { in: roles }, status: 'ACTIVE' }, select: { id: true } });
   await notifyUsers(tenantId, users.map((u) => u.id), message);
 }
 
-export async function notifyUsers(tenantId: string, userIds: string[], message: { title: string; body: string; link?: string }) {
+export async function notifyUsers(tenantId: string, userIds: string[], message: StaffMessage) {
   if (userIds.length === 0) return;
   // Links are written for the admin portal; each person gets them on their own portal
   // (an accountant's "/admin?tab=…" becomes "/accountant?tab=…").
@@ -71,5 +73,19 @@ export async function notifyUsers(tenantId: string, userIds: string[], message: 
   // Push goes out per portal so each phone opens the right page.
   const byLink = new Map<string | undefined, string[]>();
   for (const id of userIds) byLink.set(linkFor(id), [...(byLink.get(linkFor(id)) || []), id]);
-  for (const [link, ids] of byLink) await sendPush(ids, { ...message, link });
+  for (const [link, ids] of byLink) await sendPush(ids, { title: message.title, body: message.body, link });
+  if (message.whatsapp) await whatsappStaff(tenantId, userIds, message, linkFor);
+}
+
+/** WhatsApp copy of an important staff alert, with a link that opens the right screen. */
+async function whatsappStaff(tenantId: string, userIds: string[], message: StaffMessage, linkFor: (userId: string) => string | undefined) {
+  const ops = await getSetting(tenantId, 'operations');
+  if (ops.staffWhatsapp === false) return;
+  const staff = await prisma.user.findMany({ where: { id: { in: userIds }, status: 'ACTIVE', mobile: { not: null } }, select: { id: true, mobile: true } });
+  const base = (process.env.APP_URL || '').replace(/\/$/, '');
+  for (const u of staff) {
+    const link = linkFor(u.id);
+    const text = `🔔 *${message.title}*\n${message.body}${base && link ? `\n${base}${link}` : ''}`;
+    await sendWhatsAppText(tenantId, u.mobile!, text, 'STAFF_ALERT').catch(() => undefined);
+  }
 }

@@ -140,7 +140,7 @@ export async function decideApproval(auth: AuthContext, id: string, action: 'APP
     if (item.requestedById) {
       const requesterId = item.requestedById;
       effects.add('notify requester', () =>
-        notifyUsers(auth.tenantId, [requesterId], { title: `${APPROVAL_TYPES[item.type as ApprovalType].label} ${status.toLowerCase()}`, body: `${item.title}${note ? ` — ${note}` : ''}` })
+        notifyUsers(auth.tenantId, [requesterId], { title: `${APPROVAL_TYPES[item.type as ApprovalType].label} ${status.toLowerCase()}`, body: `${item.title}${note ? ` — ${note}` : ''}`, whatsapp: true })
       );
     }
     return updated;

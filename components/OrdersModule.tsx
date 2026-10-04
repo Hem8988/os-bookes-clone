@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search, Trash2, Truck, History, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Plus, RefreshCw, Search, Trash2, Truck, History, AlertTriangle, ChevronRight, Eye, Pencil, Phone } from 'lucide-react';
 import { cue } from '../lib/feedback';
 import { ChoiceTiles, PosButton, PosTotal, RecentChips, useRecent } from './pos';
 import { OrderTiles, useOrderCart } from './OrderCart';
@@ -25,12 +25,17 @@ interface Order {
   area: string | null;
   assignedDeliveryBoyId: string | null;
   assignedDeliveryBoyName: string | null;
+  deliveryBoyMobile?: string | null;
+  vehicleNumber?: string | null;
+  deliveryAddressId?: string | null;
+  notes?: string | null;
+  createdBy?: string;
   isCreditOverLimit: boolean;
   totalAmount: number;
   createdAt: string;
   items: OrderItem[];
 }
-interface Customer { id: string; customerCode: string; name: string; shortName?: string | null; phone: string; status: string; defaultProductIds: string[]; deliveryAddresses: { id: string; label: string; address: string; isDefault: boolean }[]; balance: number; creditLimit: number }
+interface Customer { id: string; customerCode: string; name: string; shortName?: string | null; phone: string; status: string; defaultProductIds: string[]; defaultDeliveryBoyId?: string | null; deliveryAddresses: { id: string; label: string; address: string; isDefault: boolean; contactPerson?: string | null }[]; balance: number; creditLimit: number }
 interface Product { id: string; name: string; salePrice: number }
 interface Boy { id: string; name: string; mobile: string | null }
 
@@ -55,6 +60,8 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
   const [loading, setLoading] = useState(true);
   const [assignFor, setAssignFor] = useState<string[] | null>(null);
   const [cancelFor, setCancelFor] = useState<Order | null>(null);
+  const [viewing, setViewing] = useState<Order | null>(null);
+  const [editing, setEditing] = useState<Order | null>(null);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [toast, showToast] = useToast();
@@ -226,13 +233,31 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
                       <StatusBadge status={o.status} />
                       {o.isCreditOverLimit && <div><Badge tone="amber">Credit limit</Badge></div>}
                     </td>
-                    <td className="p-3">{o.assignedDeliveryBoyName || <span className="text-slate-400">—</span>}</td>
+                    <td className="p-3">
+                      {o.assignedDeliveryBoyName ? (
+                        <div>
+                          <div className="font-bold text-slate-800">{o.assignedDeliveryBoyName}</div>
+                          {o.deliveryBoyMobile && <a href={`tel:${o.deliveryBoyMobile}`} className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-emerald-700"><Phone className="h-3 w-3" />{o.deliveryBoyMobile}</a>}
+                          {o.vehicleNumber && <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold font-mono text-sky-800"><Truck className="h-3 w-3" />{o.vehicleNumber}</div>}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="p-3 text-right font-mono font-bold">{inr(o.totalAmount)}</td>
                     <td className="p-3">
                       <div className="flex gap-1 justify-end">
                         {assignable(o) && (
                           <Button size="sm" tone="secondary" onClick={() => setAssignFor([o.id])} title="Assign / reassign">
                             <Truck className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button size="sm" tone="ghost" onClick={() => setViewing(o)} title="View">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        {EDITABLE.includes(o.status) && (
+                          <Button size="sm" tone="ghost" onClick={() => setEditing(o)} title="Edit">
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         <Button size="sm" tone="ghost" onClick={() => setHistoryFor(o.id)} title="Timeline">
@@ -275,6 +300,19 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
         onError={(msg) => showToast(msg, 'error')}
       />
       <OrderHistory orderId={historyFor} onClose={() => setHistoryFor(null)} />
+      {viewing && <OrderView order={viewing} onClose={() => setViewing(null)} onEdit={EDITABLE.includes(viewing.status) ? () => { setEditing(viewing); setViewing(null); } : undefined} onTimeline={() => { setHistoryFor(viewing.id); setViewing(null); }} />}
+      {editing && (
+        <EditOrderModal
+          order={editing}
+          onClose={() => setEditing(null)}
+          onDone={(msg) => {
+            showToast(msg);
+            setEditing(null);
+            void load();
+          }}
+          onError={(msg) => showToast(msg, 'error')}
+        />
+      )}
       <NewOrderModal
         open={creating}
         boys={boys}
@@ -413,7 +451,11 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
     setCustomerId(c.id);
     setQuery('');
     setError('');
-    setAddressId(c.deliveryAddresses.find((a) => a.isDefault)?.id || '');
+    const address = c.deliveryAddresses.find((a) => a.isDefault) || c.deliveryAddresses[0];
+    setAddressId(address?.id || '');
+    // The customer's delivery boy: the one set on the customer, else the delivery contact person if he is one of the boys.
+    const contact = (address?.contactPerson || '').trim().toLowerCase();
+    setBoyId((c.defaultDeliveryBoyId && boys.some((b) => b.id === c.defaultDeliveryBoyId) ? c.defaultDeliveryBoyId : boys.find((b) => contact && b.name.trim().toLowerCase() === contact)?.id) || '');
     pushRecent({ id: c.id, label: partyLabel(c.shortName, c.name), sub: c.phone });
   };
 
@@ -464,7 +506,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
           <PosTotal
             lines={
               <>
-                <div className="text-lg font-black text-slate-900">{cart.count} cylinder{cart.count === 1 ? '' : 's'} · {inr(cart.estimate)}</div>
+                <div className="text-base font-bold text-slate-900">{cart.count} cylinder{cart.count === 1 ? '' : 's'} · {inr(cart.estimate)}</div>
                 <button type="button" disabled={busy || !cart.items.length} onClick={() => submit(true)} className="text-[11px] font-black text-emerald-700 disabled:opacity-40">
                   Create &amp; next order
                 </button>
@@ -538,7 +580,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
                 <Field label="Priority">
                   <ChoiceTiles value={priority} onChange={setPriority} options={[{ value: 'NORMAL', label: 'Normal' }, { value: 'URGENT', label: 'Urgent', tone: 'rose' }]} />
                 </Field>
-                <Field label="Delivery boy" hint="Empty = customer's default">
+                <Field label="Delivery boy" hint={boyId ? "Customer's delivery boy — change if needed" : 'Default = route / area delivery boy'}>
                   <select value={boyId} onChange={(e) => setBoyId(e.target.value)} className={inputClass}>
                     <option value="">Default</option>
                     {boys.map((b) => (
@@ -565,6 +607,107 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
         </>
       )}
       {error && <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold">{error}</div>}
+    </Modal>
+  );
+}
+
+/** Orders that can still be changed (nothing has gone out for delivery yet). */
+const EDITABLE = ['WHATSAPP_RECEIVED', 'PENDING_APPROVAL', 'APPROVED', 'ASSIGNED', 'ACCEPTED'];
+
+function OrderView({ order: o, onClose, onEdit, onTimeline }: { order: Order; onClose: () => void; onEdit?: () => void; onTimeline: () => void }) {
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex justify-between gap-4 py-1.5 border-b border-slate-50 text-xs">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-semibold text-slate-900">{value}</span>
+    </div>
+  );
+  return (
+    <Modal open title={`Order ${o.orderNumber}`} onClose={onClose} footer={<><Button tone="secondary" onClick={onTimeline}><History className="h-4 w-4" /> Timeline</Button>{onEdit && <Button onClick={onEdit}><Pencil className="h-4 w-4" /> Edit</Button>}</>}>
+      <div className="flex items-center justify-between gap-2">
+        <StatusBadge status={o.status} />
+        {o.priority === 'URGENT' && <Badge tone="red">Urgent</Badge>}
+      </div>
+      <div>
+        {row('Customer', <PartyName short={o.customerShortName} legal={o.customerName} />)}
+        {row('Phone', o.customerPhone)}
+        {row('Deliver to', o.deliveryAddress || '—')}
+        {o.area && row('Area', o.area)}
+        {row('Deliver on', o.requestedDeliveryDate)}
+        {row('Delivery boy', o.assignedDeliveryBoyName ? `${o.assignedDeliveryBoyName}${o.deliveryBoyMobile ? ` · ${o.deliveryBoyMobile}` : ''}` : 'Not assigned')}
+        {row('Vehicle', o.vehicleNumber || '—')}
+        {row('Source', `${o.source.replace(/_/g, ' ').toLowerCase()}${o.createdBy ? ` · by ${o.createdBy}` : ''}`)}
+        {row('Created', dateTime(o.createdAt))}
+        {o.notes && row('Notes', o.notes)}
+      </div>
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-slate-500"><tr><th className="p-2 text-left">Cylinder</th><th className="p-2 text-right">Qty</th><th className="p-2 text-right">Rate</th><th className="p-2 text-right">Amount</th></tr></thead>
+          <tbody>
+            {o.items.map((i) => <tr key={i.id} className="border-t border-slate-100"><td className="p-2">{i.productName}</td><td className="p-2 text-right font-bold">{i.orderedQty}</td><td className="p-2 text-right font-mono">{inr(i.unitPrice)}</td><td className="p-2 text-right font-mono">{inr(i.totalAmount)}</td></tr>)}
+            <tr className="border-t-2 border-slate-200 font-black"><td className="p-2" colSpan={3}>Total</td><td className="p-2 text-right font-mono">{inr(o.totalAmount)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      {o.isCreditOverLimit && <p className="text-xs font-semibold text-amber-700">Credit limit exceeded for this customer.</p>}
+    </Modal>
+  );
+}
+
+function EditOrderModal({ order, onClose, onDone, onError }: { order: Order; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+  const products = useApiData<Product[]>('/api/products', onError).data ?? [];
+  const customers = useApiData<Customer[]>(`/api/customers?search=${encodeURIComponent(order.customerPhone)}`, onError).data ?? [];
+  const customer = customers.find((c) => c.id === order.customerId);
+  const [lines, setLines] = useState(order.items.map((i) => ({ productId: i.productId, qty: String(i.orderedQty) })));
+  const [date, setDate] = useState(order.requestedDeliveryDate);
+  const [priority, setPriority] = useState<'NORMAL' | 'URGENT'>(order.priority === 'URGENT' ? 'URGENT' : 'NORMAL');
+  const [addressId, setAddressId] = useState(order.deliveryAddressId || '');
+  const [notes, setNotes] = useState(order.notes || '');
+  const [busy, setBusy] = useState(false);
+  // Same rule as a new order: the customer's assigned cylinders (plus whatever is already on the order).
+  const assigned = customer?.defaultProductIds ?? [];
+  const choices = assigned.length ? products.filter((p) => assigned.includes(p.id) || lines.some((l) => l.productId === p.id)) : products;
+  const items = lines.filter((l) => l.productId && Number(l.qty) > 0).map((l) => ({ productId: l.productId, qty: Number(l.qty) }));
+  const estimate = items.reduce((sum, l) => sum + l.qty * (products.find((p) => p.id === l.productId)?.salePrice || 0), 0);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api(`/api/cylinder/orders/${order.id}`, { body: { action: 'edit', items, requestedDeliveryDate: date, priority, deliveryAddressId: addressId || null, notes } });
+      onDone(`Order ${order.orderNumber} updated.`);
+    } catch (e) {
+      onError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal open wide title={`Edit ${order.orderNumber} · ${partyLabel(order.customerShortName, order.customerName)}`} onClose={onClose} footer={<><Button tone="secondary" onClick={onClose}>Cancel</Button><Button busy={busy} disabled={!items.length} onClick={save}>Save changes</Button></>}>
+      <div className="space-y-2">
+        {lines.map((line, idx) => (
+          <div key={idx} className="grid grid-cols-12 gap-2">
+            <select value={line.productId} onChange={(e) => setLines(lines.map((l, i) => (i === idx ? { ...l, productId: e.target.value } : l)))} className={cx(inputClass, 'col-span-8')}>
+              <option value="">Cylinder…</option>
+              {choices.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <input type="number" min={1} value={line.qty} onChange={(e) => setLines(lines.map((l, i) => (i === idx ? { ...l, qty: e.target.value } : l)))} placeholder="Qty" className={cx(inputClass, 'col-span-3')} />
+            <button type="button" onClick={() => setLines(lines.filter((_, i) => i !== idx))} disabled={lines.length === 1} title="Remove" className="col-span-1 flex items-center justify-center text-rose-500 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setLines([...lines, { productId: '', qty: '' }])} className="text-xs font-bold text-emerald-700">+ Add cylinder</button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Deliver on"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} /></Field>
+        <Field label="Priority"><ChoiceTiles value={priority} onChange={setPriority} options={[{ value: 'NORMAL', label: 'Normal' }, { value: 'URGENT', label: 'Urgent', tone: 'rose' }]} /></Field>
+      </div>
+      {customer && customer.deliveryAddresses.length > 0 && (
+        <Field label="Delivery address">
+          <select value={addressId} onChange={(e) => setAddressId(e.target.value)} className={inputClass}>
+            <option value="">Billing address</option>
+            {customer.deliveryAddresses.map((a) => <option key={a.id} value={a.id}>{a.label}: {a.address}</option>)}
+          </select>
+        </Field>
+      )}
+      <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
+      <p className="text-[11px] text-slate-500">About {inr(estimate)} at standard rates — the customer’s own rates are applied on save.{order.assignedDeliveryBoyName ? ` ${order.assignedDeliveryBoyName} is told about the change.` : ''}</p>
     </Modal>
   );
 }

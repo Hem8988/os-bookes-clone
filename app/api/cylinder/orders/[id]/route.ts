@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
 import { badRequest, forbidden, handle, notFound, ok, readJson, str } from '@/lib/server/http';
 import { withShortNames } from '@/lib/server/shortNames';
-import { acceptOrder, assignOrders, cancelOrder, dispatchOrder } from '@/lib/server/orders';
+import { acceptOrder, assignOrders, cancelOrder, declineOrder, dispatchOrder, editOrder } from '@/lib/server/orders';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -51,10 +51,30 @@ export const POST = handle(async (request: Request, ctx: Ctx) => {
         if (auth.role !== 'DELIVERY_BOY') throw forbidden();
         await acceptOrder(tx, auth, order);
         return 'Order accepted.';
+      case 'decline':
+        if (auth.role !== 'DELIVERY_BOY') throw forbidden();
+        await declineOrder(tx, auth, order, str(body.reason, 'Reason', { required: true, max: 300 }), effects);
+        return 'Order declined — sent back to the office.';
       case 'dispatch':
         if (auth.role !== 'DELIVERY_BOY') throw forbidden();
         await dispatchOrder(tx, auth, order, effects);
         return 'Marked out for delivery.';
+      case 'edit':
+        if (!can(auth.role, 'orders.create') && !can(auth.role, 'orders.approve')) throw forbidden();
+        await editOrder(
+          tx,
+          auth,
+          order,
+          {
+            items: Array.isArray(body.items) ? (body.items as { productId: string; qty: number }[]) : [],
+            requestedDeliveryDate: typeof body.requestedDeliveryDate === 'string' ? body.requestedDeliveryDate : undefined,
+            priority: typeof body.priority === 'string' ? body.priority : undefined,
+            deliveryAddressId: body.deliveryAddressId === undefined ? undefined : (body.deliveryAddressId as string | null) || null,
+            notes: body.notes === undefined ? undefined : String(body.notes ?? ''),
+          },
+          effects
+        );
+        return 'Order updated.';
       case 'cancel':
         if (!can(auth.role, 'orders.approve')) throw forbidden();
         await cancelOrder(tx, auth, order, str(body.reason, 'Reason', { required: true, max: 300 }));

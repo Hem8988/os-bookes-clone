@@ -61,6 +61,8 @@ import RoutesModule from './RoutesModule';
 import { SettingsModule } from './SettingsModule';
 import { MENU, Sidebar } from './Sidebar';
 import { MobileMenu, MobileTabBar } from './MobileNav';
+import { MegaMenu } from './MegaMenu';
+import { useMenuUsage } from '../lib/useMenuUsage';
 import WhatsAppCenter from './WhatsAppInvoiceSenderModule';
 import { useToast } from './ui';
 
@@ -75,6 +77,12 @@ export default function Workspace() {
   const [sub, setSub] = useState<string | undefined>();
   // Phones: the full-screen "More" menu (bottom tab bar → More).
   const [menuOpen, setMenuOpen] = useState(false);
+  // Desktop: every page in the top mega menu; the sidebar keeps the everyday ones.
+  const [megaOpen, setMegaOpen] = useState(false);
+  const { usage, record, togglePin } = useMenuUsage(session?.user.id);
+  useEffect(() => {
+    record(tab, sub);
+  }, [tab, sub, record]);
   useEffect(() => {
     const wide = window.matchMedia('(min-width: 768px)');
     const close = () => wide.matches && setMenuOpen(false);
@@ -384,11 +392,13 @@ export default function Workspace() {
         customers={customers.items}
         products={products.items}
         invoices={invoices.items}
+        onOpenMenu={() => setMegaOpen(true)}
       />
+      <MegaMenu open={megaOpen} can={can} activeTab={tab} activeSub={sub} pinned={usage.pinned} onTogglePin={togglePin} onNavigate={navigate} onClose={() => setMegaOpen(false)} />
       <div className="relative flex flex-1 overflow-hidden">
         {/* Desktop: sidebar always in the layout. */}
         <div className="hidden md:block h-full flex-shrink-0">
-          <Sidebar activeTab={tab} activeSub={sub} can={can} onNavigate={navigate} />
+          <Sidebar activeTab={tab} activeSub={sub} can={can} onNavigate={navigate} usage={usage} onTogglePin={togglePin} onOpenMenu={() => setMegaOpen(true)} />
         </div>
         {/* Phone: app-style "More" screen with every menu entry. */}
         <MobileMenu

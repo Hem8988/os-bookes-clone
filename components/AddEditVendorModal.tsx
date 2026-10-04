@@ -5,7 +5,9 @@ import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2, L
 import { api, errorMessage } from '../lib/api';
 import { Customer, Product, PartyRate } from '../lib/types';
 import { CUSTOMER_SEGMENTS, PAYMENT_TERMS } from '../lib/settings';
-import { isValidGstin, isValidMobile } from '../lib/phone';
+import { isValidMobile } from '../lib/phone';
+import { GST_STATES, gstinProblem } from '../lib/gst';
+import type { GstDetails } from '../lib/server/gstLookup';
 import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
 import { AddableSelect } from './AddableSelect';
 import { Combobox } from './Combobox';
@@ -134,6 +136,34 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<{ field: string; message: string }[]>([]);
   const formBodyRef = React.useRef<HTMLDivElement>(null);
+  // Online GST lookup: a valid GSTIN fills the empty name / address boxes (needs GST_API_KEY on the server).
+  const [gstInfo, setGstInfo] = useState<{ gstin: string; state: 'loading' | 'done' | 'error' | 'off'; details?: GstDetails; filled: string[]; message?: string } | null>(null);
+  const fetchGst = async (g: string) => {
+    if (gstInfo?.gstin === g && gstInfo.state !== 'error') return;
+    setGstInfo({ gstin: g, state: 'loading', filled: [] });
+    try {
+      const d = await api<GstDetails>(`/api/gst/lookup?gstin=${g}`);
+      const filled: string[] = [];
+      // Only empty boxes are filled — nothing already typed is overwritten.
+      const fill = (label: string, value: string | null, current: string, set: (v: string) => void) => {
+        if (value && !current.trim()) {
+          set(value);
+          filled.push(label);
+        }
+      };
+      fill('legal name', d.legalName, partyName, setPartyName);
+      fill('trade name', d.tradeName, tradeName, setTradeName);
+      fill('shop name', d.tradeName || d.legalName, shortName, setShortName);
+      fill('billing address', d.address, address, setAddress);
+      fill('pin code', d.pincode, pinCode, setPinCode);
+      fill('city', d.city, city, setCity);
+      setGstInfo({ gstin: g, state: 'done', details: d, filled });
+    } catch (e) {
+      const message = errorMessage(e);
+      // Not set up yet: say it once, quietly.
+      setGstInfo({ gstin: g, state: 'error', filled: [], message: /not set up/i.test(message) ? 'Name & address auto-fill from GST is not switched on yet (needs a GST API key).' : message });
+    }
+  };
   // Terms the business made itself ("45 days", "Advance"…), shared across parties.
   const [customTerms, setCustomTerms] = useState<{ value: string; label: string; days: number }[]>([]);
   useEffect(() => {
@@ -165,6 +195,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   useEffect(() => {
     const today = getTodayDateString();
     setFormErrors([]);
+    setGstInfo(null);
     if (customerToEdit) {
       // Show exactly what is saved: old entries kept as product names are turned into ids,
       // and ids of products that no longer exist are dropped.
@@ -373,7 +404,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     if (!address.trim()) errors.push({ field: 'address', message: 'Billing address is required.' });
     if (!isValidMobile(mobileNumber)) errors.push({ field: 'mobile', message: 'Enter a valid 10-digit billing mobile number.' });
     if (whatsappNumber.trim() && !isValidMobile(whatsappNumber)) errors.push({ field: 'whatsapp', message: 'Enter a valid 10-digit WhatsApp number.' });
-    if (gstApplicable !== 'NON-GST' && gstin.trim() && !isValidGstin(gstin.trim())) errors.push({ field: 'gstin', message: 'GSTIN format is not valid — 15 characters like 23ABCDE1234F1Z5.' });
+    const gstError = gstApplicable !== 'NON-GST' && gstin.trim() ? gstinProblem(gstin) : null;
+    if (gstError) errors.push({ field: 'gstin', message: gstError });
     if (emailAddress.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress.trim())) errors.push({ field: 'email', message: 'Email is not valid.' });
     const noVoucher = depositRows.filter((r) => r.voucherMissing);
     if (noVoucher.length) errors.push({ field: 'voucher', message: `Enter the SV / TV voucher number for: ${noVoucher.map((r) => r.product.name).join(', ')} (needed when the deposit is Free or Paid).` });
@@ -517,9 +549,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-semibold text-slate-800 dark:text-slate-200">
           
           {/* Scrollable Form Body Container (Centered & Spacious) */}
-          <div ref={formBodyRef} className="party-form flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-7xl mx-auto w-full">
+          <div ref={formBodyRef} className="party-form flex-1 overflow-y-auto p-3 sm:p-4 w-full grid grid-cols-1 xl:grid-cols-2 gap-4 items-start content-start">
             {formErrors.length > 0 && (
-              <div role="alert" className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-800">
+              <div role="alert" className="xl:col-span-2 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-800">
                 <div className="text-sm font-black">Not saved — please fix this:</div>
                 <ul className="mt-1 list-disc pl-5 text-xs font-semibold space-y-0.5">
                   {formErrors.map((x) => <li key={x.field + x.message}>{x.message}</li>)}
@@ -530,8 +562,79 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           
 
 
+          {/* Card 0: GSTIN first — a valid number fills the name, address and state below. */}
+          <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-sky-500 space-y-3 shadow-sm">
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+            <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">GST Number</h4>
+            <p className="text-[11px] font-medium text-slate-500">Enter the GSTIN first — the name, address, pin code, city and state fill in by themselves.</p>
+          </div>
+          {/* Row 6: Gst Applicable, Gstin (hidden for non-GST parties) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Gst Applicable</label>
+              <div className="relative">
+                <select
+                  value={gstApplicable}
+                  onChange={(e) => setGstApplicable(e.target.value)}
+                  className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                >
+                  <option value="GST">GST</option>
+                  <option value="IGST">IGST</option>
+                  <option value="EXEMPTED">EXEMPTED</option>
+                  <option value="NON-GST">NON-GST</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {gstApplicable !== 'NON-GST' && (
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 dark:text-slate-100 block">Gstin</label>
+              <input
+                type="text"
+                placeholder="Enter Gst Number"
+                value={gstin}
+                maxLength={15}
+                onChange={(e) => {
+                  const next = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15);
+                  setGstin(next);
+                  setFormErrors((errs) => errs.filter((x) => x.field !== 'gstin'));
+                  // A valid GSTIN tells the state: fill it in.
+                  if (!gstinProblem(next)) {
+                    setStateName(GST_STATES[next.slice(0, 2)]);
+                    void fetchGst(next);
+                  } else setGstInfo(null);
+                }}
+                className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400${bad('gstin')}`}
+              />
+              {gstin.trim() && (() => {
+                const problem = gstinProblem(gstin);
+                if (!problem)
+                  return (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-emerald-700">✓ Valid GSTIN · {GST_STATES[gstin.slice(0, 2)]} · PAN {gstin.slice(2, 12)}</p>
+                      {gstInfo?.gstin === gstin && gstInfo.state === 'loading' && <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500"><Loader2 className="h-3 w-3 animate-spin" /> Fetching details from GST…</p>}
+                      {gstInfo?.gstin === gstin && gstInfo.state === 'done' && gstInfo.details && (
+                        <div className={`rounded-lg border px-2.5 py-1.5 text-[11px] ${gstInfo.details.active ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-300 bg-rose-50 text-rose-800'}`}>
+                          <div className="font-black">{gstInfo.details.active ? '✅' : '❌'} {gstInfo.details.status || 'Status unknown'}{gstInfo.details.active ? '' : ' — this GSTIN is not active, check before billing'}</div>
+                          <div className="font-semibold">{gstInfo.details.legalName}{gstInfo.details.tradeName && gstInfo.details.tradeName !== gstInfo.details.legalName ? ` · ${gstInfo.details.tradeName}` : ''}</div>
+                          {gstInfo.filled.length > 0 && <div className="text-emerald-700">Filled in: {gstInfo.filled.join(', ')}</div>}
+                        </div>
+                      )}
+                      {gstInfo?.gstin === gstin && gstInfo.state === 'error' && <p className="text-[11px] font-semibold text-amber-700">{gstInfo.message}</p>}
+                    </div>
+                  );
+                // Still typing: only count the characters; the full reason once 15 are in.
+                return gstin.length < 15 ? <p className="text-[11px] font-semibold text-slate-500">{gstin.length}/15 characters</p> : <p className="text-[11px] font-semibold text-rose-600">{problem}</p>;
+              })()}
+            </div>
+            )}
+
+          </div>
+          </div>
+
           {/* Card 1: Billing & Official Details */}
-          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-indigo-500 space-y-4 shadow-sm">
+          <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-indigo-500 space-y-3 shadow-sm">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
               <h4 className="font-extrabold text-sm text-indigo-600 dark:text-indigo-400">
                 Billing & Official Details
@@ -654,7 +757,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
           {/* Card 2: Delivery & Local Details (Customers Only) */}
           {partyCategory === 'Customer' && (
-            <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-teal-500 space-y-4 shadow-sm">
+            <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-teal-500 space-y-3 shadow-sm">
             <div className="flex items-center gap-2 border-b border-teal-100 dark:border-teal-800/50 pb-2">
               <h4 className="font-extrabold text-sm text-teal-700 dark:text-teal-400">
                 Delivery Location & Local Details
@@ -770,43 +873,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
           )}
 
-          {/* Card: GST, State & Contact */}
-          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-sky-500 space-y-4 shadow-sm">
+          {/* Card: State & Contact */}
+          <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-sky-500 space-y-3 shadow-sm">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
-            <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">GST, State &amp; Contact</h4>
-          </div>
-          {/* Row 6: Gst Applicable, Gstin (hidden for non-GST parties) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Gst Applicable</label>
-              <div className="relative">
-                <select
-                  value={gstApplicable}
-                  onChange={(e) => setGstApplicable(e.target.value)}
-                  className="w-full px-3 py-2 pr-8 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 appearance-none focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                >
-                  <option value="GST">GST</option>
-                  <option value="IGST">IGST</option>
-                  <option value="EXEMPTED">EXEMPTED</option>
-                  <option value="NON-GST">NON-GST</option>
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {gstApplicable !== 'NON-GST' && (
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Gstin</label>
-              <input
-                type="text"
-                placeholder="Enter Gst Number"
-                value={gstin}
-                onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400${bad('gstin')}`}
-              />
-            </div>
-            )}
-
+            <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">State &amp; Contact</h4>
           </div>
 
           {/* Row 7: State, Email Address, Party Type */}
@@ -852,7 +922,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
           {/* STAFF & FLEET ASSIGNMENTS CARD */}
-          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-amber-500 space-y-4 shadow-sm">
+          <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-amber-500 space-y-3 shadow-sm">
             <div className="flex items-center justify-between border-b border-amber-100 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 font-extrabold text-sm">
@@ -949,7 +1019,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
           {/* AUTHORIZED / ASSIGNED LPG CYLINDER PRODUCTS CARD */}
           {partyCategory === 'Customer' && (
-            <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-emerald-500 space-y-4 shadow-sm">
+            <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-emerald-500 space-y-3 shadow-sm">
               <div className="flex items-center justify-between border-b border-emerald-100 dark:border-slate-700 pb-2">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-extrabold text-sm">
@@ -1022,7 +1092,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           )}
 
           {/* CYLINDER SECURITY DEPOSIT & SUBSCRIPTION VOUCHER (SV/TV) CARD */}
-          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-cyan-500 space-y-4 shadow-sm">
+          <div className="party-card xl:col-span-2 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-cyan-500 space-y-3 shadow-sm">
             <div className="flex items-center justify-between border-b border-teal-100 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-teal-500/20 text-teal-700 dark:text-teal-400 font-extrabold text-sm">
@@ -1101,7 +1171,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
           {/* ACCOUNT OPENING BALANCE SETUP CARD */}
-          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-violet-500 space-y-4 shadow-sm">
+          <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-violet-500 space-y-3 shadow-sm">
             <div className="flex items-center justify-between border-b border-indigo-100 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-extrabold text-sm">
@@ -1152,7 +1222,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
           {/* Card: Other Details */}
-          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-slate-400 space-y-4 shadow-sm">
+          <div className="party-card p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-slate-400 space-y-3 shadow-sm">
             <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
               <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">Other Details</h4>
             </div>

@@ -87,3 +87,30 @@ export function amountInWords(amount: number): string {
   const paise = Math.round((value - rupees) * 100);
   return `Rs. ${integerWords(rupees)}${paise ? ` and ${upTo99(paise)} Paise` : ''} only`;
 }
+
+const GSTIN_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** The check letter (15th character) a GSTIN's first 14 characters require. */
+export function gstinCheckChar(first14: string): string {
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const product = GSTIN_CHARS.indexOf(first14[i]) * (i % 2 ? 2 : 1);
+    sum += Math.floor(product / 36) + (product % 36);
+  }
+  return GSTIN_CHARS[(36 - (sum % 36)) % 36];
+}
+
+/**
+ * Offline GSTIN check: length, pattern, state code and the check letter, so a
+ * mistyped character is caught. Returns what is wrong, or null when it is valid.
+ * (Whether the number is registered / active needs an online GST lookup.)
+ */
+export function gstinProblem(raw: string): string | null {
+  const g = raw.trim().toUpperCase();
+  if (g.length !== 15) return `GSTIN must be 15 characters (you typed ${g.length}).`;
+  if (!/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g)) return 'GSTIN pattern is wrong — it looks like 23ABCDE1234F1Z5 (state code, 10-character PAN, entity number, Z, check letter).';
+  if (!GST_STATES[g.slice(0, 2)]) return `GSTIN starts with ${g.slice(0, 2)}, which is not a GST state code.`;
+  const check = gstinCheckChar(g.slice(0, 14));
+  if (check !== g[14]) return `GSTIN check letter does not match — a character is mistyped (for these first 14 characters the last one should be ${check}).`;
+  return null;
+}

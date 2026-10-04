@@ -64,7 +64,7 @@ body {
 }
 .party-form input:not([type='checkbox']):not([type='radio']),
 .party-form select {
-  height: 2.5rem;
+  height: 2.25rem;
   border-radius: 0.625rem;
   border-color: #cbd5e1;
   font-size: 0.8125rem;

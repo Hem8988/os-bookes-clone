@@ -82,12 +82,10 @@ export const MENU: MenuSection[] = [
     icon: Wallet,
     items: [
       { tab: 'payments', label: 'Payments', permission: 'ledger.view' },
-      { tab: 'ledgers', label: 'Ledgers', permission: 'ledger.view' },
       { tab: 'cash', label: 'Cash wallets', permission: 'wallet.viewAll' },
       { tab: 'day-closing', label: 'Day closing', permission: 'dayclose.perform' },
       { tab: 'billing', label: 'New invoice', permission: 'invoices.manage' },
       { tab: 'documents', sub: 'sales', label: 'Invoices', permission: 'invoices.view' },
-      { tab: 'gst', label: 'GST reports', permission: 'invoices.view' },
     ],
   },
   {

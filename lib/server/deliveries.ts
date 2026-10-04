@@ -9,7 +9,7 @@ import { moveStock, StockLocation } from './inventory';
 import { createInvoiceFromLines, invoiceStatus } from './invoices';
 import { postBookEntry, postCustomerLedger } from './ledger';
 import { notifyCustomer, notifyRoles, notifyUsers } from './notify';
-import { setOrderStatus } from './orders';
+import { deliveryBoyVehicle, setOrderStatus } from './orders';
 import { nextNumber } from './sequence';
 import { getSetting } from './settings';
 import { isStoredFile } from './storage';
@@ -288,7 +288,7 @@ export async function submitDelivery(tx: Tx, actor: Actor, input: DeliveryInput,
 }
 
 /** Customer paperwork recorded when accounts verify a delivery. */
-export interface DeliveryDocs { challanNumber?: string | null; challanUrl?: string | null; grnNumber?: string | null; grnDate?: string | null; poNumber?: string | null; poDate?: string | null }
+export interface DeliveryDocs { challanNumber?: string | null; challanUrl?: string | null; grnNumber?: string | null; grnDate?: string | null; poNumber?: string | null; poDate?: string | null; vehicleNumber?: string | null }
 
 /** Accountant approves a delivery: invoice → ledger → payment → completed. The delivery challan number is required; its copy is optional. */
 export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, note: string | null, effects: Effects, docs: DeliveryDocs = {}) {
@@ -300,6 +300,8 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
   const paper = { challanNumber: doc(docs.challanNumber), challanUrl: doc(docs.challanUrl), grnNumber: doc(docs.grnNumber), grnDate: doc(docs.grnDate), poNumber: doc(docs.poNumber), poDate: doc(docs.poDate) };
   if (!paper.challanNumber) throw badRequest('Enter the delivery challan number.');
   if (paper.challanUrl && !isStoredFile(paper.challanUrl)) throw badRequest('Upload the delivery challan again.');
+  // Vehicle on the invoice: as typed, else the one set on the order, else the delivery boy's (Operations → Vehicles → Driver).
+  const vehicleNumber = doc(docs.vehicleNumber)?.toUpperCase() || delivery.order.vehicleNumber || (await deliveryBoyVehicle(tx, actor.tenantId, delivery.deliveryBoyId, delivery.deliveryBoyName));
 
   const order = delivery.order;
   const customer = await tx.customer.findUniqueOrThrow({ where: { id: delivery.customerId } });
@@ -318,6 +320,9 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
       date: delivery.deliveryDate,
       lines: delivery.items.map((i) => {
         const p = products.find((x) => x.id === i.productId);
+        // "Invoice by weight" cylinders (e.g. 425 kg): quantity in KGS, rate per kg — same amount.
+        const kg = p && (p.extra as { billByWeight?: boolean } | null)?.billByWeight && (p.weightUnit || 'KG').toUpperCase() === 'KG' ? Number(p.weightVolume) || 0 : 0;
+        if (kg > 0) return { productId: i.productId, productName: i.productName, hsnCode: p?.hsnCode || '27111900', quantity: Math.round(i.deliveredQty * kg * 1000) / 1000, unit: 'KGS', unitPrice: i.unitPrice / kg, taxRate: i.taxRate };
         return { productId: i.productId, productName: i.productName, hsnCode: p?.hsnCode || '27111900', quantity: i.deliveredQty, unit: p?.unit || 'PCS', unitPrice: i.unitPrice, taxRate: i.taxRate };
       }),
       source: 'DELIVERY',
@@ -340,6 +345,7 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
         grnDate: paper.grnDate ?? undefined,
         poNumber: paper.poNumber ?? undefined,
         poDate: paper.poDate ?? undefined,
+        vehicleNumber: vehicleNumber ?? undefined,
       },
     });
     await setOrderStatus(tx, order, 'INVOICED', actor.name, invoice.invoiceNumber);

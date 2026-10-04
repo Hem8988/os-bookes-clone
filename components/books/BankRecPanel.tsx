@@ -1,13 +1,27 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, FileUp, Landmark, Link2, Plus, RefreshCw, Unlink, EyeOff } from 'lucide-react';
+import { CheckCircle2, FileUp, Landmark, Link2, Plus, RefreshCw, Unlink, EyeOff, Trash2 } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Kpi, LedgerOption, money, plain } from './shared';
 
 interface StatementLine { id: string; date: string; description: string; reference: string | null; debit: number; credit: number; balance: number | null; status: 'UNMATCHED' | 'MATCHED' | 'IGNORED'; matchedTo: string; matchedBy: string | null }
+interface BookPick { id: string; voucherNumber: string; date: string; party: string }
+interface Preview {
+  account: string;
+  lines: { index: number; date: string; description: string; reference: string | null; debit: number; credit: number; balance: number | null; exists: boolean; match: BookPick | null; options: BookPick[]; party: { customerId: string; name: string } | null }[];
+  from: string;
+  to: string;
+  total: number;
+  newCount: number;
+  willMatch: number;
+  existingCount: number;
+  deposits: number;
+  withdrawals: number;
+  closingBalance: number | null;
+}
 interface BookLine { id: string; date: string; voucherNumber: string; voucherType: string; party: string | null; narration: string | null; debit: number; credit: number }
 interface Rec {
   account: { id: string; name: string };
@@ -53,17 +67,46 @@ export default function BankRecPanel() {
     }
   };
 
+  const send = async (file: File, preview: boolean, chosen?: Record<number, string>) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('accountId', bank);
+    if (preview) form.append('preview', '1');
+    // 'pick-…' = "choose a customer / ledger" opened but nothing chosen yet → not linked.
+    if (chosen) form.append('links', JSON.stringify(Object.fromEntries(Object.entries(chosen).map(([i, id]) => [i, id && !id.startsWith('pick-') ? id : null]))));
+    const res = await fetch('/api/books/bank-rec', { method: 'POST', body: form, credentials: 'same-origin' });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed.');
+    return json;
+  };
+  // Step 1: read the file and show what would come in. Nothing is saved yet.
+  const [pending, setPending] = useState<{ file: File; preview: Preview } | null>(null);
+  const [previewFilter, setPreviewFilter] = useState<'ALL' | 'MATCH' | 'NOMATCH'>('ALL');
+  // Row index → book entry id ('' = leave unmatched). Starts with the auto-match; change it per line.
+  const [links, setLinks] = useState<Record<number, string>>({});
   const upload = async (file: File | undefined) => {
     if (!file || !bank) return;
     setBusy('upload');
     try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('accountId', bank);
-      const res = await fetch('/api/books/bank-rec', { method: 'POST', body: form, credentials: 'same-origin' });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed.');
+      const preview = (await send(file, true)).data as Preview;
+      setPending({ file, preview });
+      // Default: the book entry found; else, when the narration names a customer, a new receipt from them.
+      setLinks(Object.fromEntries(preview.lines.filter((l) => !l.exists).map((l) => [l.index, l.match?.id || (l.party ? `pay:${l.party.customerId}` : '')])));
+      setPreviewFilter('ALL');
+    } catch (e) {
+      onError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  // Step 2: approved in the preview → import.
+  const confirmImport = async () => {
+    if (!pending) return;
+    setBusy('import');
+    try {
+      const json = await send(pending.file, false, links);
       showToast(json.message || 'Statement imported.');
+      setPending(null);
       recQ.reload();
     } catch (e) {
       onError(errorMessage(e));
@@ -84,7 +127,7 @@ export default function BankRecPanel() {
         subtitle="Upload the bank statement (Excel or CSV from any bank). Entries are matched with the books automatically; add what the books are missing in one click."
         actions={
           <label className={cx('inline-flex items-center gap-1.5 rounded-xl font-bold px-3.5 py-2 text-xs cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white', (!bank || busy === 'upload') && 'opacity-50 pointer-events-none')}>
-            <FileUp className="h-4 w-4" /> {busy === 'upload' ? 'Importing…' : 'Upload statement'}
+            <FileUp className="h-4 w-4" /> {busy === 'upload' ? 'Reading…' : 'Upload statement'}
             <input type="file" accept=".xlsx,.csv,text/csv" className="hidden" onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
           </label>
         }
@@ -98,6 +141,11 @@ export default function BankRecPanel() {
         </Field>
         <Field label="As on"><input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className={cx(inputClass, 'w-44')} /></Field>
         <Button tone="secondary" busy={busy === 'auto'} disabled={!bank} onClick={() => act('auto', { action: 'auto', accountId: bank }, 'Auto-match done.')}><RefreshCw className="h-4 w-4" /> Auto-match</Button>
+        {!!rec?.counts.unmatched && (
+          <Button tone="secondary" busy={busy === 'clear'} onClick={() => { if (window.confirm('Remove all unmatched / ignored statement lines of this bank? Matched lines stay. Use this to upload a statement again.')) void act('clear', { action: 'clear', accountId: bank }, 'Unmatched lines removed — upload the statement again.'); }} title="Remove unmatched lines (wrong upload) and upload again">
+            <Trash2 className="h-4 w-4" /> Clear unmatched
+          </Button>
+        )}
       </div>
 
       {!bank ? (
@@ -185,6 +233,136 @@ export default function BankRecPanel() {
             </Card>
           </div>
         </>
+      )}
+
+      {pending && (
+        <Modal
+          open
+          full
+          title={`Check before import · ${pending.file.name}`}
+          onClose={() => setPending(null)}
+          footer={
+            <>
+              <Button tone="secondary" onClick={() => setPending(null)}>Cancel</Button>
+              <Button busy={busy === 'import'} disabled={!pending.preview.newCount} onClick={confirmImport}>
+                <CheckCircle2 className="h-4 w-4" /> Import {pending.preview.newCount} line{pending.preview.newCount === 1 ? '' : 's'}
+              </Button>
+            </>
+          }
+        >
+          {(() => {
+            const p = pending.preview;
+            // Counts follow what is chosen in the dropdowns.
+            const isLinked = (v?: string) => !!v && !v.startsWith('pick-');
+            const linked = Object.values(links).filter(isLinked).length;
+            const usedBy = new Map(Object.entries(links).filter(([, id]) => isLinked(id)).map(([i, id]) => [id, Number(i)]));
+            // Pick lists for lines the books don't have: customers (→ their receipt) and every other ledger (→ voucher).
+            const all = ledgersQ.data ?? [];
+            const customers = all.filter((a) => a.groupName === 'Sundry Debtors' && a.partyId).sort((a, b) => a.name.localeCompare(b.name));
+            const others = all.filter((a) => a.id !== bank && !(a.groupName === 'Sundry Debtors' && a.partyId)).sort((a, b) => a.groupName.localeCompare(b.groupName) || a.name.localeCompare(b.name));
+            return (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-600">
+                  Into <strong>{p.account}</strong> · {p.from === p.to ? p.from : `${p.from} to ${p.to}`}. Check the dates, narration and amounts against your statement — nothing is saved until you import.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <Kpi label="New lines" value={`${p.newCount} / ${p.total}`} tone="green" />
+                  <Kpi label="Will match" value={`${linked} / ${p.newCount}`} tone={linked ? 'green' : 'amber'} hint={`${p.newCount - linked} not in books — create vouchers after import`} />
+                  <Kpi label="Deposits" value={money(p.deposits)} />
+                  <Kpi label="Withdrawals" value={money(p.withdrawals)} />
+                  <Kpi label="Closing balance" value={p.closingBalance === null ? '—' : money(p.closingBalance)} hint={p.closingBalance === null ? 'no balance column found' : 'as per statement'} />
+                </div>
+                {p.existingCount > 0 && (
+                  <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs font-semibold text-amber-800">
+                    {p.existingCount} line(s) are already imported and will be skipped (shown faded).
+                  </p>
+                )}
+                <div className="flex gap-1">
+                  {([['ALL', 'All'], ['MATCH', 'Will match'], ['NOMATCH', 'No match']] as const).map(([k, label]) => (
+                    <button key={k} onClick={() => setPreviewFilter(k)} className={cx('px-2.5 py-1 rounded-lg text-[11px] font-bold', previewFilter === k ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600')}>
+                      {label} ({k === 'ALL' ? p.total : k === 'MATCH' ? linked : p.newCount - linked})
+                    </button>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-slate-200">
+                  <table className="w-full text-xs">
+                    <thead className="sticky -top-5 z-10 bg-slate-50 text-[10px] uppercase text-slate-500">
+                      <tr>
+                        <th className="p-2 text-left">Date</th>
+                        <th className="p-2 text-left">Narration</th>
+                        <th className="p-2 text-right">Withdrawal</th>
+                        <th className="p-2 text-right">Deposit</th>
+                        <th className="p-2 text-right">Balance</th>
+                        <th className="p-2 text-left">Match in books</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {p.lines.filter((l) => previewFilter === 'ALL' || (previewFilter === 'MATCH' ? isLinked(links[l.index]) : !l.exists && !isLinked(links[l.index]))).map((l) => {
+                        const v = links[l.index] || '';
+                        const detected = l.party ? `pay:${l.party.customerId}` : '';
+                        const mode = v === 'pick-cust' || (v.startsWith('pay:') && v !== detected) ? 'cust' : v === 'pick-led' || v.startsWith('led:') ? 'led' : 'main';
+                        const set = (value: string) => setLinks({ ...links, [l.index]: value });
+                        return (
+                        <tr key={l.index} className={cx(l.exists && 'opacity-40')}>
+                          <td className="p-2 whitespace-nowrap">{l.date}</td>
+                          <td className="p-2">
+                            <div className="break-all">{l.description}</div>
+                            {l.reference && <div className="text-[10px] text-slate-400 font-mono">{l.reference}</div>}
+                            {l.exists && <Badge tone="slate">Already imported</Badge>}
+                          </td>
+                          <td className="p-2 text-right font-mono text-rose-700">{l.debit ? plain(l.debit) : ''}</td>
+                          <td className="p-2 text-right font-mono text-emerald-700">{l.credit ? plain(l.credit) : ''}</td>
+                          <td className="p-2 text-right font-mono text-slate-500">{l.balance === null ? '' : plain(l.balance)}</td>
+                          <td className="p-2 w-64">
+                            {l.exists ? null : (
+                              <div className="space-y-1">
+                                <select
+                                  value={mode === 'cust' ? 'pick-cust' : mode === 'led' ? 'pick-led' : v}
+                                  onChange={(e) => set(e.target.value)}
+                                  className={cx(inputClass, 'py-1 text-[11px]', isLinked(v) ? 'border-emerald-400 bg-emerald-50' : 'border-amber-300')}
+                                >
+                                  <option value="">No match — leave for later</option>
+                                  {l.party && <option value={detected}>New receipt from {l.party.name} (customer payment)</option>}
+                                  {l.options.map((o) => {
+                                    const other = usedBy.get(o.id);
+                                    const taken = other !== undefined && other !== l.index;
+                                    return (
+                                      <option key={o.id} value={o.id} disabled={taken}>
+                                        {o.voucherNumber} · {o.date} · {o.party}{taken ? ' (used on another line)' : ''}
+                                      </option>
+                                    );
+                                  })}
+                                  {!!l.credit && <option value="pick-cust">Choose customer… (new receipt)</option>}
+                                  <option value="pick-led">Choose other ledger… (new {l.credit ? 'receipt' : 'payment'})</option>
+                                </select>
+                                {mode === 'cust' && (
+                                  <select value={v.startsWith('pay:') ? v : ''} onChange={(e) => set(e.target.value || 'pick-cust')} className={cx(inputClass, 'py-1 text-[11px]', v.startsWith('pay:') ? 'border-emerald-400' : 'border-amber-300')}>
+                                    <option value="">Select customer…</option>
+                                    {customers.map((c) => <option key={c.id} value={`pay:${c.partyId}`}>{c.name}</option>)}
+                                  </select>
+                                )}
+                                {mode === 'led' && (
+                                  <select value={v.startsWith('led:') ? v : ''} onChange={(e) => set(e.target.value || 'pick-led')} className={cx(inputClass, 'py-1 text-[11px]', v.startsWith('led:') ? 'border-emerald-400' : 'border-amber-300')}>
+                                    <option value="">Select ledger…</option>
+                                    {others.map((a) => <option key={a.id} value={`led:${a.id}`}>{a.name} · {a.groupName}</option>)}
+                                  </select>
+                                )}
+                                {v === detected && l.party && <div className="text-[10px] font-bold text-emerald-700">Customer found in narration · receipt goes to their ledger</div>}
+                                {v.startsWith('pay:') && v !== detected && <div className="text-[10px] text-slate-500">Customer payment — their outstanding goes down</div>}
+                                {v !== (l.match?.id || detected) && isLinked(v) && <div className="text-[10px] font-bold text-sky-700">Changed by you{l.match ? ` (auto: ${l.match.voucherNumber})` : ''}</div>}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
       )}
 
       {matching && rec && (

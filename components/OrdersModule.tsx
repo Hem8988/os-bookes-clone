@@ -38,6 +38,7 @@ interface Order {
 interface Customer { id: string; customerCode: string; name: string; shortName?: string | null; phone: string; status: string; defaultProductIds: string[]; defaultDeliveryBoyId?: string | null; deliveryAddresses: { id: string; label: string; address: string; isDefault: boolean; contactPerson?: string | null }[]; balance: number; creditLimit: number }
 interface Product { id: string; name: string; salePrice: number }
 interface Boy { id: string; name: string; mobile: string | null }
+interface Vehicle { id: string; number: string; type: string; driverUserId: string | null; driverName: string | null }
 
 // 'All' first and selected when the screen opens.
 const GROUPS: Record<string, string[] | null> = {
@@ -56,6 +57,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
   const [search, setSearch] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [boys, setBoys] = useState<Boy[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [assignFor, setAssignFor] = useState<string[] | null>(null);
@@ -91,6 +93,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
 
   useEffect(() => {
     api<Boy[]>('/api/users/roles?role=DELIVERY_BOY').then(setBoys).catch(() => {});
+    api<Vehicle[]>('/api/cylinder/orders/vehicles').then(setVehicles).catch(() => {});
   }, []);
 
   const assignable = (o: Order) => ['APPROVED', 'ASSIGNED', 'ACCEPTED'].includes(o.status);
@@ -281,6 +284,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
       <AssignModal
         orderIds={assignFor}
         boys={boys}
+        vehicles={vehicles}
         onClose={() => setAssignFor(null)}
         onDone={(msg) => {
           showToast(msg);
@@ -316,6 +320,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
       <NewOrderModal
         open={creating}
         boys={boys}
+        vehicles={vehicles}
         onClose={() => setCreating(false)}
         onCreated={(msg, keepOpen) => {
           showToast(msg);
@@ -327,15 +332,39 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
   );
 }
 
-function AssignModal({ orderIds, boys, onClose, onDone, onError }: { orderIds: string[] | null; boys: Boy[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+/** The vehicle given to this delivery boy in Operations → Vehicles. */
+const boyVehicle = (vehicles: Vehicle[], boy?: Boy) =>
+  boy ? vehicles.find((v) => v.driverUserId === boy.id)?.number || vehicles.find((v) => v.driverName && v.driverName.trim().toLowerCase() === boy.name.trim().toLowerCase())?.number || '' : '';
+
+/** Vehicle for the trip: pick one of ours or type a hired one. Printed on the invoice. */
+function VehicleField({ value, onChange, vehicles, boys }: { value: string; onChange: (v: string) => void; vehicles: Vehicle[]; boys: Boy[] }) {
+  return (
+    <Field label="Vehicle no." hint="Auto-filled with the delivery boy's vehicle — change if he goes in another one">
+      <input list="order-vehicles" value={value} onChange={(e) => onChange(e.target.value.toUpperCase())} placeholder="e.g. DL01AB1234" className={cx(inputClass, 'font-mono')} />
+      <datalist id="order-vehicles">
+        {vehicles.map((v) => (
+          <option key={v.id} value={v.number}>{[v.type, boys.find((b) => b.id === v.driverUserId)?.name || v.driverName].filter(Boolean).join(' · ')}</option>
+        ))}
+      </datalist>
+    </Field>
+  );
+}
+
+function AssignModal({ orderIds, boys, vehicles, onClose, onDone, onError }: { orderIds: string[] | null; boys: Boy[]; vehicles: Vehicle[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
   const [boyId, setBoyId] = useState('');
+  const [vehicle, setVehicle] = useState('');
   const [busy, setBusy] = useState(false);
+  const pickBoy = (id: string) => {
+    setBoyId(id);
+    setVehicle(boyVehicle(vehicles, boys.find((b) => b.id === id)));
+  };
   const submit = async () => {
     if (!orderIds || !boyId) return;
     setBusy(true);
     try {
-      if (orderIds.length === 1) await api(`/api/cylinder/orders/${orderIds[0]}`, { body: { action: 'assign', deliveryBoyId: boyId } });
-      else await api('/api/cylinder/orders/assign', { body: { orderIds, deliveryBoyId: boyId } });
+      const vehicleNumber = vehicle.trim() || null;
+      if (orderIds.length === 1) await api(`/api/cylinder/orders/${orderIds[0]}`, { body: { action: 'assign', deliveryBoyId: boyId, vehicleNumber } });
+      else await api('/api/cylinder/orders/assign', { body: { orderIds, deliveryBoyId: boyId, vehicleNumber } });
       onDone(`${orderIds.length} order(s) assigned.`);
     } catch (e) {
       onError(errorMessage(e));
@@ -345,14 +374,17 @@ function AssignModal({ orderIds, boys, onClose, onDone, onError }: { orderIds: s
   };
   return (
     <Modal open={!!orderIds} title={`Assign ${orderIds?.length || 0} order(s)`} onClose={onClose} footer={<><Button tone="secondary" onClick={onClose}>Cancel</Button><Button busy={busy} disabled={!boyId} onClick={submit}>Assign</Button></>}>
-      <Field label="Delivery boy">
-        <select value={boyId} onChange={(e) => setBoyId(e.target.value)} className={inputClass}>
-          <option value="">Select…</option>
-          {boys.map((b) => (
-            <option key={b.id} value={b.id}>{b.name}{b.mobile ? ` (${b.mobile})` : ''}</option>
-          ))}
-        </select>
-      </Field>
+      <div className="space-y-3">
+        <Field label="Delivery boy">
+          <select value={boyId} onChange={(e) => pickBoy(e.target.value)} className={inputClass}>
+            <option value="">Select…</option>
+            {boys.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}{b.mobile ? ` (${b.mobile})` : ''}</option>
+            ))}
+          </select>
+        </Field>
+        <VehicleField value={vehicle} onChange={setVehicle} vehicles={vehicles} boys={boys} />
+      </div>
     </Modal>
   );
 }
@@ -418,7 +450,7 @@ function OrderHistory({ orderId, onClose }: { orderId: string | null; onClose: (
   );
 }
 
-function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys: Boy[]; onClose: () => void; onCreated: (m: string, keepOpen: boolean) => void }) {
+function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boolean; boys: Boy[]; vehicles: Vehicle[]; onClose: () => void; onCreated: (m: string, keepOpen: boolean) => void }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customerId, setCustomerId] = useState('');
@@ -428,7 +460,13 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
   const [deliveryDate, setDeliveryDate] = useState(today());
   const [priority, setPriority] = useState<'NORMAL' | 'URGENT'>('NORMAL');
   const [addressId, setAddressId] = useState('');
-  const [boyId, setBoyId] = useState('');
+  const [boyId, setBoyIdRaw] = useState('');
+  const [vehicle, setVehicle] = useState('');
+  // Picking a delivery boy fills in his vehicle.
+  const setBoyId = (id: string) => {
+    setBoyIdRaw(id);
+    setVehicle(boyVehicle(vehicles, boys.find((b) => b.id === id)));
+  };
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -473,6 +511,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
           priority,
           deliveryAddressId: addressId || null,
           assignedDeliveryBoyId: boyId || null,
+          vehicleNumber: vehicle.trim() || null,
           notes,
           source: 'ADMIN',
         }),
@@ -566,7 +605,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
             <span>
               More options{' '}
               <span className="font-semibold text-slate-500">
-                · {deliveryDate === today() ? 'Today' : deliveryDate} · {priority === 'URGENT' ? 'Urgent' : 'Normal'} · {boys.find((b) => b.id === boyId)?.name || "Customer's delivery boy"}
+                · {deliveryDate === today() ? 'Today' : deliveryDate} · {priority === 'URGENT' ? 'Urgent' : 'Normal'} · {boys.find((b) => b.id === boyId)?.name || "Customer's delivery boy"}{vehicle ? ` · ${vehicle}` : ''}
               </span>
             </span>
             <ChevronRight className={cx('h-4 w-4 transition', more && 'rotate-90')} />
@@ -589,6 +628,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
                   </select>
                 </Field>
               </div>
+              <VehicleField value={vehicle} onChange={setVehicle} vehicles={vehicles} boys={boys} />
               {customer.deliveryAddresses.length > 1 && (
                 <Field label="Delivery address">
                   <select value={addressId} onChange={(e) => setAddressId(e.target.value)} className={inputClass}>

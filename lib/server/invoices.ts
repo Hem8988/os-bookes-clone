@@ -37,7 +37,7 @@ export interface InvoicePrintExtra {
 }
 
 /** Print references the office can fill in by hand. */
-export const INVOICE_REF_FIELDS = ['grnNumber', 'vehicleNumber', 'challanNumber', 'poNumber'] as const;
+export const INVOICE_REF_FIELDS = ['grnNumber', 'grnDate', 'vehicleNumber', 'challanNumber', 'poNumber', 'poDate'] as const;
 
 export function invoicePrintExtra(
   customer: Pick<Customer, 'address' | 'city' | 'state' | 'stateCode' | 'pincode' | 'email' | 'gstin'>,

@@ -146,6 +146,8 @@ export interface Product {
   unit: string;
   weightVolume?: number;
   weightUnit?: string;
+  /** Invoice this cylinder by weight: quantity in KGS and rate per kg (e.g. 425 kg cylinders). */
+  billByWeight?: boolean;
   purchasePrice: number;
   /** Standard (GST-inclusive) rate per cylinder. */
   salePrice: number;

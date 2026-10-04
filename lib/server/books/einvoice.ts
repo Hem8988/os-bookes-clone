@@ -73,8 +73,12 @@ export async function buildEinvoiceJson(tenantId: string, ids: string[]) {
       SellerDtls: { Gstin: company.gstin, LglNm: clip(company.legalName || company.name, 100), TrdNm: clip(company.name, 100), ...lines(company.address), Loc: clip(company.city || 'NA', 50), Pin: pinOf(company.pincode || company.address), Stcd: company.gstin.slice(0, 2), ...(company.phone ? { Ph: company.phone.replace(/\D/g, '').slice(-12) } : {}), ...(company.email ? { Em: company.email } : {}) },
       BuyerDtls: { Gstin: inv.customerGstin, LglNm: clip(c.name, 100), ...(c.tradeName ? { TrdNm: clip(c.tradeName, 100) } : {}), Pos: buyerState, ...lines(c.address), Loc: clip(c.city || c.area || 'NA', 50), Pin: pinOf(c.pincode || c.address), Stcd: buyerState, ...(c.phone ? { Ph: c.phone.replace(/\D/g, '').slice(-12) } : {}) },
       ItemList: inv.items.map((it, n) => {
-        const gross = r2(it.quantity * it.unitPrice);
-        return { SlNo: String(n + 1), PrdDesc: clip(it.productName, 300), IsServc: 'N', HsnCd: it.hsnCode, Qty: it.quantity, Unit: uqc(it.unit), UnitPrice: r2(it.unitPrice), TotAmt: gross, Discount: r2(Math.max(0, gross - it.taxableAmount)), AssAmt: r2(it.taxableAmount), GstRt: it.taxRate, IgstAmt: r2(it.igstAmount), CgstAmt: r2(it.cgstAmount), SgstAmt: r2(it.sgstAmount), CesRt: 0, CesAmt: 0, TotItemVal: r2(it.totalAmount) };
+        // Delivery invoices carry GST-inclusive rates: the IRP wants the price before tax
+        // (taxable ÷ qty) and no discount. A real discount only on tax-exclusive lines.
+        const inclusive = Math.abs(it.quantity * it.unitPrice - it.totalAmount) < 1;
+        const unitPrice = inclusive ? (it.quantity ? it.taxableAmount / it.quantity : 0) : it.unitPrice;
+        const gross = inclusive ? r2(it.taxableAmount) : r2(it.quantity * it.unitPrice);
+        return { SlNo: String(n + 1), PrdDesc: clip(it.productName, 300), IsServc: 'N', HsnCd: it.hsnCode, Qty: it.quantity, Unit: uqc(it.unit), UnitPrice: r2(unitPrice), TotAmt: gross, Discount: r2(Math.max(0, gross - it.taxableAmount)), AssAmt: r2(it.taxableAmount), GstRt: it.taxRate, IgstAmt: r2(it.igstAmount), CgstAmt: r2(it.cgstAmount), SgstAmt: r2(it.sgstAmount), CesRt: 0, CesAmt: 0, TotItemVal: r2(it.totalAmount) };
       }),
       ValDtls: { AssVal: r2(inv.items.reduce((s, it) => s + it.taxableAmount, 0)), CgstVal: r2(inv.totalCgst), SgstVal: r2(inv.totalSgst), IgstVal: r2(inv.totalIgst), CesVal: 0, Discount: 0, RndOffAmt: r2(inv.roundOff), TotInvVal: r2(inv.grandTotal) },
     });

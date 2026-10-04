@@ -387,6 +387,7 @@ model Order {
   assignedDeliveryBoyId   String?
   assignedDeliveryBoyName String?
   assignedAt              DateTime?
+  vehicleNumber           String? // vehicle the delivery goes in (printed on the invoice)
   acceptedAt              DateTime?
   dispatchedAt            DateTime?
   approvedBy              String?
@@ -1568,6 +1569,7 @@ model BankStatementLine {
   matchedLineId String?  @unique // AccountVoucherLine.id
   matchedBy     String?
   matchedAt     DateTime?
+  receiptNumber String? // customer receipt (RCPT-…) booked from this line, maybe still awaiting approval
   fingerprint   String // de-duplicates re-uploads
   createdAt     DateTime @default(now())
 

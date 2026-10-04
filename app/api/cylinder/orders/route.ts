@@ -68,7 +68,7 @@ export const GET = handle(async (request: Request) => {
   const withBoy = orders.map((o) => ({
     ...o,
     deliveryBoyMobile: boys.find((b) => b.id === o.assignedDeliveryBoyId)?.mobile ?? null,
-    vehicleNumber: vehicles.find((v) => v.driverUserId === o.assignedDeliveryBoyId)?.number ?? null,
+    vehicleNumber: o.vehicleNumber || (vehicles.find((v) => v.driverUserId === o.assignedDeliveryBoyId)?.number ?? null),
   }));
   return ok(await withShortNames(auth.tenantId, withBoy));
 });
@@ -105,6 +105,7 @@ export const POST = handle(async (request: Request) => {
         priority: body.priority === 'URGENT' ? 'URGENT' : 'NORMAL',
         notes: optStr(body.notes),
         assignedDeliveryBoyId,
+        vehicleNumber: auth.role === 'CUSTOMER' ? null : optStr(body.vehicleNumber),
       },
       effects
     )

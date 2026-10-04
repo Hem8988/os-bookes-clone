@@ -51,7 +51,18 @@ export interface CreateOrderInput {
   priority?: 'NORMAL' | 'URGENT';
   notes?: string | null;
   assignedDeliveryBoyId?: string | null;
+  vehicleNumber?: string | null;
 }
+
+/** The delivery boy's vehicle: the one assigned to him (Operations → Vehicles → Driver), else the one his last approved stock issue went in. */
+export async function deliveryBoyVehicle(db: Pick<Tx, 'vehicle' | 'stockTransfer'>, tenantId: string, deliveryBoyId: string, deliveryBoyName: string) {
+  const assigned = await db.vehicle.findFirst({ where: { tenantId, active: true, OR: [{ driverUserId: deliveryBoyId }, { driverName: { equals: deliveryBoyName, mode: 'insensitive' } }] }, orderBy: { updatedAt: 'desc' } });
+  if (assigned) return assigned.number;
+  const issue = await db.stockTransfer.findFirst({ where: { tenantId, toId: deliveryBoyId, status: 'APPROVED', vehicleNumber: { not: null } }, orderBy: { createdAt: 'desc' } });
+  return issue?.vehicleNumber || null;
+}
+
+const vehicleNo = (v: string | null | undefined) => (typeof v === 'string' && v.trim() ? v.trim().toUpperCase().slice(0, 30) : null);
 
 export async function createOrder(tx: Tx, actor: Actor, input: CreateOrderInput, effects: Effects) {
   const customer = await tx.customer.findFirst({ where: { id: input.customerId, tenantId: actor.tenantId, type: 'Customer' } });
@@ -106,6 +117,7 @@ export async function createOrder(tx: Tx, actor: Actor, input: CreateOrderInput,
       area: customer.area,
       route: customer.route,
       assignedDeliveryBoyId: input.assignedDeliveryBoyId || null,
+      vehicleNumber: vehicleNo(input.vehicleNumber),
       isCreditOverLimit,
       totalAmount,
       notes: input.notes || null,
@@ -199,17 +211,24 @@ export async function rejectOrder(tx: Tx, actor: Actor, order: Order, reason: st
   effects.add('order rejected message', () => notifyCustomer(actor.tenantId, customer, 'ORDER_REJECTED', { orderNumber: order.orderNumber, reason }));
 }
 
-export async function assignOrders(tx: Tx, actor: Actor, orders: Order[], deliveryBoyId: string, effects: Effects, note?: string) {
+/** `vehicleNumber`: the vehicle chosen for this trip; empty = keep the order's (same boy) or use the boy's own vehicle. */
+export async function assignOrders(tx: Tx, actor: Actor, orders: Order[], deliveryBoyId: string, effects: Effects, note?: string, vehicleNumber?: string | null) {
   const boy = await tx.user.findFirst({ where: { id: deliveryBoyId, tenantId: actor.tenantId, role: 'DELIVERY_BOY', status: 'ACTIVE' } });
   if (!boy) throw badRequest('Select an active delivery boy.');
+  const chosen = vehicleNo(vehicleNumber);
+  let boyVehicle: string | null | undefined;
   for (const order of orders) {
     if (!ASSIGNABLE.includes(order.status as OrderStatus)) throw conflict(`${order.orderNumber} cannot be assigned while ${order.status.replace(/_/g, ' ').toLowerCase()}.`);
     const reassigned = order.assignedDeliveryBoyId && order.assignedDeliveryBoyId !== boy.id && order.status !== 'APPROVED';
-    await setOrderStatus(tx, order, 'ASSIGNED', actor.name, note || (reassigned ? `Reassigned to ${boy.name}` : `Assigned to ${boy.name}`), {
+    const kept = order.assignedDeliveryBoyId === boy.id ? order.vehicleNumber : null;
+    if (!chosen && !kept && boyVehicle === undefined) boyVehicle = await deliveryBoyVehicle(tx, actor.tenantId, boy.id, boy.name);
+    const vehicle = chosen || kept || boyVehicle || null;
+    await setOrderStatus(tx, order, 'ASSIGNED', actor.name, (note || (reassigned ? `Reassigned to ${boy.name}` : `Assigned to ${boy.name}`)) + (vehicle ? ` · ${vehicle}` : ''), {
       assignedDeliveryBoyId: boy.id,
       assignedDeliveryBoyName: boy.name,
       assignedAt: new Date(),
       acceptedAt: null,
+      vehicleNumber: vehicle,
     });
     const customer = await tx.customer.findUniqueOrThrow({ where: { id: order.customerId } });
     effects.add('delivery assigned message', () =>
@@ -236,7 +255,7 @@ export async function declineOrder(tx: Tx, actor: Actor, order: Order, reason: s
   if (order.assignedDeliveryBoyId !== actor.userId) throw forbidden('This order is not assigned to you.');
   if (!['ASSIGNED', 'ACCEPTED'].includes(order.status)) throw conflict('Only orders not yet out for delivery can be declined.');
   if (!reason.trim()) throw badRequest('Give a reason for declining.');
-  await setOrderStatus(tx, order, 'APPROVED', actor.name, `Declined by ${actor.name}: ${reason}`, { assignedDeliveryBoyId: null, assignedDeliveryBoyName: null, assignedAt: null, acceptedAt: null });
+  await setOrderStatus(tx, order, 'APPROVED', actor.name, `Declined by ${actor.name}: ${reason}`, { assignedDeliveryBoyId: null, assignedDeliveryBoyName: null, assignedAt: null, acceptedAt: null, vehicleNumber: null });
   await audit(tx, actor, { action: 'ORDER_DECLINED', entityType: 'Order', entityId: order.id, reference: order.orderNumber, reason });
   effects.add('notify office', () =>
     notifyRoles(actor.tenantId, ['MANAGER', 'SUPER_ADMIN'], { title: 'Order declined by delivery boy', body: `${order.orderNumber} (${order.customerName}) — ${actor.name}: ${reason}. Assign it again.`, link: '/admin?tab=orders', whatsapp: true })

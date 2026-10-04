@@ -4,25 +4,41 @@ import { can } from '@/lib/permissions';
 import { audit } from '@/lib/server/audit';
 import { requireAuth } from '@/lib/server/auth';
 import { forbidden, handle, notFound, ok, readJson, str } from '@/lib/server/http';
+import { deliveryBoyVehicle } from '@/lib/server/orders';
 import { INVOICE_REF_FIELDS, invoicePrintExtra, InvoicePrintExtra } from '@/lib/server/invoices';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Print details frozen on the invoice, or rebuilt from the customer / delivery for older invoices. */
+/**
+ * Print details frozen on the invoice, or rebuilt from the customer / delivery for older invoices.
+ * References missing from the print (GRN / PO and their dates, challan, vehicle) are filled from the delivery.
+ */
 async function printExtraFor(invoice: Invoice, customer: Customer | null): Promise<InvoicePrintExtra | null> {
   const frozen = ((invoice.extra as { print?: InvoicePrintExtra } | null)?.print ?? null) as InvoicePrintExtra | null;
-  if (frozen || !customer) return frozen;
+  if (!frozen && !customer) return null;
   const [order, delivery] = await Promise.all([
-    invoice.orderId ? prisma.order.findFirst({ where: { id: invoice.orderId }, select: { orderNumber: true, deliveryAddress: true } }) : null,
-    invoice.deliveryId ? prisma.delivery.findFirst({ where: { id: invoice.deliveryId }, include: { items: true } }) : null,
+    invoice.orderId ? prisma.order.findFirst({ where: { id: invoice.orderId, tenantId: invoice.tenantId }, select: { orderNumber: true, deliveryAddress: true, vehicleNumber: true } }) : null,
+    invoice.deliveryId ? prisma.delivery.findFirst({ where: { id: invoice.deliveryId, tenantId: invoice.tenantId }, include: { items: true } }) : null,
   ]);
-  return invoicePrintExtra(customer, {
-    shipTo: order?.deliveryAddress || null,
-    orderNumber: order?.orderNumber,
-    deliveryNumber: delivery?.deliveryNumber,
-    deliveryBoy: delivery?.deliveryBoyName,
-    cylinders: delivery?.items.map((i) => ({ productName: i.productName, delivered: i.deliveredQty, emptyReceived: i.emptyReceivedQty })),
-  });
+  const print =
+    frozen ??
+    invoicePrintExtra(customer!, {
+      shipTo: order?.deliveryAddress || null,
+      orderNumber: order?.orderNumber,
+      deliveryNumber: delivery?.deliveryNumber,
+      deliveryBoy: delivery?.deliveryBoyName,
+      cylinders: delivery?.items.map((i) => ({ productName: i.productName, delivered: i.deliveredQty, emptyReceived: i.emptyReceivedQty })),
+    });
+  if (!delivery) return print;
+  return {
+    ...print,
+    challanNumber: print.challanNumber || delivery.challanNumber || undefined,
+    grnNumber: print.grnNumber || delivery.grnNumber || undefined,
+    grnDate: print.grnDate || delivery.grnDate || undefined,
+    poNumber: print.poNumber || delivery.poNumber || undefined,
+    poDate: print.poDate || delivery.poDate || undefined,
+    vehicleNumber: print.vehicleNumber || order?.vehicleNumber || (await deliveryBoyVehicle(prisma, invoice.tenantId, delivery.deliveryBoyId, delivery.deliveryBoyName)) || undefined,
+  };
 }
 
 /**
@@ -47,7 +63,7 @@ export const GET = handle(async (request: Request, ctx: Ctx) => {
   // IRN / e-way bill details saved from Books → E-invoice.
   const saved = (invoice.extra as Record<string, unknown> | null) ?? {};
   const pick = (k: string) => (typeof saved[k] === 'string' && saved[k] ? (saved[k] as string) : undefined);
-  const einv = { irn: pick('irn') || ((print as { irn?: string } | null)?.irn ?? undefined), ackNo: pick('ackNo'), ackDate: pick('ackDate'), signedQr: pick('signedQr'), ewbNo: pick('ewbNo'), ewbValidUpto: pick('ewbValidUpto') };
+  const einv = { irn: pick('irn') || ((print as { irn?: string } | null)?.irn ?? undefined), ackNo: pick('ackNo'), ackDate: pick('ackDate'), signedQr: pick('signedQr'), ewbNo: pick('ewbNo'), ewbDate: pick('ewbDate'), ewbValidUpto: pick('ewbValidUpto') };
   return ok({ ...invoice, print: print ? { ...print, ...einv } : null, customerPan, canEditRefs: can(auth.role, 'invoices.manage') });
 });
 

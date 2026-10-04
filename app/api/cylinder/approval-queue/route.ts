@@ -13,12 +13,14 @@ export const GET = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'approvals.view');
   const url = new URL(request.url);
   const status = url.searchParams.get('status') || 'PENDING';
-  const where: Prisma.ApprovalRequestWhereInput = { tenantId: auth.tenantId, status };
+  // ALL = every status; pending ones still listed first.
+  const where: Prisma.ApprovalRequestWhereInput = { tenantId: auth.tenantId, ...(status === 'ALL' ? {} : { status }) };
   const type = url.searchParams.get('type');
   if (type) where.type = { in: type.split(',') };
   if (url.searchParams.get('mine') !== 'false' && auth.role !== 'SUPER_ADMIN') where.approverRoles = { has: auth.role };
 
   const items = await prisma.approvalRequest.findMany({ where, include: { logs: { orderBy: { createdAt: 'asc' } } }, orderBy: { createdAt: status === 'PENDING' ? 'asc' : 'desc' }, take: 200 });
+  if (status === 'ALL') items.sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING'));
 
   // Attach the referenced records so the reviewer sees everything at once.
   const ids = (t: string) => items.filter((i) => i.referenceType === t && i.referenceId).map((i) => i.referenceId!);
@@ -48,7 +50,7 @@ export const POST = handle(async (request: Request) => {
   const docs = body.docs && typeof body.docs === 'object' ? (body.docs as Record<string, unknown>) : {};
   const pick = (k: string) => optStr(docs[k]);
   const item = await decideApproval(auth, str(body.itemId, 'Item', { required: true }), action, optStr(body.note), {
-    docs: { challanNumber: pick('challanNumber'), challanUrl: pick('challanUrl'), grnNumber: pick('grnNumber'), grnDate: pick('grnDate'), poNumber: pick('poNumber'), poDate: pick('poDate') },
+    docs: { challanNumber: pick('challanNumber'), challanUrl: pick('challanUrl'), grnNumber: pick('grnNumber'), grnDate: pick('grnDate'), poNumber: pick('poNumber'), poDate: pick('poDate'), vehicleNumber: pick('vehicleNumber') },
   });
   return ok(item, action === 'APPROVE' ? 'Approved.' : 'Rejected.');
 });

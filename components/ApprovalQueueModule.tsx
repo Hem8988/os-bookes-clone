@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, MapPin, Pencil, Printer, RefreshCw, Upload, XCircle } from 'lucide-react';
-import { api, errorMessage, inr, uploadFile } from '../lib/api';
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, MapPin, Pencil, Printer, RefreshCw, XCircle } from 'lucide-react';
+import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { InvoiceView, PrintInvoiceModal } from './PrintInvoiceModal';
 import { APPROVAL_TYPES, ApprovalType } from '../lib/permissions';
@@ -38,7 +38,7 @@ interface Props {
 
 /** Central approval queue (SRS §8): view → approve / reject with reason. */
 export default function ApprovalQueueModule({ types, title = 'Approval Queue' }: Props) {
-  const [status, setStatus] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [status, setStatus] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [decision, setDecision] = useState<{ action: 'APPROVE' | 'REJECT'; note: string } | null>(null);
@@ -60,23 +60,10 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
   const visible = typeFilter === 'ALL' ? items : items.filter((i) => i.type === typeFilter);
   const selected = visible.find((i) => i.id === selectedId) || visible[0] || null;
 
-  // Approving a delivery records the customer's paperwork: challan number (required); copy, GRN and PO optional.
-  const emptyDocs = { challanNumber: '', challanUrl: '', challanName: '', grnNumber: '', grnDate: '', poNumber: '', poDate: '' };
+  // Approving a delivery records the customer's paperwork: challan number (required); GRN and PO optional.
+  const emptyDocs = { challanNumber: '', grnNumber: '', grnDate: '', poNumber: '', poDate: '', vehicleNumber: '' };
   const [docs, setDocs] = useState(emptyDocs);
-  const [uploading, setUploading] = useState(false);
   const needsDocs = selected?.type === 'DELIVERY_VERIFICATION' && decision?.action === 'APPROVE';
-  const uploadChallan = async (file?: File) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const url = await uploadFile(file);
-      setDocs((d) => ({ ...d, challanUrl: url, challanName: file.name }));
-    } catch (e) {
-      showToast(errorMessage(e), 'error');
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const decide = async () => {
     if (!selected || !decision) return;
@@ -84,9 +71,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
     if (needsDocs && !docs.challanNumber.trim()) return showToast('Enter the delivery challan number.', 'error');
     setBusy(true);
     try {
-      const { challanName: _name, ...paper } = docs;
-      void _name;
-      await api('/api/cylinder/approval-queue', { body: { itemId: selected.id, action: decision.action, note: decision.note.trim() || null, docs: needsDocs ? paper : undefined } });
+      await api('/api/cylinder/approval-queue', { body: { itemId: selected.id, action: decision.action, note: decision.note.trim() || null, docs: needsDocs ? docs : undefined } });
       setDocs(emptyDocs);
       showToast(decision.action === 'APPROVE' ? 'Approved.' : 'Rejected.');
       setDecision(null);
@@ -132,7 +117,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-black text-slate-900">{title}</h2>
         <div className="flex items-center gap-2">
-          {(['PENDING', 'APPROVED', 'REJECTED'] as const).map((s) => (
+          {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((s) => (
             <button key={s} onClick={() => setStatus(s)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold', status === s ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
               {s.charAt(0) + s.slice(1).toLowerCase()}
             </button>
@@ -168,7 +153,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
               >
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone="blue">{APPROVAL_TYPES[item.type]?.label || item.type}</Badge>
-                  {overdue ? <Badge tone="red">Overdue</Badge> : <span className="text-[10px] text-slate-400">{dateTime(item.createdAt)}</span>}
+                  {overdue ? <Badge tone="red">Overdue</Badge> : status === 'ALL' && item.status !== 'PENDING' ? <Badge tone={item.status === 'APPROVED' ? 'green' : 'slate'}>{item.status.charAt(0) + item.status.slice(1).toLowerCase()}</Badge> : <span className="text-[10px] text-slate-400">{dateTime(item.createdAt)}</span>}
                 </div>
                 <div className="mt-1 text-xs font-black text-slate-900">{item.title}</div>
                 {item.summary && <div className="text-[11px] text-slate-600 line-clamp-2">{item.summary}</div>}
@@ -244,15 +229,8 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="text-xs font-black text-slate-800">Delivery paperwork</div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Delivery challan no. *">
+              <Field label="Delivery challan no. *" className="col-span-2">
                 <input value={docs.challanNumber} onChange={(e) => setDocs({ ...docs, challanNumber: e.target.value.toUpperCase() })} className={cx(inputClass, !docs.challanNumber.trim() && 'border-rose-300')} placeholder="e.g. DC-1045" />
-              </Field>
-              <Field label="Delivery challan copy (optional)">
-                <label className={cx('flex h-[38px] cursor-pointer items-center gap-2 rounded-xl border px-3 text-xs font-bold', docs.challanUrl ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-dashed border-slate-300 bg-white text-slate-600')}>
-                  {uploading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : docs.challanUrl ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Upload className="h-3.5 w-3.5" />}
-                  <span className="truncate">{uploading ? 'Uploading…' : docs.challanUrl ? docs.challanName || 'Uploaded — tap to change' : 'Upload photo / PDF'}</span>
-                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => void uploadChallan(e.target.files?.[0])} />
-                </label>
               </Field>
               <Field label="GRN no.">
                 <input value={docs.grnNumber} onChange={(e) => setDocs({ ...docs, grnNumber: e.target.value.toUpperCase() })} className={inputClass} />
@@ -266,8 +244,11 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
               <Field label="PO date">
                 <input type="date" value={docs.poDate} onChange={(e) => setDocs({ ...docs, poDate: e.target.value })} className={inputClass} />
               </Field>
+              <Field label="Vehicle no." hint="Leave empty to use the delivery boy's vehicle (Operations → Vehicles)." className="col-span-2">
+                <input value={docs.vehicleNumber} onChange={(e) => setDocs({ ...docs, vehicleNumber: e.target.value.toUpperCase() })} className={inputClass} placeholder="Auto — delivery boy's vehicle" />
+              </Field>
             </div>
-            <p className="text-[11px] text-slate-500">Only the challan number is required. Challan copy, GRN and PO are optional; the numbers are printed on the invoice.</p>
+            <p className="text-[11px] text-slate-500">Only the challan number is required. GRN and PO are optional; the numbers are printed on the invoice.</p>
           </div>
         )}
         <Field label={decision?.action === 'REJECT' ? 'Reason (required)' : 'Note (optional)'}>

@@ -1,10 +1,13 @@
 import { createHash } from 'crypto';
 import ExcelJS from 'exceljs';
-import { prisma } from '@/lib/db';
+import { prisma, transaction } from '@/lib/db';
 import type { Tx } from '@/lib/db';
 import { audit, Actor } from '../audit';
+import { Effects } from '../effects';
 import { badRequest, conflict, notFound } from '../http';
+import { recordPayment, verifyPayment } from '../payments';
 import { createManualVoucher } from './entries';
+import { syncBooks } from './sync';
 
 // Bank reconciliation: import a bank statement (Excel / CSV from any Indian
 // bank), match its lines with the bank ledger in the books, create vouchers for
@@ -102,13 +105,13 @@ export async function readGrid(buffer: Buffer, filename: string, sheet?: RegExp)
 
 const HEAD = {
   date: /^(txn |transaction |value )?date$|^date$|^tran date|^txn date|^posting date/i,
-  description: /narration|description|particulars|details|remarks/i,
-  reference: /chq|cheque|ref|utr|instrument/i,
+  description: /narration|description|particular|details|remarks/i, // ICICI: "Tran Particular"
+  reference: /chq|cheque|ref|utr|instrument|^tran remarks/i, // ICICI keeps the UTR / ref no. in "Tran Remarks"
   debit: /withdrawal|debit|dr\b|paid out|money out/i,
   credit: /deposit|credit|cr\b|paid in|money in/i,
   amount: /^amount/i,
   type: /^(dr ?\/ ?cr|type|cr ?\/ ?dr)$/i,
-  balance: /balance/i,
+  balance: /balance|^bal amt/i, // ICICI: "Bal Amt"
 };
 
 /** Find the header row and turn the statement into rows. */
@@ -156,33 +159,190 @@ async function bankLedger(db: Tx | typeof prisma, tenantId: string, accountId: s
   return acc;
 }
 
-export async function importStatement(tenantId: string, accountId: string, rows: StatementRow[], actor: Actor) {
+// Same date + text + amount + running balance = the same bank line (re-uploads are skipped).
+const fingerprintOf = (r: StatementRow, i: number) => createHash('sha1').update(`${r.date}|${r.description}|${r.reference || ''}|${r.debit}|${r.credit}|${r.balance ?? `#${i}`}`).digest('hex');
+
+const norm = (s: string) => ` ${s.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()} `;
+const NAME_NOISE = /\b(M ?S|PVT|PRIVATE|LTD|LIMITED|LLP|AND|CO|THE)\b/g;
+
+/** Finds the customer whose name, trade name or short name appears in a bank narration (longest name wins). */
+async function customerFinder(tenantId: string) {
+  const customers = await prisma.customer.findMany({ where: { tenantId, type: 'Customer' }, select: { id: true, name: true, tradeName: true, shortName: true } });
+  const keys = customers
+    .flatMap((c) => [c.name, c.tradeName, c.shortName].filter(Boolean).map((n) => ({ c, key: norm(n!.replace(/&/g, ' ')).replace(NAME_NOISE, ' ').replace(/\s+/g, ' ') })))
+    .filter((k) => k.key.trim().length >= 4)
+    .sort((a, b) => b.key.length - a.key.length);
+  return (text: string) => {
+    const t = norm(text).replace(NAME_NOISE, ' ').replace(/\s+/g, ' ');
+    const hit = keys.find((k) => t.includes(k.key));
+    return hit ? { customerId: hit.c.id, name: hit.c.name } : null;
+  };
+}
+
+/** What an upload would import, without saving: each row flagged if it is already in, plus totals. */
+export async function previewStatement(tenantId: string, accountId: string, rows: StatementRow[]) {
+  const acc = await bankLedger(prisma, tenantId, accountId);
+  const prints = rows.map(fingerprintOf);
+  const existing = new Set((await prisma.bankStatementLine.findMany({ where: { tenantId, accountId, fingerprint: { in: prints } }, select: { fingerprint: true } })).map((x) => x.fingerprint));
+  // The auto-match that runs after import, tried here without saving.
+  const toImport = rows.filter((_, i) => !existing.has(prints[i])).sort((a, b) => a.date.localeCompare(b.date));
+  const [open, partyOf] = await Promise.all([openBookLines(tenantId, accountId), customerFinder(tenantId)]);
+  const picks = pairLines(toImport, open);
+  const matchOf = new Map(toImport.map((r, i) => [r, picks[i]]));
+  const view = (b: OpenBookLine) => ({ id: b.id, voucherNumber: b.voucher.voucherNumber, date: b.voucher.date, party: b.voucher.partyName || b.voucher.narration || '' });
+  const day = (d: string) => new Date(`${d}T00:00:00Z`).getTime() / 86_400_000;
+  const lines = rows.map((r, i) => {
+    const exists = existing.has(prints[i]);
+    const m = matchOf.get(r);
+    // To link by hand: any open book entry with the same amount on the same side, nearest date first.
+    const options = exists
+      ? []
+      : open
+          .filter((b) => (r.credit ? Math.abs(b.debit - r.credit) < 0.01 : Math.abs(b.credit - r.debit) < 0.01))
+          .sort((a, b) => Math.abs(day(a.voucher.date) - day(r.date)) - Math.abs(day(b.voucher.date) - day(r.date)))
+          .slice(0, 15)
+          .map(view);
+    // Money in with a customer's name in the narration: can be booked as that customer's receipt.
+    const party = !exists && r.credit ? partyOf(`${r.description} ${r.reference || ''}`) : null;
+    return { ...r, index: i, exists, match: m ? view(m) : null, options, party };
+  });
+  const fresh = lines.filter((l) => !l.exists);
+  const dates = rows.map((r) => r.date).sort();
+  const withBalance = rows.filter((r) => r.balance !== null);
+  return {
+    account: acc.name,
+    lines,
+    from: dates[0],
+    to: dates[dates.length - 1],
+    total: rows.length,
+    newCount: fresh.length,
+    willMatch: fresh.filter((l) => l.match).length,
+    existingCount: rows.length - fresh.length,
+    deposits: r2(fresh.reduce((s, l) => s + l.credit, 0)),
+    withdrawals: r2(fresh.reduce((s, l) => s + l.debit, 0)),
+    closingBalance: withBalance.length ? withBalance[withBalance.length - 1].balance : null,
+  };
+}
+
+/**
+ * Save the new statement lines. `links` (from the preview: row index → book entry id, or null = leave unmatched)
+ * replaces the auto-match, so the lines are linked exactly as chosen.
+ */
+export async function importStatement(tenantId: string, accountId: string, rows: StatementRow[], actor: Actor, links?: Record<string, string | null>) {
   await bankLedger(prisma, tenantId, accountId);
   const batch = `IMP-${Date.now()}`;
   let added = 0;
+  const created = new Map<number, string>();
   for (const [i, r] of rows.entries()) {
-    // Same date + text + amount + running balance = the same bank line (re-uploads are skipped).
-    const fingerprint = createHash('sha1').update(`${r.date}|${r.description}|${r.reference || ''}|${r.debit}|${r.credit}|${r.balance ?? `#${i}`}`).digest('hex');
+    const fingerprint = fingerprintOf(r, i);
     const exists = await prisma.bankStatementLine.findUnique({ where: { tenantId_accountId_fingerprint: { tenantId, accountId, fingerprint } } });
     if (exists) continue;
-    await prisma.bankStatementLine.create({ data: { tenantId, accountId, importBatch: batch, fingerprint, ...r } });
+    created.set(i, (await prisma.bankStatementLine.create({ data: { tenantId, accountId, importBatch: batch, fingerprint, ...r } })).id);
     added++;
   }
   await audit(prisma, actor, { action: 'BANK_STATEMENT_IMPORTED', entityType: 'LedgerAccount', entityId: accountId, reference: batch, newValue: { rows: rows.length, added } });
-  const matched = await autoMatch(tenantId, accountId);
-  return { rows: rows.length, added, skipped: rows.length - added, matched };
+  if (!links) return { rows: rows.length, added, skipped: rows.length - added, matched: await autoMatch(tenantId, accountId), failed: 0, receipts: 0, pendingReceipts: 0 };
+  const items = [...created].map(([i, lineId]) => ({ lineId, link: links[String(i)] || '' })).filter((x) => x.link);
+  return { rows: rows.length, added, skipped: rows.length - added, ...(await linkLines(tenantId, accountId, items, actor)) };
 }
 
-/** Pair unmatched statement lines with book entries: same amount and side, closest date within ±5 days. */
-export async function autoMatch(tenantId: string, accountId: string) {
-  const [lines, bookLines] = await Promise.all([
-    prisma.bankStatementLine.findMany({ where: { tenantId, accountId, status: 'UNMATCHED' }, orderBy: { date: 'asc' } }),
-    prisma.accountVoucherLine.findMany({ where: { accountId, voucher: { tenantId, cancelled: false } }, include: { voucher: { select: { date: true, voucherNumber: true, narration: true } } } }),
-  ]);
-  const taken = new Set((await prisma.bankStatementLine.findMany({ where: { tenantId, accountId, matchedLineId: { not: null } }, select: { matchedLineId: true } })).map((x) => x.matchedLineId));
-  const day = (d: string) => new Date(`${d}T00:00:00Z`).getTime() / 86_400_000;
+/**
+ * Link unmatched statement lines, one by one or in bulk. A link is a book entry id (match),
+ * `pay:<customerId>` (customer receipt) or `led:<accountId>` (receipt / payment voucher against that ledger).
+ */
+export async function linkLines(tenantId: string, accountId: string, items: { lineId: string; link: string }[], actor: Actor) {
   let matched = 0;
-  for (const s of lines) {
+  let failed = 0;
+  const receipts: { lineId: string; paymentNumber: string; verified: boolean }[] = [];
+  for (const { lineId, link } of items) {
+    try {
+      const line = await prisma.bankStatementLine.findFirst({ where: { id: lineId, tenantId, accountId } });
+      if (!line || line.status !== 'UNMATCHED') throw conflict('Line is not waiting to be matched.');
+      if (line.receiptNumber) throw conflict(`Receipt ${line.receiptNumber} is already booked for this line.`);
+      if (link.startsWith('pay:')) {
+        if (!line.credit) throw badRequest('Only money received can be a customer receipt.');
+        const r = await bankReceipt(actor, link.slice(4), line);
+        await prisma.bankStatementLine.update({ where: { id: line.id }, data: { receiptNumber: r.paymentNumber } });
+        receipts.push({ lineId, ...r });
+      } else if (link.startsWith('led:')) {
+        // Not a customer (supplier, card, expense, loan …): receipt / payment voucher against that ledger.
+        await transaction((tx) => createVoucherForLine(tx, actor, lineId, link.slice(4), null));
+        matched++;
+      } else {
+        await matchLine(tenantId, lineId, link, actor);
+        matched++;
+      }
+    } catch {
+      failed++; // the entry changed, got matched meanwhile, or the day is closed — the line stays to match by hand
+    }
+  }
+  // Verified receipts reach the books on sync; link each bank line to its receipt there.
+  if (receipts.some((r) => r.verified)) {
+    await syncBooks(tenantId);
+    for (const r of receipts.filter((x) => x.verified)) {
+      if (await matchReceipt(tenantId, accountId, r.lineId, r.paymentNumber, actor)) matched++;
+      else failed++;
+    }
+  }
+  return { matched, failed, receipts: receipts.length, pendingReceipts: receipts.filter((r) => !r.verified).length };
+}
+
+/** Match a statement line with the bank entry of the receipt booked from it (once that receipt is verified). */
+async function matchReceipt(tenantId: string, accountId: string, lineId: string, paymentNumber: string, actor: Actor) {
+  const bookLine = await prisma.accountVoucherLine.findFirst({ where: { accountId, debit: { gt: 0 }, voucher: { tenantId, cancelled: false, narration: { startsWith: `${paymentNumber} ·` } } } });
+  if (!bookLine) return false;
+  try {
+    await matchLine(tenantId, lineId, bookLine.id, actor);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A customer's money seen in the bank statement, booked as their payment (online, with the bank reference).
+ * The statement itself is the proof, so a Super Admin's import verifies it at once; anyone else's waits in
+ * the approval queue (nobody approves their own entry). No WhatsApp per line — a statement can hold dozens.
+ */
+async function bankReceipt(actor: Actor, customerId: string, row: Pick<StatementRow, 'date' | 'description' | 'reference' | 'credit'>) {
+  return transaction(async (tx) => {
+    const quiet = new Effects(); // never scheduled
+    const payment = await recordPayment(
+      tx,
+      actor,
+      { customerId, amount: row.credit, mode: 'ONLINE', paymentDate: row.date, transactionId: (row.reference || row.description).slice(0, 80), notes: `Bank statement: ${row.description}`.slice(0, 300) },
+      'LATE_ENTRY',
+      quiet
+    );
+    if (actor.role !== 'SUPER_ADMIN') return { paymentNumber: payment.paymentNumber, verified: false };
+    await verifyPayment(tx, actor, payment.id, quiet);
+    const note = 'Verified against the bank statement';
+    await tx.approvalRequest.updateMany({
+      where: { tenantId: actor.tenantId, referenceType: 'PAYMENT', referenceId: payment.id, status: 'PENDING' },
+      data: { status: 'APPROVED', decidedById: actor.userId, decidedByName: actor.name, decidedAt: new Date(), decisionNote: note },
+    });
+    const approval = await tx.approvalRequest.findFirst({ where: { tenantId: actor.tenantId, referenceType: 'PAYMENT', referenceId: payment.id } });
+    if (approval) await tx.approvalLog.create({ data: { requestId: approval.id, action: 'APPROVED', actorName: actor.name, actorRole: actor.role, note } });
+    return { paymentNumber: payment.paymentNumber, verified: true };
+  });
+}
+
+/** Book entries of a bank ledger not yet matched to any statement line. */
+async function openBookLines(tenantId: string, accountId: string) {
+  const [bookLines, matched] = await Promise.all([
+    prisma.accountVoucherLine.findMany({ where: { accountId, voucher: { tenantId, cancelled: false } }, include: { voucher: { select: { date: true, voucherNumber: true, narration: true, partyName: true } } } }),
+    prisma.bankStatementLine.findMany({ where: { tenantId, accountId, matchedLineId: { not: null } }, select: { matchedLineId: true } }),
+  ]);
+  const taken = new Set(matched.map((x) => x.matchedLineId));
+  return bookLines.filter((b) => !taken.has(b.id));
+}
+type OpenBookLine = Awaited<ReturnType<typeof openBookLines>>[number];
+
+/** Pair statement lines with book entries: same amount and side, closest date within ±5 days. Each book entry is used once. */
+function pairLines<S extends Pick<StatementRow, 'date' | 'description' | 'reference' | 'debit' | 'credit'>>(lines: S[], bookLines: OpenBookLine[]) {
+  const taken = new Set<string>();
+  const day = (d: string) => new Date(`${d}T00:00:00Z`).getTime() / 86_400_000;
+  return lines.map((s) => {
     // Money into the bank (statement credit) is a debit to the bank ledger.
     const candidates = bookLines
       .filter((b) => !taken.has(b.id) && (s.credit ? Math.abs(b.debit - s.credit) < 0.01 : Math.abs(b.credit - s.debit) < 0.01) && Math.abs(day(b.voucher.date) - day(s.date)) <= 5)
@@ -191,10 +351,22 @@ export async function autoMatch(tenantId: string, accountId: string) {
         return { b, score: Math.abs(day(b.voucher.date) - day(s.date)) - (refHit ? 10 : 0) };
       })
       .sort((a, b) => a.score - b.score);
-    if (!candidates.length) continue;
-    const pick = candidates[0].b;
-    taken.add(pick.id);
-    await prisma.bankStatementLine.update({ where: { id: s.id }, data: { status: 'MATCHED', matchedLineId: pick.id, matchedBy: 'auto', matchedAt: new Date() } });
+    const pick = candidates[0]?.b ?? null;
+    if (pick) taken.add(pick.id);
+    return pick;
+  });
+}
+
+export async function autoMatch(tenantId: string, accountId: string) {
+  const [lines, bookLines] = await Promise.all([
+    prisma.bankStatementLine.findMany({ where: { tenantId, accountId, status: 'UNMATCHED' }, orderBy: { date: 'asc' } }),
+    openBookLines(tenantId, accountId),
+  ]);
+  const picks = pairLines(lines, bookLines);
+  let matched = 0;
+  for (const [i, pick] of picks.entries()) {
+    if (!pick) continue;
+    await prisma.bankStatementLine.update({ where: { id: lines[i].id }, data: { status: 'MATCHED', matchedLineId: pick.id, matchedBy: 'auto', matchedAt: new Date() } });
     matched++;
   }
   return matched;
@@ -215,6 +387,14 @@ export async function setLineStatus(tenantId: string, statementLineId: string, s
   const s = await prisma.bankStatementLine.findFirst({ where: { id: statementLineId, tenantId } });
   if (!s) throw notFound('Statement line not found.');
   await prisma.bankStatementLine.update({ where: { id: s.id }, data: { status, matchedLineId: null, matchedBy: status === 'IGNORED' ? actor.name : null, matchedAt: null } });
+}
+
+/** Remove statement lines not yet matched (a wrong upload), so the statement can be uploaded again. Matched lines stay. */
+export async function clearUnmatched(tenantId: string, accountId: string, actor: Actor) {
+  await bankLedger(prisma, tenantId, accountId);
+  const { count } = await prisma.bankStatementLine.deleteMany({ where: { tenantId, accountId, status: { in: ['UNMATCHED', 'IGNORED'] } } });
+  await audit(prisma, actor, { action: 'BANK_STATEMENT_CLEARED', entityType: 'LedgerAccount', entityId: accountId, newValue: { removed: count } });
+  return count;
 }
 
 /** Book what the bank shows but the books do not (charges, interest, direct transfers) and match it. */

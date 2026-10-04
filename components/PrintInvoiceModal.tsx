@@ -6,6 +6,7 @@ import { Link2, Pencil, Printer, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCompany } from '../lib/useCompany';
 import { amountInWords, stateLabel, GST_STATES } from '../lib/gst';
+import { EinvoiceSheet } from './EinvoiceSheet';
 
 // GST tax invoice laid out like the distributor's existing printed bill:
 // title strip, firm header, buyer / invoice-details box, place of delivery /
@@ -61,9 +62,12 @@ interface PrintExtra {
   ackDate?: string;
   signedQr?: string;
   ewbNo?: string;
+  ewbDate?: string;
   ewbValidUpto?: string;
   vehicleNumber?: string;
   grnNumber?: string;
+  grnDate?: string;
+  poDate?: string;
   challanNumber?: string;
   poNumber?: string;
 }
@@ -71,10 +75,12 @@ interface PrintExtra {
 type PrintData = InvoiceView & { print?: PrintExtra | null; customerPan?: string; canEditRefs?: boolean };
 
 const REF_FIELDS = [
-  { key: 'grnNumber', label: 'GRN No.' },
-  { key: 'vehicleNumber', label: 'Vehicle No' },
-  { key: 'challanNumber', label: 'Challan No' },
-  { key: 'poNumber', label: 'P.O. No' },
+  { key: 'grnNumber', label: 'GRN No.', type: 'text' },
+  { key: 'grnDate', label: 'GRN Date', type: 'date' },
+  { key: 'vehicleNumber', label: 'Vehicle No', type: 'text' },
+  { key: 'challanNumber', label: 'Challan No', type: 'text' },
+  { key: 'poNumber', label: 'P.O. No', type: 'text' },
+  { key: 'poDate', label: 'P.O. Date', type: 'date' },
 ] as const;
 type RefKey = (typeof REF_FIELDS)[number]['key'];
 
@@ -118,6 +124,8 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const [refError, setRefError] = useState('');
   const [payMsg, setPayMsg] = useState('');
   const [paying, setPaying] = useState(false);
+  // Print layout: the usual GST invoice, or the IRP e-invoice format (chosen by itself once an IRN exists).
+  const [format, setFormat] = useState<'gst' | 'einvoice' | null>(null);
   const sendPayLink = async (invoiceId: string) => {
     setPaying(true);
     setPayMsg('');
@@ -140,9 +148,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
     setRefError('');
     setRefs({
       grnNumber: pr?.grnNumber || '',
+      grnDate: pr?.grnDate || '',
       vehicleNumber: pr?.vehicleNumber || '',
       challanNumber: pr?.challanNumber || pr?.deliveryNumber || '',
       poNumber: pr?.poNumber || '',
+      poDate: pr?.poDate || '',
     });
   };
   const saveRefs = async () => {
@@ -197,6 +207,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   });
 
   const p = inv.print;
+  const layout = format ?? (p?.irn ? 'einvoice' : 'gst');
   const bill = p?.billTo;
   const buyerState = bill ? stateLabel(bill.stateCode, inv.customerGstin, bill.state) : stateLabel(null, inv.customerGstin);
   const buyerStateName = bill?.state || GST_STATES[(bill?.stateCode || inv.customerGstin?.slice(0, 2) || '').trim()] || '';
@@ -222,6 +233,13 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
           <div className="flex items-center gap-2">
             <Printer className="h-5 w-5 text-emerald-400" />
             <h3 className="font-extrabold text-sm">Tax Invoice {inv.invoiceNumber}</h3>
+            <div className="ml-2 flex rounded-lg bg-slate-800 p-0.5 text-[11px] font-bold">
+              {([['gst', 'GST Invoice'], ['einvoice', 'E-Invoice']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setFormat(k)} className={`px-2.5 py-1 rounded-md cursor-pointer ${layout === k ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {payMsg && <span className="text-[11px] text-emerald-300 max-w-[220px] truncate" title={payMsg}>{payMsg}</span>}
@@ -246,11 +264,12 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
 
         {refs && (
           <div className="print:hidden px-5 py-3 bg-slate-800 text-white border-t border-slate-700">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {REF_FIELDS.map((f) => (
                 <label key={f.key} className="text-[11px] font-bold text-slate-300">
                   {f.label}
                   <input
+                    type={f.type}
                     value={refs[f.key]}
                     maxLength={60}
                     onChange={(e) => setRefs({ ...refs, [f.key]: e.target.value })}
@@ -272,6 +291,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
         )}
 
         <div className="overflow-y-auto p-3 sm:p-5 bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
+          {layout === 'einvoice' ? (
+            <div id="printable-invoice" className="relative mx-auto" style={{ width: '100%', maxWidth: 800 }}>
+              <EinvoiceSheet inv={inv} company={company} />
+            </div>
+          ) : (
           <div id="printable-invoice" className="relative mx-auto bg-white border border-black text-[11px] leading-snug font-sans text-black" style={{ width: '100%', maxWidth: 800 }}>
             {inv.status === 'Cancelled' && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -323,10 +347,10 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
                   <span>Invoice No. : {inv.invoiceNumber}</span>
                   <span className="font-normal text-[11px]">Date : {dmy(inv.date)}</span>
                 </div>
-                <div>GRN No.: {p?.grnNumber || ''}</div>
+                <div>GRN No.: {p?.grnNumber || ''}{p?.grnDate ? ` · Dt ${dmy(p.grnDate)}` : ''}</div>
                 <div>Vehicle No : {p?.vehicleNumber || ''}</div>
                 <div>CHALLAN NO:{p?.challanNumber || p?.deliveryNumber || ''}</div>
-                <div>P.O. NO:{p?.poNumber || ''}</div>
+                <div>P.O. NO:{p?.poNumber || ''}{p?.poDate ? ` · Dt ${dmy(p.poDate)}` : ''}</div>
                 {p?.orderNumber && <div className="font-normal text-[11px]">Order No : {p.orderNumber}</div>}
                 {inv.dueDate && <div className="font-normal text-[11px]">Due Date : {dmy(inv.dueDate)}</div>}
               </div>
@@ -518,6 +542,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
               ))}
             </div>
           </div>
+          )}
           <div className="mx-auto mt-1 text-center text-[9px] text-slate-500" style={{ maxWidth: 800 }}>
             {company.name} · Computer generated invoice
           </div>

@@ -1,6 +1,6 @@
 import { transaction } from '@/lib/db';
 import { requireAuth, rateLimit } from '@/lib/server/auth';
-import { autoMatch, createVoucherForLine, importStatement, matchLine, parseStatement, reconciliation, setLineStatus } from '@/lib/server/books/bankRec';
+import { autoMatch, clearUnmatched, createVoucherForLine, importStatement, matchLine, parseStatement, previewStatement, reconciliation, setLineStatus } from '@/lib/server/books/bankRec';
 import { syncBooks } from '@/lib/server/books/sync';
 import { badRequest, businessDate, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 
@@ -17,7 +17,7 @@ export const GET = handle(async (request: Request) => {
   return ok(await reconciliation(auth.tenantId, accountId, isDate(asOf) ? asOf : businessDate()));
 });
 
-/** Upload a statement (multipart: file, accountId). */
+/** Upload a statement (multipart: file, accountId, preview?). */
 export const POST = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'books.manage', { write: true });
   rateLimit(`bankrec:${auth.userId}`, 20, 60_000);
@@ -29,11 +29,24 @@ export const POST = handle(async (request: Request) => {
   if (!accountId) throw badRequest('Choose the bank ledger.');
   await syncBooks(auth.tenantId);
   const rows = await parseStatement(Buffer.from(await file.arrayBuffer()), file.name || 'statement');
-  const r = await importStatement(auth.tenantId, accountId, rows, auth);
-  return ok(r, `${r.added} new line(s) imported, ${r.matched} matched automatically${r.skipped ? `, ${r.skipped} already imported` : ''}.`);
+  // preview=1: show what would be imported; nothing is saved.
+  if (form?.get('preview') === '1') return ok(await previewStatement(auth.tenantId, accountId, rows));
+  // links: the matches chosen in the preview ({ rowIndex: bookEntryId | null }); without it the auto-match runs.
+  let links: Record<string, string | null> | undefined;
+  const raw = form?.get('links');
+  if (typeof raw === 'string' && raw) {
+    try {
+      links = JSON.parse(raw);
+    } catch {
+      throw badRequest('Invalid match selection.');
+    }
+  }
+  const r = await importStatement(auth.tenantId, accountId, rows, auth, links);
+  const receipts = r.receipts ? `, ${r.receipts} customer receipt(s) created${r.pendingReceipts ? ` (${r.pendingReceipts} waiting in the Approval queue — approve them, then Auto-match)` : ''}` : '';
+  return ok(r, `${r.added} new line(s) imported, ${r.matched} matched${links ? '' : ' automatically'}${receipts}${r.failed ? `, ${r.failed} could not be linked (match them by hand)` : ''}${r.skipped ? `, ${r.skipped} already imported` : ''}.`);
 });
 
-/** { action: auto | match | unmatch | ignore | create, … } */
+/** { action: auto | clear | match | unmatch | ignore | create, … } */
 export const PATCH = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'books.manage', { write: true });
   const body = await readJson(request);
@@ -42,6 +55,10 @@ export const PATCH = handle(async (request: Request) => {
     await syncBooks(auth.tenantId);
     const n = await autoMatch(auth.tenantId, str(body.accountId, 'Bank ledger', { required: true }));
     return ok({ matched: n }, `${n} line(s) matched.`);
+  }
+  if (action === 'clear') {
+    const n = await clearUnmatched(auth.tenantId, str(body.accountId, 'Bank ledger', { required: true }), auth);
+    return ok({ removed: n }, `${n} unmatched line(s) removed — upload the statement again.`);
   }
   const lineId = str(body.lineId, 'Statement line', { required: true });
   if (action === 'match') {

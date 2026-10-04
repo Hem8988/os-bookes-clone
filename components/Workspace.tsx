@@ -47,10 +47,8 @@ import CylinderBalanceModule from './CylinderBalanceModule';
 import { Dashboard } from './Dashboard';
 import DayClosingModule from './DayClosingModule';
 import DeliveryGpsTrackingModule from './DeliveryGpsTrackingModule';
-import { GstReportsModule } from './GstReportsModule';
 import { InventoryHubModule } from './InventoryHubModule';
 import { InventoryModule } from './InventoryModule';
-import LedgersModule from './LedgersModule';
 import { MastersModule } from './MastersModule';
 import { Navbar } from './Navbar';
 import OrdersModule from './OrdersModule';
@@ -123,7 +121,7 @@ export default function Workspace() {
   const need = (tabs: string[], permission: Permission) => !!session && tabs.includes(tab) && can(permission);
   const customers = useServerCollection<Customer>('customers', need(['customers', 'vendors', 'billing', 'documents', 'masters'], 'customers.view'));
   const products = useServerCollection<Product>('products', need(['customers', 'vendors', 'billing', 'documents', 'masters'], 'products.view'));
-  const invoices = useServerCollection<Invoice>('invoices', need(['documents', 'gst'], 'invoices.view'));
+  const invoices = useServerCollection<Invoice>('invoices', need(['documents'], 'invoices.view'));
   const followUps = useServerCollection<FollowUp>('followUps', need(['masters'], 'customers.view'));
   const units = useServerCollection<UnitMaster>('units', need(['masters'], 'masters.view'));
   const categories = useServerCollection<CategoryMaster>('categories', need(['masters'], 'masters.view'));
@@ -240,8 +238,6 @@ export default function Workspace() {
         return <RoutesModule />;
       case 'payments':
         return <PaymentsModule />;
-      case 'ledgers':
-        return <LedgersModule />;
       case 'cash':
         return <CashWalletModule />;
       case 'day-closing':
@@ -258,8 +254,6 @@ export default function Workspace() {
           );
         return <BillingModule key={`${billable.length}-${activeCustomers.length}`} customers={activeCustomers} products={billable} onAddInvoice={addInvoice} onOpenInvoiceModal={() => {}} />;
       }
-      case 'gst':
-        return <GstReportsModule invoices={invoices.items.filter((i) => (i.status as string) !== 'Cancelled')} />;
       case 'registers':
         return sub === 'cylinders' ? <CylindersPanel /> : sub === 'vehicles' ? <VehiclesPanel /> : sub === 'owner' ? <OwnerDashboard /> : sub === 'reorder' ? <ReorderPanel /> : sub === 'route' ? <RoutePanel /> : <ComplaintsPanel />;
       case 'books':

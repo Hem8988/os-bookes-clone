@@ -2,7 +2,7 @@ import { prisma, transaction } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
-import { badRequest, forbidden, handle, notFound, ok, readJson, str } from '@/lib/server/http';
+import { badRequest, forbidden, handle, notFound, ok, optStr, readJson, str } from '@/lib/server/http';
 import { withShortNames } from '@/lib/server/shortNames';
 import { acceptOrder, assignOrders, cancelOrder, declineOrder, dispatchOrder, editOrder } from '@/lib/server/orders';
 
@@ -45,7 +45,7 @@ export const POST = handle(async (request: Request, ctx: Ctx) => {
     switch (action) {
       case 'assign':
         if (!can(auth.role, 'orders.assign')) throw forbidden();
-        await assignOrders(tx, auth, [order], str(body.deliveryBoyId, 'Delivery boy', { required: true }), effects);
+        await assignOrders(tx, auth, [order], str(body.deliveryBoyId, 'Delivery boy', { required: true }), effects, undefined, optStr(body.vehicleNumber));
         return 'Delivery boy assigned.';
       case 'accept':
         if (auth.role !== 'DELIVERY_BOY') throw forbidden();

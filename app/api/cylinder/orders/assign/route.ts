@@ -1,7 +1,7 @@
 import { prisma, transaction } from '@/lib/db';
 import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
-import { badRequest, handle, ok, readJson, str } from '@/lib/server/http';
+import { badRequest, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 import { assignOrders } from '@/lib/server/orders';
 
 /** Bulk assign / reassign several approved orders to one delivery boy. */
@@ -15,7 +15,7 @@ export const POST = handle(async (request: Request) => {
   await transaction(async (tx) => {
     const orders = await tx.order.findMany({ where: { id: { in: ids }, tenantId: auth.tenantId } });
     if (orders.length !== ids.length) throw badRequest('Some orders were not found.');
-    await assignOrders(tx, auth, orders, deliveryBoyId, effects);
+    await assignOrders(tx, auth, orders, deliveryBoyId, effects, undefined, optStr(body.vehicleNumber));
   });
   effects.schedule();
   return ok(await prisma.order.findMany({ where: { id: { in: ids } } }), `${ids.length} order(s) assigned.`);

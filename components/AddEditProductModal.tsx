@@ -105,6 +105,19 @@ const ProductForm: React.FC<AddEditProductModalProps> = ({ productToEdit, catego
                 {['KG', 'M3', 'L'].map((u) => <option key={u}>{u}</option>)}
               </select>
             </div>
+            {/* Big cylinders are billed in kg: 10 × 425 kg → 4250 KGS at ₹/kg on the invoice. */}
+            <label className={`mt-1.5 flex items-start gap-2 text-[11px] ${(form.weightUnit || 'KG') === 'KG' && Number(form.weightVolume) > 0 ? 'text-slate-700' : 'text-slate-400'}`}>
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                disabled={(form.weightUnit || 'KG') !== 'KG' || !(Number(form.weightVolume) > 0)}
+                checked={!!form.billByWeight}
+                onChange={(e) => set('billByWeight', e.target.checked)}
+              />
+              <span>
+                <b>Invoice by weight (₹ per kg)</b> — e.g. 10 cylinders × {Number(form.weightVolume) || 425} kg print as {10 * (Number(form.weightVolume) || 425)} KGS with the rate per kg. Needs the weight in KG.
+              </span>
+            </label>
           </L>
           <L label="Brand / oil company">
             <input className={input} list="brand-options" value={form.brand || ''} onChange={(e) => set('brand', e.target.value)} placeholder="Indane / HP / Bharat…" />

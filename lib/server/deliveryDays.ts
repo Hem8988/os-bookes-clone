@@ -2,7 +2,9 @@ import type { Db, Tx } from '@/lib/db';
 import { audit, Actor } from './audit';
 import { assertDayOpen } from './dayLocks';
 import { ApiError, businessDate, conflict, round2 } from './http';
-import { stockAt } from './inventory';
+import type { Effects } from './effects';
+import { getDefaultWarehouse, stockAt } from './inventory';
+import { requestTransfer } from './stock';
 import { getSetting } from './settings';
 import { availableToSubmit, getWallet } from './wallet';
 
@@ -11,6 +13,40 @@ type StockSnapshot = { productId: string; productName: string; fullQty: number; 
 async function snapshot(db: Db, tenantId: string, deliveryBoyId: string): Promise<StockSnapshot> {
   const rows = await stockAt(db, tenantId, 'DELIVERY_BOY', deliveryBoyId);
   return rows.map((r) => ({ productId: r.productId, productName: r.productName, fullQty: r.fullQty, emptyQty: r.emptyQty }));
+}
+
+/**
+ * Day-end stock return: what the boy holds minus what already waits in a return / hand-over request.
+ * Stock moves only when the admin accepts the request, so until then it stays with the boy (shown as pending).
+ */
+export async function stockToReturn(db: Db, tenantId: string, deliveryBoyId: string) {
+  const [held, pending] = await Promise.all([
+    snapshot(db, tenantId, deliveryBoyId),
+    db.stockTransfer.findMany({ where: { tenantId, fromType: 'DELIVERY_BOY', fromId: deliveryBoyId, status: 'PENDING_APPROVAL' }, include: { items: true }, orderBy: { createdAt: 'asc' } }),
+  ]);
+  const toReturn = held
+    .map((h) => {
+      const out = pending.flatMap((t) => t.items).filter((i) => i.productId === h.productId);
+      return { ...h, fullQty: Math.max(0, h.fullQty - out.reduce((s, i) => s + i.fullQty, 0)), emptyQty: Math.max(0, h.emptyQty - out.reduce((s, i) => s + i.emptyQty, 0)) };
+    })
+    .filter((r) => r.fullQty > 0 || r.emptyQty > 0);
+  return {
+    toReturn,
+    pending: pending.map((t) => ({ transferNumber: t.transferNumber, toName: t.toName, createdAt: t.createdAt, items: t.items.map((i) => ({ productName: i.productName, fullQty: i.fullQty, emptyQty: i.emptyQty })) })),
+  };
+}
+
+/** One request sending everything still with the boy back to the godown (accepted by the admin). */
+export async function returnStockToGodown(tx: Tx, actor: Actor, effects: Effects) {
+  const { toReturn } = await stockToReturn(tx, actor.tenantId, actor.userId);
+  if (!toReturn.length) throw conflict('No stock left to return.');
+  const godown = await getDefaultWarehouse(tx, actor.tenantId);
+  return requestTransfer(
+    tx,
+    actor,
+    { transferType: 'DRIVER_TO_WAREHOUSE', fromId: actor.userId, toId: godown.id, items: toReturn.map((r) => ({ productId: r.productId, fullQty: r.fullQty, emptyQty: r.emptyQty })), notes: `Day-end return · ${businessDate()}` },
+    effects
+  );
 }
 
 /** Login → biometric → location → Start Day: records opening stock and cash (SRS §9.1). */
@@ -94,6 +130,7 @@ export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string
       sentBack: deliveries.filter((d) => d.status === 'SENT_BACK').length,
     },
     stock: [...products.values()],
+    stockReturn: await stockToReturn(db, tenantId, deliveryBoyId),
     cash: {
       opening: day?.openingCash ?? 0,
       collected: byMode('CASH'),
@@ -117,6 +154,9 @@ export async function closeDay(tx: Tx, actor: Actor) {
   // All cash in hand must be handed over (a submission awaiting confirmation counts) before closing.
   const { available } = await availableToSubmit(tx, actor.tenantId, actor.userId, actor.name);
   if (available > 0.009) throw new ApiError(409, `Submit your cash in hand (₹${available.toLocaleString('en-IN')}) from the Cash tab before closing the day.`, 'CASH_NOT_SUBMITTED');
+  // Likewise all stock goes back to the godown (a return awaiting the admin counts).
+  const { toReturn } = await stockToReturn(tx, actor.tenantId, actor.userId);
+  if (toReturn.length) throw new ApiError(409, 'Send your stock back to the godown before closing the day.', 'STOCK_NOT_RETURNED');
 
   const summary = await daySummary(tx, actor.tenantId, actor.userId, date);
   const closed = await tx.deliveryDay.update({

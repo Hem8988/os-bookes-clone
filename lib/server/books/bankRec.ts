@@ -358,12 +358,13 @@ function pairLines<S extends Pick<StatementRow, 'date' | 'description' | 'refere
 }
 
 export async function autoMatch(tenantId: string, accountId: string) {
-  const [lines, bookLines] = await Promise.all([
-    prisma.bankStatementLine.findMany({ where: { tenantId, accountId, status: 'UNMATCHED' }, orderBy: { date: 'asc' } }),
-    openBookLines(tenantId, accountId),
-  ]);
-  const picks = pairLines(lines, bookLines);
+  const all = await prisma.bankStatementLine.findMany({ where: { tenantId, accountId, status: 'UNMATCHED' }, orderBy: { date: 'asc' } });
   let matched = 0;
+  // Lines whose customer receipt was booked from the statement go to that very receipt (once approved).
+  const system = { tenantId, userId: 'system', name: 'Auto-match', role: 'SYSTEM' } as Actor;
+  for (const s of all.filter((x) => x.receiptNumber)) if (await matchReceipt(tenantId, accountId, s.id, s.receiptNumber!, system)) matched++;
+  const lines = all.filter((x) => !x.receiptNumber);
+  const picks = pairLines(lines, await openBookLines(tenantId, accountId));
   for (const [i, pick] of picks.entries()) {
     if (!pick) continue;
     await prisma.bankStatementLine.update({ where: { id: lines[i].id }, data: { status: 'MATCHED', matchedLineId: pick.id, matchedBy: 'auto', matchedAt: new Date() } });
@@ -392,7 +393,8 @@ export async function setLineStatus(tenantId: string, statementLineId: string, s
 /** Remove statement lines not yet matched (a wrong upload), so the statement can be uploaded again. Matched lines stay. */
 export async function clearUnmatched(tenantId: string, accountId: string, actor: Actor) {
   await bankLedger(prisma, tenantId, accountId);
-  const { count } = await prisma.bankStatementLine.deleteMany({ where: { tenantId, accountId, status: { in: ['UNMATCHED', 'IGNORED'] } } });
+  // Lines with a receipt already booked stay, or a re-upload would book that money twice.
+  const { count } = await prisma.bankStatementLine.deleteMany({ where: { tenantId, accountId, status: { in: ['UNMATCHED', 'IGNORED'] }, receiptNumber: null } });
   await audit(prisma, actor, { action: 'BANK_STATEMENT_CLEARED', entityType: 'LedgerAccount', entityId: accountId, newValue: { removed: count } });
   return count;
 }

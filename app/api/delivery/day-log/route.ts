@@ -2,7 +2,7 @@ import { prisma, transaction } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { requestDayReopen } from '@/lib/server/closing';
-import { closeDay, daySummary, startDay } from '@/lib/server/deliveryDays';
+import { closeDay, daySummary, returnStockToGodown, startDay } from '@/lib/server/deliveryDays';
 import { Effects } from '@/lib/server/effects';
 import { badRequest, businessDate, forbidden, handle, ok, readJson, str } from '@/lib/server/http';
 
@@ -33,12 +33,13 @@ export const POST = handle(async (request: Request) => {
   const result = await transaction(async (tx) => {
     if (action === 'START_DAY') return startDay(tx, auth, { latitude: num(body.latitude), longitude: num(body.longitude) });
     if (action === 'CLOSE_DAY') return closeDay(tx, auth);
+    if (action === 'RETURN_STOCK') return returnStockToGodown(tx, auth, effects);
     if (action === 'REQUEST_REOPEN') {
       return requestDayReopen(tx, auth, { scope: 'DELIVERY_DAY', date: str(body.date, 'Date', { required: true }), reason: str(body.reason, 'Reason', { required: true, max: 300 }) }, effects);
     }
     throw badRequest('Unknown action.');
   });
   effects.schedule();
-  const messages: Record<string, string> = { START_DAY: 'Day started.', CLOSE_DAY: 'Day closed. Entries are now locked.', REQUEST_REOPEN: 'Re-open request sent to admin.' };
+  const messages: Record<string, string> = { START_DAY: 'Day started.', CLOSE_DAY: 'Day closed. Entries are now locked.', RETURN_STOCK: 'Stock return sent — the admin accepts it into the godown.', REQUEST_REOPEN: 'Re-open request sent to admin.' };
   return ok(result, messages[action]);
 });

@@ -1,6 +1,6 @@
 import { transaction } from '@/lib/db';
 import { requireAuth, rateLimit } from '@/lib/server/auth';
-import { autoMatch, clearUnmatched, createVoucherForLine, importStatement, matchLine, parseStatement, previewStatement, reconciliation, setLineStatus } from '@/lib/server/books/bankRec';
+import { autoMatch, clearUnmatched, createVoucherForLine, importStatement, linkLines, matchLine, parseStatement, previewStatement, reconciliation, setLineStatus } from '@/lib/server/books/bankRec';
 import { syncBooks } from '@/lib/server/books/sync';
 import { badRequest, businessDate, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 
@@ -55,6 +55,21 @@ export const PATCH = handle(async (request: Request) => {
     await syncBooks(auth.tenantId);
     const n = await autoMatch(auth.tenantId, str(body.accountId, 'Bank ledger', { required: true }));
     return ok({ matched: n }, `${n} line(s) matched.`);
+  }
+  if (action === 'link' || action === 'ignore-many') {
+    // One or many lines: link: book entry id | pay:<customerId> | led:<accountId>.
+    const accountId = str(body.accountId, 'Bank ledger', { required: true });
+    const lineIds = Array.isArray(body.lineIds) ? body.lineIds.map(String).slice(0, 500) : [];
+    if (!lineIds.length) throw badRequest('Select at least one line.');
+    if (action === 'ignore-many') {
+      for (const id of lineIds) await setLineStatus(auth.tenantId, id, 'IGNORED', auth);
+      return ok(null, `${lineIds.length} line(s) ignored.`);
+    }
+    const link = str(body.link, 'Customer / ledger', { required: true });
+    await syncBooks(auth.tenantId);
+    const r = await linkLines(auth.tenantId, accountId, lineIds.map((lineId) => ({ lineId, link })), auth);
+    const receipts = r.receipts ? `${r.receipts} customer receipt(s) created${r.pendingReceipts ? ` — ${r.pendingReceipts} waiting in the Approval queue (approve, then Auto-match)` : ''}. ` : '';
+    return ok(r, `${receipts}${r.matched} matched${r.failed ? `, ${r.failed} could not be linked` : ''}.`);
   }
   if (action === 'clear') {
     const n = await clearUnmatched(auth.tenantId, str(body.accountId, 'Bank ledger', { required: true }), auth);

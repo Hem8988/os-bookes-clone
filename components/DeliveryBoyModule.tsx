@@ -89,6 +89,11 @@ interface DaySummary {
   deliveries: { count: number; cylindersDelivered: number; emptiesCollected: number; pendingVerification: number; sentBack: number };
   stock: { productId: string; productName: string; openingFull: number; received: number; delivered: number; returned: number; emptyCollected: number; closingFull: number; closingEmpty: number }[];
   cash: { opening: number; collected: number; submitted: number; pendingSubmission: number; closing: number; online: number; cheque: number; credit: number };
+  // Day-end: stock still to send to the godown, and returns waiting for the admin.
+  stockReturn?: {
+    toReturn: { productId: string; productName: string; fullQty: number; emptyQty: number }[];
+    pending: { transferNumber: string; toName: string; items: { productName: string; fullQty: number; emptyQty: number }[] }[];
+  };
 }
 interface WalletInfo {
   wallet: { balance: number };
@@ -346,10 +351,26 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
     }
   };
 
+  const returnStock = async () => {
+    setBusy(true);
+    try {
+      await api('/api/delivery/day-log', { body: { action: 'RETURN_STOCK' } });
+      toast('Stock return sent — the admin accepts it into the godown.');
+      await onChanged();
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!summary) return <Empty>{t('Loading…')}</Empty>;
   const s = summary;
   // Cash still to hand over; the day cannot be closed until it is submitted.
   const cashToSubmit = Math.max(0, Math.round((s.cash.closing - s.cash.pendingSubmission) * 100) / 100);
+  // Stock likewise goes back to the godown; it stays with him until the admin accepts the return.
+  const toReturn = s.stockReturn?.toReturn ?? [];
+  const pendingReturns = s.stockReturn?.pending ?? [];
   return (
     <>
       <div className={cx('rounded-2xl p-4 text-white', s.status === 'STARTED' ? 'bg-emerald-600' : s.status === 'CLOSED' ? 'bg-slate-700' : 'bg-sky-700')}>
@@ -430,7 +451,7 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
         footer={
           <>
             <Button tone="secondary" onClick={() => setConfirmClose(false)}>{t('Back')}</Button>
-            <Button tone="danger" busy={busy} disabled={cashToSubmit > 0} onClick={closeDay}>{t('Close & lock day')}</Button>
+            <Button tone="danger" busy={busy} disabled={cashToSubmit > 0 || toReturn.length > 0} onClick={closeDay}>{t('Close & lock day')}</Button>
           </>
         }
       >
@@ -442,6 +463,33 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
             </div>
             <Button size="sm" className="w-full" onClick={() => { setConfirmClose(false); onOpenCash(); }}>
               <Wallet className="h-3.5 w-3.5" />{t('Go to Cash — submit now')}</Button>
+          </div>
+        )}
+        {toReturn.length > 0 && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold space-y-2">
+            <div className="flex gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {t('Send your stock back to the godown before closing the day.')}
+            </div>
+            {toReturn.map((r) => (
+              <div key={r.productId} className="flex justify-between font-semibold">
+                <span>{r.productName}</span>
+                <span>{r.fullQty} {t('full')} · {r.emptyQty} {t('empty')}</span>
+              </div>
+            ))}
+            <Button size="sm" className="w-full" busy={busy} onClick={returnStock}>
+              <Truck className="h-3.5 w-3.5" />{t('Send all to godown')}</Button>
+          </div>
+        )}
+        {pendingReturns.length > 0 && (
+          <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-xs space-y-1">
+            <div className="font-bold">{t('Waiting for the admin to accept')}</div>
+            {pendingReturns.map((p) => (
+              <div key={p.transferNumber}>
+                <strong>{p.transferNumber}</strong> → {p.toName}: {p.items.map((i) => `${i.productName} ${i.fullQty}/${i.emptyQty}`).join(', ')}
+              </div>
+            ))}
+            <div className="text-[10px] text-sky-700">{t('Stock stays in your name until accepted (full/empty).')}</div>
           </div>
         )}
         <table className="w-full text-xs">

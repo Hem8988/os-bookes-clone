@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import { CheckCircle2, FileUp, Landmark, Link2, Plus, RefreshCw, Unlink, EyeOff, Trash2 } from 'lucide-react';
-import { api, errorMessage } from '../../lib/api';
+import { api, apiWithMessage, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Kpi, LedgerOption, money, plain } from './shared';
 
-interface StatementLine { id: string; date: string; description: string; reference: string | null; debit: number; credit: number; balance: number | null; status: 'UNMATCHED' | 'MATCHED' | 'IGNORED'; matchedTo: string; matchedBy: string | null }
+interface StatementLine { id: string; date: string; description: string; reference: string | null; debit: number; credit: number; balance: number | null; status: 'UNMATCHED' | 'MATCHED' | 'IGNORED'; matchedTo: string; matchedBy: string | null; receiptNumber: string | null }
 interface BookPick { id: string; voucherNumber: string; date: string; party: string }
 interface Preview {
   account: string;
@@ -50,7 +50,9 @@ export default function BankRecPanel() {
   const [filter, setFilter] = useState<'UNMATCHED' | 'ALL'>('ALL');
   const [busy, setBusy] = useState<string | null>(null);
   const [matching, setMatching] = useState<StatementLine | null>(null);
-  const [creating, setCreating] = useState<StatementLine | null>(null);
+  // Lines to book against a customer / ledger: one (row ➕) or many (ticked).
+  const [linking, setLinking] = useState<StatementLine[] | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const recQ = useApiData<Rec>(bank ? `/api/books/bank-rec?accountId=${bank}&asOf=${asOf}` : null, onError);
   const rec = recQ.data;
 
@@ -84,6 +86,9 @@ export default function BankRecPanel() {
   const [previewFilter, setPreviewFilter] = useState<'ALL' | 'MATCH' | 'NOMATCH'>('ALL');
   // Row index → book entry id ('' = leave unmatched). Starts with the auto-match; change it per line.
   const [links, setLinks] = useState<Record<number, string>>({});
+  // Preview rows ticked for one customer / ledger in one go.
+  const [bulkPick, setBulkPick] = useState<Set<number>>(new Set());
+  const [bulkTarget, setBulkTarget] = useState('');
   const upload = async (file: File | undefined) => {
     if (!file || !bank) return;
     setBusy('upload');
@@ -93,6 +98,8 @@ export default function BankRecPanel() {
       // Default: the book entry found; else, when the narration names a customer, a new receipt from them.
       setLinks(Object.fromEntries(preview.lines.filter((l) => !l.exists).map((l) => [l.index, l.match?.id || (l.party ? `pay:${l.party.customerId}` : '')])));
       setPreviewFilter('ALL');
+      setBulkPick(new Set());
+      setBulkTarget('');
     } catch (e) {
       onError(errorMessage(e));
     } finally {
@@ -116,6 +123,8 @@ export default function BankRecPanel() {
   };
 
   const lines = (rec?.statement ?? []).filter((l) => filter === 'ALL' || l.status === 'UNMATCHED');
+  // Lines that can be ticked for bulk booking: unmatched, no receipt booked yet.
+  const pickable = lines.filter((l) => l.status === 'UNMATCHED' && !l.receiptNumber);
   const tone = (s: string) => (s === 'MATCHED' ? 'green' : s === 'IGNORED' ? 'slate' : 'amber');
 
   return (
@@ -184,23 +193,46 @@ export default function BankRecPanel() {
                 <Empty>{rec.counts.total ? 'Everything is matched. 🎉' : 'Upload a statement to begin.'}</Empty>
               ) : (
                 <div className="overflow-x-auto">
+                  {picked.size > 0 && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs text-white">
+                      <span className="font-bold">{picked.size} selected</span>
+                      <span className="font-mono opacity-70">net {money(pickable.filter((l) => picked.has(l.id)).reduce((s, l) => s + l.credit - l.debit, 0))}</span>
+                      <span className="flex-1" />
+                      <Button size="sm" onClick={() => setLinking(pickable.filter((l) => picked.has(l.id)))}><Plus className="h-3.5 w-3.5" /> Book to customer / ledger</Button>
+                      <Button size="sm" tone="secondary" busy={busy === 'ignore-many'} onClick={() => void act('ignore-many', { action: 'ignore-many', accountId: bank, lineIds: [...picked] }, `${picked.size} line(s) ignored.`).then(() => setPicked(new Set()))}><EyeOff className="h-3.5 w-3.5" /> Ignore</Button>
+                      <button onClick={() => setPicked(new Set())} className="px-2 font-bold opacity-70 hover:opacity-100">Clear</button>
+                    </div>
+                  )}
                   <table className="w-full text-xs">
                     <thead className="text-slate-500 border-b border-slate-200">
-                      <tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-right">Withdrawal</th><th className="p-2 text-right">Deposit</th><th className="p-2 text-left">Status</th><th className="p-2" /></tr>
+                      <tr>
+                        <th className="p-2 w-6">
+                          <input type="checkbox" title="Select all lines to match" checked={pickable.length > 0 && pickable.every((l) => picked.has(l.id))} onChange={(e) => setPicked(e.target.checked ? new Set(pickable.map((l) => l.id)) : new Set())} />
+                        </th>
+                        <th className="p-2 text-left">Date</th><th className="p-2 text-left">Narration</th><th className="p-2 text-right">Withdrawal</th><th className="p-2 text-right">Deposit</th><th className="p-2 text-left">Status</th><th className="p-2" />
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {lines.map((l) => (
-                        <tr key={l.id}>
+                        <tr key={l.id} className={cx(picked.has(l.id) && 'bg-emerald-50')}>
+                          <td className="p-2">
+                            {l.status === 'UNMATCHED' && !l.receiptNumber && (
+                              <input type="checkbox" checked={picked.has(l.id)} onChange={() => setPicked((s) => { const n = new Set(s); if (n.has(l.id)) n.delete(l.id); else n.add(l.id); return n; })} />
+                            )}
+                          </td>
                           <td className="p-2 whitespace-nowrap">{l.date}</td>
                           <td className="p-2"><div className="font-semibold">{l.description}</div>{l.reference && <div className="text-[10px] text-slate-400">{l.reference}</div>}</td>
                           <td className="p-2 text-right font-mono text-rose-700">{l.debit ? plain(l.debit) : ''}</td>
                           <td className="p-2 text-right font-mono text-emerald-700">{l.credit ? plain(l.credit) : ''}</td>
-                          <td className="p-2"><Badge tone={tone(l.status)}>{l.status === 'MATCHED' ? `✓ ${l.matchedTo}` : l.status.toLowerCase()}</Badge></td>
+                          <td className="p-2">
+                            <Badge tone={tone(l.status)}>{l.status === 'MATCHED' ? `✓ ${l.matchedTo}` : l.status.toLowerCase()}</Badge>
+                            {l.status === 'UNMATCHED' && l.receiptNumber && <div className="mt-0.5 text-[10px] font-bold text-sky-700">{l.receiptNumber} awaiting approval</div>}
+                          </td>
                           <td className="p-2 whitespace-nowrap text-right">
-                            {l.status === 'UNMATCHED' ? (
+                            {l.status === 'UNMATCHED' && l.receiptNumber ? null : l.status === 'UNMATCHED' ? (
                               <div className="flex justify-end gap-1">
                                 <button title="Match with a book entry" onClick={() => setMatching(l)} className="p-1 text-sky-700"><Link2 className="h-4 w-4" /></button>
-                                <button title="Create voucher" onClick={() => setCreating(l)} className="p-1 text-emerald-700"><Plus className="h-4 w-4" /></button>
+                                <button title="Book to a customer / ledger" onClick={() => setLinking([l])} className="p-1 text-emerald-700"><Plus className="h-4 w-4" /></button>
                                 <button title="Ignore" onClick={() => act(l.id, { action: 'ignore', lineId: l.id })} className="p-1 text-slate-400"><EyeOff className="h-4 w-4" /></button>
                               </div>
                             ) : (
@@ -260,6 +292,24 @@ export default function BankRecPanel() {
             const all = ledgersQ.data ?? [];
             const customers = all.filter((a) => a.groupName === 'Sundry Debtors' && a.partyId).sort((a, b) => a.name.localeCompare(b.name));
             const others = all.filter((a) => a.id !== bank && !(a.groupName === 'Sundry Debtors' && a.partyId)).sort((a, b) => a.groupName.localeCompare(b.groupName) || a.name.localeCompare(b.name));
+            const visible = p.lines.filter((l) => previewFilter === 'ALL' || (previewFilter === 'MATCH' ? isLinked(links[l.index]) : !l.exists && !isLinked(links[l.index])));
+            const tickable = visible.filter((l) => !l.exists);
+            const ticked = p.lines.filter((l) => bulkPick.has(l.index));
+            const tickedIn = ticked.every((l) => l.credit > 0);
+            // Apply one choice to every ticked line ('none' = leave unmatched). A customer receipt only fits money in.
+            const applyBulk = () => {
+              const next = { ...links };
+              let skipped = 0;
+              for (const l of ticked) {
+                if (bulkTarget.startsWith('pay:') && !l.credit) skipped++;
+                else next[l.index] = bulkTarget === 'none' ? '' : bulkTarget;
+              }
+              setLinks(next);
+              setBulkPick(new Set());
+              setBulkTarget('');
+              showToast(`${ticked.length - skipped} line(s) set${skipped ? ` · ${skipped} withdrawal(s) skipped (a customer receipt needs money in)` : ''}.`);
+            };
+            const groups = [...new Set(others.map((a) => a.groupName))];
             return (
               <div className="space-y-3">
                 <p className="text-xs text-slate-600">
@@ -284,10 +334,36 @@ export default function BankRecPanel() {
                     </button>
                   ))}
                 </div>
+                {bulkPick.size > 0 && (
+                  <div className="sticky -top-5 z-20 flex flex-wrap items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs text-white">
+                    <span className="font-bold">{bulkPick.size} selected</span>
+                    <span className="font-mono opacity-70">net {money(ticked.reduce((s, l) => s + l.credit - l.debit, 0))}</span>
+                    <select value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value)} className={cx(inputClass, 'w-80 py-1 text-[11px] text-slate-900')}>
+                      <option value="">Set all to…</option>
+                      <option value="none">No match — leave for later</option>
+                      {tickedIn && (
+                        <optgroup label="Customer (new receipt)">
+                          {customers.map((c) => <option key={c.id} value={`pay:${c.partyId}`}>{c.name}</option>)}
+                        </optgroup>
+                      )}
+                      {groups.map((g) => (
+                        <optgroup key={g} label={`${g} (new voucher)`}>
+                          {others.filter((a) => a.groupName === g).map((a) => <option key={a.id} value={`led:${a.id}`}>{a.name}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <Button size="sm" disabled={!bulkTarget} onClick={applyBulk}>Apply</Button>
+                    <span className="flex-1" />
+                    <button onClick={() => setBulkPick(new Set())} className="px-2 font-bold opacity-70 hover:opacity-100">Clear</button>
+                  </div>
+                )}
                 <div className="rounded-xl border border-slate-200">
                   <table className="w-full text-xs">
                     <thead className="sticky -top-5 z-10 bg-slate-50 text-[10px] uppercase text-slate-500">
                       <tr>
+                        <th className="p-2 w-6">
+                          <input type="checkbox" title="Select all shown" checked={tickable.length > 0 && tickable.every((l) => bulkPick.has(l.index))} onChange={(e) => setBulkPick(e.target.checked ? new Set(tickable.map((l) => l.index)) : new Set())} />
+                        </th>
                         <th className="p-2 text-left">Date</th>
                         <th className="p-2 text-left">Narration</th>
                         <th className="p-2 text-right">Withdrawal</th>
@@ -297,13 +373,16 @@ export default function BankRecPanel() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {p.lines.filter((l) => previewFilter === 'ALL' || (previewFilter === 'MATCH' ? isLinked(links[l.index]) : !l.exists && !isLinked(links[l.index]))).map((l) => {
+                      {visible.map((l) => {
                         const v = links[l.index] || '';
                         const detected = l.party ? `pay:${l.party.customerId}` : '';
                         const mode = v === 'pick-cust' || (v.startsWith('pay:') && v !== detected) ? 'cust' : v === 'pick-led' || v.startsWith('led:') ? 'led' : 'main';
                         const set = (value: string) => setLinks({ ...links, [l.index]: value });
                         return (
-                        <tr key={l.index} className={cx(l.exists && 'opacity-40')}>
+                        <tr key={l.index} className={cx(l.exists && 'opacity-40', bulkPick.has(l.index) && 'bg-emerald-50')}>
+                          <td className="p-2">
+                            {!l.exists && <input type="checkbox" checked={bulkPick.has(l.index)} onChange={() => setBulkPick((s) => { const n = new Set(s); if (n.has(l.index)) n.delete(l.index); else n.add(l.index); return n; })} />}
+                          </td>
                           <td className="p-2 whitespace-nowrap">{l.date}</td>
                           <td className="p-2">
                             <div className="break-all">{l.description}</div>
@@ -385,22 +464,42 @@ export default function BankRecPanel() {
           })()}
         </Modal>
       )}
-      {creating && <CreateVoucher line={creating} ledgers={(ledgersQ.data ?? []).filter((l) => l.id !== bank && !(l.groupName === 'Sundry Debtors' && l.partyId))} onClose={() => setCreating(null)} onDone={(m) => { showToast(m); setCreating(null); recQ.reload(); }} onError={onError} />}
+      {linking && (
+        <LinkModal
+          lines={linking}
+          bank={bank}
+          ledgers={ledgersQ.data ?? []}
+          onClose={() => setLinking(null)}
+          onDone={(m) => {
+            showToast(m);
+            setLinking(null);
+            setPicked(new Set());
+            recQ.reload();
+          }}
+          onError={onError}
+        />
+      )}
     </div>
   );
 }
 
-function CreateVoucher({ line, ledgers, onClose, onDone, onError }: { line: StatementLine; ledgers: LedgerOption[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
-  const guess = ledgers.find((l) => (line.debit ? /bank charges/i.test(l.name) : /interest/i.test(l.name)))?.id || '';
-  const [counter, setCounter] = useState(guess);
-  const [narration, setNarration] = useState(line.description);
+/** Book one or many bank lines to a customer (their receipt) or any other ledger (receipt / payment voucher). */
+function LinkModal({ lines, bank, ledgers, onClose, onDone, onError }: { lines: StatementLine[]; bank: string; ledgers: LedgerOption[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+  const allIn = lines.every((l) => l.credit > 0);
+  const allOut = lines.every((l) => l.debit > 0);
+  const [kind, setKind] = useState<'customer' | 'ledger'>(allIn ? 'customer' : 'ledger');
+  const [target, setTarget] = useState('');
   const [busy, setBusy] = useState(false);
-  const groups = [...new Set(ledgers.map((l) => l.groupName))].sort();
+  const customers = ledgers.filter((a) => a.groupName === 'Sundry Debtors' && a.partyId).sort((a, b) => a.name.localeCompare(b.name));
+  const others = ledgers.filter((a) => a.id !== bank && !(a.groupName === 'Sundry Debtors' && a.partyId));
+  const groups = [...new Set(others.map((l) => l.groupName))].sort();
+  const total = lines.reduce((s, l) => s + l.credit - l.debit, 0);
   const save = async () => {
     setBusy(true);
     try {
-      const v = await api<{ voucherNumber: string }>('/api/books/bank-rec', { method: 'PATCH', body: { action: 'create', lineId: line.id, counterAccountId: counter, narration } });
-      onDone(`Voucher ${v.voucherNumber} created and matched.`);
+      const link = kind === 'customer' ? `pay:${target}` : `led:${target}`;
+      const r = await apiWithMessage('/api/books/bank-rec', { action: 'link', accountId: bank, lineIds: lines.map((l) => l.id), link }, 'PATCH');
+      onDone(r.message || 'Done.');
     } catch (e) {
       onError(errorMessage(e));
     } finally {
@@ -408,19 +507,41 @@ function CreateVoucher({ line, ledgers, onClose, onDone, onError }: { line: Stat
     }
   };
   return (
-    <Modal open title={line.credit ? 'Record money received' : 'Record money paid'} onClose={onClose} footer={<Button busy={busy} disabled={!counter} onClick={save}>Create {line.credit ? 'receipt' : 'payment'}</Button>}>
-      <p className="text-xs text-slate-600">{line.date} · <strong>{money(line.debit || line.credit)}</strong> {line.credit ? 'came into' : 'went out of'} the bank.</p>
-      <Field label={line.credit ? 'Received from / for (ledger)' : 'Paid to / for (ledger)'} hint="Customer payments: use Accounts → Payments so the customer ledger stays right.">
-        <select value={counter} onChange={(e) => setCounter(e.target.value)} className={inputClass}>
-          <option value="">Choose ledger…</option>
-          {groups.map((g) => (
-            <optgroup key={g} label={g}>
-              {ledgers.filter((l) => l.groupName === g).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </optgroup>
-          ))}
-        </select>
-      </Field>
-      <Field label="Narration"><input value={narration} onChange={(e) => setNarration(e.target.value)} className={inputClass} /></Field>
+    <Modal
+      open
+      title={lines.length === 1 ? (lines[0].credit ? 'Book money received' : 'Book money paid') : `Book ${lines.length} lines`}
+      onClose={onClose}
+      footer={<Button busy={busy} disabled={!target} onClick={save}>{kind === 'customer' ? `Create ${lines.length} receipt${lines.length === 1 ? '' : 's'}` : `Create ${lines.length} voucher${lines.length === 1 ? '' : 's'}`}</Button>}
+    >
+      {lines.length === 1 ? (
+        <p className="text-xs text-slate-600">{lines[0].date} · <strong>{money(lines[0].debit || lines[0].credit)}</strong> {lines[0].credit ? 'came into' : 'went out of'} the bank · <span className="break-all">{lines[0].description}</span></p>
+      ) : (
+        <p className="text-xs text-slate-600"><strong>{lines.length}</strong> lines · net <strong>{money(total)}</strong> {total >= 0 ? 'in' : 'out'}. Each line gets its own entry.</p>
+      )}
+      {!allIn && !allOut && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs font-semibold text-amber-800">Money in and money out are mixed — only a ledger can take both.</p>}
+      <div className="flex gap-1">
+        {allIn && <button onClick={() => { setKind('customer'); setTarget(''); }} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold', kind === 'customer' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600')}>Customer (receipt)</button>}
+        <button onClick={() => { setKind('ledger'); setTarget(''); }} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold', kind === 'ledger' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600')}>Other ledger</button>
+      </div>
+      {kind === 'customer' ? (
+        <Field label="Customer" hint="A payment is entered for the customer and their outstanding goes down. Super Admin: verified at once; others: goes to the Approval queue.">
+          <select value={target} onChange={(e) => setTarget(e.target.value)} className={inputClass}>
+            <option value="">Choose customer…</option>
+            {customers.map((c) => <option key={c.id} value={c.partyId!}>{c.name}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <Field label={allIn ? 'Received from / for (ledger)' : allOut ? 'Paid to / for (ledger)' : 'Ledger'}>
+          <select value={target} onChange={(e) => setTarget(e.target.value)} className={inputClass}>
+            <option value="">Choose ledger…</option>
+            {groups.map((g) => (
+              <optgroup key={g} label={g}>
+                {others.filter((l) => l.groupName === g).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </Field>
+      )}
     </Modal>
   );
 }

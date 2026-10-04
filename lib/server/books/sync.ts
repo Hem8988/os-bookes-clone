@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import type { Invoice, LedgerEntry, Payment } from '@/lib/generated/prisma/client';
 import { bankAccount, ensureChart, expenseAccount, partyAccount, systemAccount, walletAccount } from './accounts';
-import { cancelSourceVoucher, VoucherLineInput, writeVoucher } from './vouchers';
+import { cancelSourceVoucher, VoucherLineInput, writeSourceVoucher } from './vouchers';
 
 // Turns business documents into double-entry vouchers. Idempotent: every
 // source produces exactly one voucher (sourceType + sourceId), rewritten when
@@ -113,34 +113,34 @@ async function postLedgerEntry(tenantId: string, e: LedgerEntry) {
   if ((e.referenceType === 'CREDIT_NOTE' || e.referenceType === 'CREDIT_NOTE_REFUND') && e.referenceId) {
     const note = await prisma.creditNote.findFirst({ where: { id: e.referenceId } });
     if (note && e.referenceType === 'CREDIT_NOTE') {
-      return writeVoucher(prisma, { ...base, voucherType: e.entryType === 'REVERSAL' ? 'JOURNAL' : 'CREDIT_NOTE', lines: await creditNoteLines(tenantId, note, party.id, e.entryType === 'REVERSAL' ? -1 : 1) });
+      return writeSourceVoucher(prisma, { ...base, voucherType: e.entryType === 'REVERSAL' ? 'JOURNAL' : 'CREDIT_NOTE', lines: await creditNoteLines(tenantId, note, party.id, e.entryType === 'REVERSAL' ? -1 : 1) });
     }
     if (note) {
       const money = (note.refundAccountId && (await prisma.ledgerAccount.findFirst({ where: { id: note.refundAccountId, tenantId } }))) || (await systemAccount(prisma, tenantId, note.refundMode === 'BANK' ? 'BANK' : 'CASH'));
-      return writeVoucher(prisma, { ...base, voucherType: 'PAYMENT', lines: [{ accountId: party.id, debit: amount }, { accountId: money.id, credit: amount }] });
+      return writeSourceVoucher(prisma, { ...base, voucherType: 'PAYMENT', lines: [{ accountId: party.id, debit: amount }, { accountId: money.id, credit: amount }] });
     }
   }
   if (invoice && e.entryType === 'INVOICE') {
-    return writeVoucher(prisma, { ...base, voucherType: 'SALES', narration: `${invoice.invoiceNumber} · ${e.particulars}`, lines: await salesLines(tenantId, invoice, amount, party.id, 1) });
+    return writeSourceVoucher(prisma, { ...base, voucherType: 'SALES', narration: `${invoice.invoiceNumber} · ${e.particulars}`, lines: await salesLines(tenantId, invoice, amount, party.id, 1) });
   }
   if (invoice && (e.entryType === 'REVERSAL' || (e.entryType === 'ADJUSTMENT' && e.credit > 0))) {
-    return writeVoucher(prisma, { ...base, voucherType: 'CREDIT_NOTE', lines: await salesLines(tenantId, invoice, amount, party.id, -1) });
+    return writeSourceVoucher(prisma, { ...base, voucherType: 'CREDIT_NOTE', lines: await salesLines(tenantId, invoice, amount, party.id, -1) });
   }
   if (invoice && e.entryType === 'ADJUSTMENT') {
-    return writeVoucher(prisma, { ...base, voucherType: 'JOURNAL', lines: await salesLines(tenantId, invoice, amount, party.id, 1) });
+    return writeSourceVoucher(prisma, { ...base, voucherType: 'JOURNAL', lines: await salesLines(tenantId, invoice, amount, party.id, 1) });
   }
   if (payment) {
     const linkedInvoice = payment.invoiceId ? await prisma.invoice.findFirst({ where: { id: payment.invoiceId } }) : null;
     const money = await moneyAccountFor(tenantId, payment, linkedInvoice);
     const note = `${payment.paymentNumber} · ${e.particulars}`;
     if (e.credit > 0) {
-      return writeVoucher(prisma, { ...base, voucherType: 'RECEIPT', narration: note, lines: [{ accountId: money.id, debit: amount }, { accountId: party.id, credit: amount }] });
+      return writeSourceVoucher(prisma, { ...base, voucherType: 'RECEIPT', narration: note, lines: [{ accountId: money.id, debit: amount }, { accountId: party.id, credit: amount }] });
     }
-    return writeVoucher(prisma, { ...base, voucherType: 'PAYMENT', narration: note, lines: [{ accountId: party.id, debit: amount }, { accountId: money.id, credit: amount }] });
+    return writeSourceVoucher(prisma, { ...base, voucherType: 'PAYMENT', narration: note, lines: [{ accountId: party.id, debit: amount }, { accountId: money.id, credit: amount }] });
   }
   // Manual adjustments (approved) and anything unrecognised.
   const other = await systemAccount(prisma, tenantId, e.referenceType === 'CHEQUE_BOUNCE' ? 'BOUNCE_CHARGES' : e.referenceType === 'TDS' ? 'TDS_RECEIVABLE' : e.entryType === 'ADJUSTMENT' ? 'ADJUSTMENT' : 'SUSPENSE');
-  return writeVoucher(prisma, {
+  return writeSourceVoucher(prisma, {
     ...base,
     voucherType: 'JOURNAL',
     lines: e.debit > 0 ? [{ accountId: party.id, debit: amount }, { accountId: other.id, credit: amount }] : [{ accountId: other.id, debit: amount }, { accountId: party.id, credit: amount }],
@@ -169,7 +169,7 @@ async function syncCashSubmissions(tenantId: string) {
     lines.forEach((l) => net.set(l.accountId, r2((net.get(l.accountId) || 0) + (l.debit || 0) - (l.credit || 0))));
     const final = [...net.entries()].filter(([, v]) => v !== 0).map(([accountId, v]) => (v > 0 ? { accountId, debit: v } : { accountId, credit: -v }));
     if (final.length < 2) continue;
-    await writeVoucher(prisma, {
+    await writeSourceVoucher(prisma, {
       tenantId,
       voucherType: 'CONTRA',
       date: s.date,
@@ -215,7 +215,7 @@ async function syncPurchaseBills(tenantId: string) {
       : [{ accountId: purchase.id, debit: r2(b.subTotal + tax) }];
     lines.push({ accountId: round.id, debit: b.roundOff });
     lines.push({ accountId: party.id, credit: b.grandTotal });
-    await writeVoucher(prisma, {
+    await writeSourceVoucher(prisma, {
       tenantId,
       voucherType: 'PURCHASE',
       date: b.date,
@@ -264,7 +264,7 @@ async function syncExpenses(tenantId: string) {
       credit = await systemAccount(prisma, tenantId, x.paidFrom === 'BANK' ? 'BANK' : 'CASH');
     }
     lines.push({ accountId: credit.id, credit: x.totalAmount });
-    await writeVoucher(prisma, {
+    await writeSourceVoucher(prisma, {
       tenantId,
       voucherType: x.paidFrom === 'CREDIT' ? 'JOURNAL' : 'PAYMENT',
       date: x.date,
@@ -307,7 +307,7 @@ async function syncDebitNotes(tenantId: string) {
       : [{ accountId: ret.id, credit: r2(n.subTotal + tax) }];
     lines.push({ accountId: round.id, credit: n.roundOff });
     lines.push({ accountId: party.id, debit: n.grandTotal });
-    await writeVoucher(prisma, {
+    await writeSourceVoucher(prisma, {
       tenantId,
       voucherType: 'DEBIT_NOTE',
       date: n.date,

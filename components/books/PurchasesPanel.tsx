@@ -854,6 +854,7 @@ function PayBill({ bill, onClose, onSaved, onError }: { bill: Bill; onClose: () 
       </div>
       <Field label="Paid from">
         <select value={source} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
+          {moneyLedgers.length === 0 && <option value="">{ledgersQ.loading ? 'Loading…' : 'No bank / cash ledger — add one in Books → Ledgers'}</option>}
           {moneyLedgers.map((l) => (
             <option key={l.id} value={l.id}>{l.name} · balance {money(l.closing)}</option>
           ))}

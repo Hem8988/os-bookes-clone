@@ -570,9 +570,12 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
     setLines(defaults.length ? defaults.map((id) => ({ productId: id, qty: '' })) : [{ productId: '', qty: '' }]);
   };
 
-  // Only the cylinder types assigned to this customer; everything if none are assigned.
-  const own = customer?.defaultProductIds.filter((id) => products.some((p) => p.id === id)) ?? [];
-  const choices = own.length ? products.filter((p) => own.includes(p.id)) : products;
+  // Only the cylinder types assigned to this customer (everything if none are assigned).
+  // If the assigned ones are switched off, show none rather than every product.
+  const assigned = customer?.defaultProductIds ?? [];
+  const own = assigned.filter((id) => products.some((p) => p.id === id));
+  const choices = assigned.length ? products.filter((p) => own.includes(p.id)) : products;
+  const assignedOff = !!customer && assigned.length > 0 && own.length === 0 && products.length > 0;
 
   const items = lines.filter((l) => l.productId && Number(l.qty) > 0).map((l) => ({ productId: l.productId, qty: Number(l.qty) }));
 
@@ -638,6 +641,7 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
       )}
       {customer && (
         <>
+          {assignedOff && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] font-semibold text-amber-800">{t('The cylinder assigned to this customer is switched off. Ask the office to fix it in the customer or product master.')}</p>}
           <div className="space-y-2">
             {lines.map((line, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2">

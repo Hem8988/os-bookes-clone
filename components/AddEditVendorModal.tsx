@@ -839,7 +839,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
                   return masterList.map((prod) => {
                     const isChecked = assignedCylinderTypes.includes(prod.id) || assignedCylinderTypes.includes(prod.name);
-                    const displayName = `${prod.name} (₹${(prod.salePrice || 0).toLocaleString('en-IN')})`;
+                    const displayName = `${prod.name} (₹${(prod.salePrice || 0).toLocaleString('en-IN')})${prod.active === false ? ' — inactive, cannot be ordered' : ''}`;
 
                     return (
                       <label key={prod.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${isChecked ? 'bg-white border-emerald-500 shadow-sm text-emerald-950 font-extrabold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>

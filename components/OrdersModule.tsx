@@ -357,9 +357,12 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
     setLines(defaults.length ? defaults.map((id) => ({ productId: id, qty: '' })) : [{ productId: '', qty: '' }]);
   };
 
-  // Only the cylinder types assigned to this customer; everything if none are assigned.
-  const own = customer?.defaultProductIds.filter((id) => products.some((p) => p.id === id)) ?? [];
-  const choices = own.length ? products.filter((p) => own.includes(p.id)) : products;
+  // Only the cylinder types assigned to this customer (everything if none are assigned).
+  // If the assigned ones are switched off, show none rather than every product.
+  const assigned = customer?.defaultProductIds ?? [];
+  const own = assigned.filter((id) => products.some((p) => p.id === id));
+  const choices = assigned.length ? products.filter((p) => own.includes(p.id)) : products;
+  const assignedOff = !!customer && assigned.length > 0 && own.length === 0 && products.length > 0;
 
   const estimate = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (products.find((p) => p.id === l.productId)?.salePrice || 0), 0);
 
@@ -421,6 +424,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
           <AlertTriangle className="h-4 w-4" /> This order will exceed the credit limit and needs a credit override approval.
         </div>
       )}
+      {assignedOff && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs font-semibold text-amber-800">The cylinder assigned to this customer is inactive. Switch it on in Masters → Products, or tick an active cylinder in the customer’s “Authorized / Assigned Products”.</p>}
       <div className="space-y-2">
         {lines.map((line, idx) => (
           <div key={idx} className="grid grid-cols-12 gap-2">

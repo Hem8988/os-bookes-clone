@@ -56,8 +56,21 @@ async function normalise(db: Db, tenantId: string, lines: VoucherLineInput[], al
 }
 
 /**
+ * Voucher for a business document. A ₹0 document (zero bill, zero ledger line)
+ * has nothing to post: any earlier voucher from it is cancelled and null is
+ * returned, so one such document cannot break the whole books sync.
+ */
+export async function writeSourceVoucher(db: Db, input: VoucherInput) {
+  if (input.lines.every((l) => r2((Number(l.debit) || 0) - (Number(l.credit) || 0)) === 0)) {
+    await cancelSourceVoucher(db, input.tenantId, input.sourceType, input.sourceId!);
+    return null;
+  }
+  return writeVoucher(db, input);
+}
+
+/**
  * Create a voucher, or (for a document-generated one) replace the voucher
- * already made from the same source. Returns null when nothing is left to post.
+ * already made from the same source.
  */
 export async function writeVoucher(db: Db, input: VoucherInput) {
   const generated = input.sourceType !== 'MANUAL' && !!input.sourceId;

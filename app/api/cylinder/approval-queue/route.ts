@@ -39,12 +39,16 @@ export const GET = handle(async (request: Request) => {
   return ok(items.map((i) => ({ ...i, reference: i.referenceId ? byId.get(i.referenceId) ?? null : null })));
 });
 
-/** { itemId, action: 'APPROVE' | 'REJECT', note } */
+/** { itemId, action: 'APPROVE' | 'REJECT', note, docs? } — docs = delivery challan / GRN / PO when verifying a delivery. */
 export const POST = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'approvals.view', { write: true });
   const body = await readJson(request);
   const action = String(body.action || '').toUpperCase();
   if (action !== 'APPROVE' && action !== 'REJECT') throw badRequest('Action must be APPROVE or REJECT.');
-  const item = await decideApproval(auth, str(body.itemId, 'Item', { required: true }), action, optStr(body.note));
+  const docs = body.docs && typeof body.docs === 'object' ? (body.docs as Record<string, unknown>) : {};
+  const pick = (k: string) => optStr(docs[k]);
+  const item = await decideApproval(auth, str(body.itemId, 'Item', { required: true }), action, optStr(body.note), {
+    docs: { challanNumber: pick('challanNumber'), challanUrl: pick('challanUrl'), grnNumber: pick('grnNumber'), grnDate: pick('grnDate'), poNumber: pick('poNumber'), poDate: pick('poDate') },
+  });
   return ok(item, action === 'APPROVE' ? 'Approved.' : 'Rejected.');
 });

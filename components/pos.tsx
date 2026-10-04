@@ -11,14 +11,14 @@ import { cx, Modal } from './ui';
 const clampQty = (n: number, min: number, max?: number) => Math.max(min, max != null ? Math.min(max, n) : n);
 
 /** Pill stepper: (−) n (+); the number can still be typed. */
-export function Stepper({ value, onChange, min = 0, max, size = 'md', invalid, label }: { value: number; onChange: (n: number) => void; min?: number; max?: number; size?: 'md' | 'lg'; invalid?: boolean; label?: string }) {
+export function Stepper({ value, onChange, min = 0, max, size = 'md', invalid, label }: { value: number; onChange: (n: number) => void; min?: number; max?: number; size?: 'sm' | 'md' | 'lg'; invalid?: boolean; label?: string }) {
   const step = (d: number) => {
     const next = clampQty(value + d, min, max);
     if (next === value) return cue('error');
     cue(d > 0 ? 'tap' : 'remove');
     onChange(next);
   };
-  const btn = size === 'lg' ? 'h-10 w-10' : 'h-8 w-8';
+  const btn = size === 'lg' ? 'h-10 w-10' : size === 'sm' ? 'h-7 w-7' : 'h-8 w-8';
   return (
     <div className="space-y-1">
       {label && <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>}
@@ -32,7 +32,7 @@ export function Stepper({ value, onChange, min = 0, max, size = 'md', invalid, l
           placeholder="0"
           onChange={(e) => onChange(clampQty(Number(e.target.value.replace(/\D/g, '')) || 0, min, max))}
           onFocus={(e) => e.target.select()}
-          className={cx('w-full min-w-0 bg-transparent text-center font-bold tabular-nums outline-none placeholder-slate-300', size === 'lg' ? 'text-lg' : 'text-base', invalid ? 'text-rose-600' : 'text-slate-900')}
+          className={cx('w-full min-w-0 bg-transparent text-center font-bold tabular-nums outline-none placeholder-slate-300', size === 'lg' ? 'text-lg' : size === 'sm' ? 'text-sm' : 'text-base', invalid ? 'text-rose-600' : 'text-slate-900')}
         />
         <button type="button" onClick={() => step(1)} className={cx(btn, 'shrink-0 rounded-full bg-emerald-600 text-white shadow-sm shadow-emerald-200 flex items-center justify-center active:scale-90 transition')} aria-label="More">
           <Plus className="h-3.5 w-3.5" />
@@ -109,7 +109,7 @@ const CHOICE_ON: Record<NonNullable<Choice<string>['tone']>, string> = {
 const CHECK_ON: Record<NonNullable<Choice<string>['tone']>, string> = { emerald: 'bg-emerald-600', rose: 'bg-rose-600', sky: 'bg-sky-600', amber: 'bg-amber-500', slate: 'bg-slate-800' };
 
 /** One-tap choices (payment mode, priority, godown…). */
-export function ChoiceTiles<T extends string>({ value, onChange, options, cols }: { value: T; onChange: (v: T) => void; options: Choice<T>[]; cols?: number }) {
+export function ChoiceTiles<T extends string>({ value, onChange, options, cols, compact }: { value: T; onChange: (v: T) => void; options: Choice<T>[]; cols?: number; compact?: boolean }) {
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols ?? options.length}, minmax(0, 1fr))` }}>
       {options.map((o) => {
@@ -124,7 +124,7 @@ export function ChoiceTiles<T extends string>({ value, onChange, options, cols }
               cue('tap');
               onChange(o.value);
             }}
-            className={cx('relative min-h-[44px] rounded-xl border px-2.5 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97] transition', Icon && 'flex-col gap-1', on ? cx('ring-1 font-bold', CHOICE_ON[tone]) : 'bg-white border-slate-200 text-slate-600 shadow-sm')}
+            className={cx('relative rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97] transition', compact ? 'min-h-[36px] px-2 py-1.5' : 'min-h-[44px] px-2.5 py-2', Icon && !compact && 'flex-col gap-1', on ? cx('ring-1 font-bold', CHOICE_ON[tone]) : 'bg-white border-slate-200 text-slate-600 shadow-sm')}
           >
             {on && (
               <span className={cx('absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full text-white flex items-center justify-center', CHECK_ON[tone])}>
@@ -140,8 +140,9 @@ export function ChoiceTiles<T extends string>({ value, onChange, options, cols }
   );
 }
 
-/** Amount entry: ₹ display, quick amounts and a numpad. */
-export function AmountPad({ value, onChange, quick = [], label }: { value: string; onChange: (v: string) => void; quick?: { label: string; value: number }[]; label?: string }) {
+/** Amount entry: ₹ display, quick amounts and a numpad (`compact`: small, numpad behind "Other amount"). */
+export function AmountPad({ value, onChange, quick = [], label, compact, otherLabel = "Other amount" }: { value: string; onChange: (v: string) => void; quick?: { label: string; value: number }[]; label?: string; compact?: boolean; otherLabel?: string }) {
+  const [padOpen, setPadOpen] = useState(!compact);
   const press = (k: string) => {
     cue(k === 'del' ? 'remove' : 'tap');
     if (k === 'del') return onChange(value.slice(0, -1));
@@ -152,9 +153,9 @@ export function AmountPad({ value, onChange, quick = [], label }: { value: strin
   const shown = Number(value) || 0;
   return (
     <div className="space-y-2">
-      <div className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white px-4 py-3 flex items-end justify-between">
+      <div className={cx('rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white flex items-center justify-between', compact ? 'px-3 py-2' : 'px-4 py-3')}>
         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
-        <span className="text-2xl font-bold tabular-nums">₹{shown.toLocaleString('en-IN')}</span>
+        <span className={cx('font-bold tabular-nums', compact ? 'text-lg' : 'text-2xl')}>₹{shown.toLocaleString('en-IN')}</span>
       </div>
       {quick.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -171,16 +172,22 @@ export function AmountPad({ value, onChange, quick = [], label }: { value: strin
               {q.label}
             </button>
           ))}
-          <button type="button" onClick={() => { cue('remove'); onChange(''); }} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-rose-600 shadow-sm active:scale-95">Clear</button>
+          {compact ? (
+            <button type="button" onClick={() => { cue('tap'); if (!padOpen) onChange(''); setPadOpen(!padOpen); }} className={cx('px-3 py-1.5 rounded-full border text-[11px] font-semibold shadow-sm active:scale-95', padOpen ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-700')}>{otherLabel}</button>
+          ) : (
+            <button type="button" onClick={() => { cue('remove'); onChange(''); }} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-rose-600 shadow-sm active:scale-95">Clear</button>
+          )}
         </div>
       )}
+      {padOpen && (
       <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1.5">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'del'].map((k) => (
-          <button key={k} type="button" onClick={() => press(k)} className="h-11 rounded-lg bg-white text-lg font-semibold text-slate-800 shadow-sm flex items-center justify-center active:bg-slate-50 active:scale-95 transition">
+          <button key={k} type="button" onClick={() => press(k)} className={cx(compact ? 'h-10' : 'h-11', 'rounded-lg bg-white text-lg font-semibold text-slate-800 shadow-sm flex items-center justify-center active:bg-slate-50 active:scale-95 transition')}>
             {k === 'del' ? <Delete className="h-5 w-5 text-slate-500" /> : k}
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }

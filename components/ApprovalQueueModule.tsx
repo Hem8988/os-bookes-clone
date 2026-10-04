@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, MapPin, Pencil, Printer, RefreshCw, XCircle } from 'lucide-react';
-import { api, errorMessage, inr } from '../lib/api';
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, MapPin, Pencil, Printer, RefreshCw, Upload, XCircle } from 'lucide-react';
+import { api, errorMessage, inr, uploadFile } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { InvoiceView, PrintInvoiceModal } from './PrintInvoiceModal';
 import { APPROVAL_TYPES, ApprovalType } from '../lib/permissions';
@@ -60,12 +60,34 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
   const visible = typeFilter === 'ALL' ? items : items.filter((i) => i.type === typeFilter);
   const selected = visible.find((i) => i.id === selectedId) || visible[0] || null;
 
+  // Approving a delivery records the customer's paperwork: challan number (required); copy, GRN and PO optional.
+  const emptyDocs = { challanNumber: '', challanUrl: '', challanName: '', grnNumber: '', grnDate: '', poNumber: '', poDate: '' };
+  const [docs, setDocs] = useState(emptyDocs);
+  const [uploading, setUploading] = useState(false);
+  const needsDocs = selected?.type === 'DELIVERY_VERIFICATION' && decision?.action === 'APPROVE';
+  const uploadChallan = async (file?: File) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file);
+      setDocs((d) => ({ ...d, challanUrl: url, challanName: file.name }));
+    } catch (e) {
+      showToast(errorMessage(e), 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const decide = async () => {
     if (!selected || !decision) return;
     if (decision.action === 'REJECT' && !decision.note.trim()) return showToast('Reason is mandatory for rejection.', 'error');
+    if (needsDocs && !docs.challanNumber.trim()) return showToast('Enter the delivery challan number.', 'error');
     setBusy(true);
     try {
-      await api('/api/cylinder/approval-queue', { body: { itemId: selected.id, action: decision.action, note: decision.note.trim() || null } });
+      const { challanName: _name, ...paper } = docs;
+      void _name;
+      await api('/api/cylinder/approval-queue', { body: { itemId: selected.id, action: decision.action, note: decision.note.trim() || null, docs: needsDocs ? paper : undefined } });
+      setDocs(emptyDocs);
       showToast(decision.action === 'APPROVE' ? 'Approved.' : 'Rejected.');
       setDecision(null);
       await load();
@@ -218,6 +240,36 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
             <AlertTriangle className="h-4 w-4 shrink-0" /> This customer is over the credit limit. Approving records a credit override in your name.
           </div>
         )}
+        {needsDocs && (
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-black text-slate-800">Delivery paperwork</div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Delivery challan no. *">
+                <input value={docs.challanNumber} onChange={(e) => setDocs({ ...docs, challanNumber: e.target.value.toUpperCase() })} className={cx(inputClass, !docs.challanNumber.trim() && 'border-rose-300')} placeholder="e.g. DC-1045" />
+              </Field>
+              <Field label="Delivery challan copy (optional)">
+                <label className={cx('flex h-[38px] cursor-pointer items-center gap-2 rounded-xl border px-3 text-xs font-bold', docs.challanUrl ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-dashed border-slate-300 bg-white text-slate-600')}>
+                  {uploading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : docs.challanUrl ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Upload className="h-3.5 w-3.5" />}
+                  <span className="truncate">{uploading ? 'Uploading…' : docs.challanUrl ? docs.challanName || 'Uploaded — tap to change' : 'Upload photo / PDF'}</span>
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => void uploadChallan(e.target.files?.[0])} />
+                </label>
+              </Field>
+              <Field label="GRN no.">
+                <input value={docs.grnNumber} onChange={(e) => setDocs({ ...docs, grnNumber: e.target.value.toUpperCase() })} className={inputClass} />
+              </Field>
+              <Field label="GRN date">
+                <input type="date" value={docs.grnDate} onChange={(e) => setDocs({ ...docs, grnDate: e.target.value })} className={inputClass} />
+              </Field>
+              <Field label="PO no.">
+                <input value={docs.poNumber} onChange={(e) => setDocs({ ...docs, poNumber: e.target.value.toUpperCase() })} className={inputClass} />
+              </Field>
+              <Field label="PO date">
+                <input type="date" value={docs.poDate} onChange={(e) => setDocs({ ...docs, poDate: e.target.value })} className={inputClass} />
+              </Field>
+            </div>
+            <p className="text-[11px] text-slate-500">Only the challan number is required. Challan copy, GRN and PO are optional; the numbers are printed on the invoice.</p>
+          </div>
+        )}
         <Field label={decision?.action === 'REJECT' ? 'Reason (required)' : 'Note (optional)'}>
           <textarea value={decision?.note || ''} onChange={(e) => decision && setDecision({ ...decision, note: e.target.value })} rows={3} className={inputClass} />
         </Field>
@@ -263,8 +315,16 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
 const Photo = ({ url, label }: { url?: string | null; label: string }) =>
   url ? (
     <a href={url} target="_blank" rel="noreferrer" className="block">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt={label} className="h-28 w-full object-cover rounded-lg border border-slate-200" />
+      {/\.pdf($|\?)/i.test(url) ? (
+        // A PDF (e.g. scanned challan) has no thumbnail: show a tile that opens it.
+        <span className="h-28 w-full rounded-lg border border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-500">
+          <FileText className="h-8 w-8" />
+          <span className="text-[10px] font-bold">PDF</span>
+        </span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={label} className="h-28 w-full object-cover rounded-lg border border-slate-200" />
+      )}
       <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
         {label} <ExternalLink className="h-3 w-3" />
       </span>
@@ -359,10 +419,18 @@ function Detail({ item }: { item: ApprovalItem }) {
           item.status === 'PENDING' && <div className="text-[11px] text-slate-500">The invoice is created automatically when you approve this delivery.</div>
         )}
         <PrintInvoiceModal invoice={printing} onClose={() => setPrinting(null)} />
+        {(ref.challanNumber || ref.grnNumber || ref.poNumber) && (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl border border-slate-200 p-3 text-xs">
+            <Line label="Delivery challan" value={ref.challanNumber || '—'} />
+            <Line label="GRN" value={[ref.grnNumber, ref.grnDate].filter(Boolean).join(' · ') || '—'} />
+            <Line label="PO" value={[ref.poNumber, ref.poDate].filter(Boolean).join(' · ') || '—'} />
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <Photo url={ref.deliveryProofUrl} label="Delivery proof" />
           <Photo url={ref.paymentProofUrl} label="Payment screenshot" />
           <Photo url={ref.chequePhotoUrl} label="Cheque photo" />
+          <Photo url={ref.challanUrl} label="Delivery challan" />
         </div>
       </div>
     );

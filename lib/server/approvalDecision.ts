@@ -5,7 +5,7 @@ import { audit } from './audit';
 import type { AuthContext } from './auth';
 import { approveCash, rejectCash } from './cash';
 import { applyDayReopen } from './closing';
-import { sendBackDelivery, verifyDelivery } from './deliveries';
+import { DeliveryDocs, sendBackDelivery, verifyDelivery } from './deliveries';
 import { Effects } from './effects';
 import { badRequest, conflict, forbidden, notFound, round2, businessDate } from './http';
 import { postCustomerLedger } from './ledger';
@@ -15,8 +15,11 @@ import { approveOrder, rejectOrder } from './orders';
 import { rejectPayment, verifyPayment } from './payments';
 import { applyAdjustment, AdjustmentInput, approveTransfer, rejectTransfer } from './stock';
 
+/** Extra details an approver fills in (delivery paperwork). */
+export type ApprovalExtra = { docs?: DeliveryDocs };
+
 type Handler = {
-  approve: (tx: Tx, auth: AuthContext, item: ApprovalRequest, note: string | null, effects: Effects) => Promise<void>;
+  approve: (tx: Tx, auth: AuthContext, item: ApprovalRequest, note: string | null, effects: Effects, extra: ApprovalExtra) => Promise<void>;
   reject: (tx: Tx, auth: AuthContext, item: ApprovalRequest, note: string, effects: Effects) => Promise<void>;
 };
 
@@ -38,8 +41,8 @@ const HANDLERS: Record<ApprovalType, Handler> = {
     reject: async (tx, auth, item, note, effects) => rejectOrder(tx, auth, await loadOrder(tx, item), note, effects),
   },
   DELIVERY_VERIFICATION: {
-    approve: async (tx, auth, item, note, effects) => {
-      await verifyDelivery(tx, auth, item.referenceId || '', note, effects);
+    approve: async (tx, auth, item, note, effects, extra) => {
+      await verifyDelivery(tx, auth, item.referenceId || '', note, effects, extra.docs);
     },
     reject: (tx, auth, item, note, effects) => sendBackDelivery(tx, auth, item.referenceId || '', note, effects),
   },
@@ -106,7 +109,7 @@ const HANDLERS: Record<ApprovalType, Handler> = {
 };
 
 /** Approve or reject a queue item. Reject always requires a reason (SRS §8). */
-export async function decideApproval(auth: AuthContext, id: string, action: 'APPROVE' | 'REJECT', note: string | null) {
+export async function decideApproval(auth: AuthContext, id: string, action: 'APPROVE' | 'REJECT', note: string | null, extra: ApprovalExtra = {}) {
   const effects = new Effects();
   const result = await transaction(async (tx) => {
     const item = await tx.approvalRequest.findFirst({ where: { id, tenantId: auth.tenantId } });
@@ -121,7 +124,7 @@ export async function decideApproval(auth: AuthContext, id: string, action: 'APP
       if (!note?.trim()) throw badRequest('Reason is mandatory when rejecting.');
       await handler.reject(tx, auth, item, note.trim(), effects);
     } else {
-      await handler.approve(tx, auth, item, note, effects);
+      await handler.approve(tx, auth, item, note, effects, extra);
     }
 
     const status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';

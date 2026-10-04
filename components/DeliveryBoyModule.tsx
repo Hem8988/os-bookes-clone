@@ -851,7 +851,7 @@ function OrderSheet({ order, stock, queued, dayStarted, onClose, onChanged, toas
     : [];
 
   return (
-    <Modal open title={`${order.orderNumber} · ${partyLabel(order.customerShortName, order.customerName)}`} onClose={onClose} wide>
+    <Modal open title={`${order.orderNumber} · ${partyLabel(order.customerShortName, order.customerName)}`} onClose={onClose}>
       {delivering ? (
         <DeliveryForm order={order} previous={sentBack} onCancel={() => setDelivering(false)} onQueued={onChanged} toast={toast} />
       ) : (
@@ -938,7 +938,7 @@ function PhotoInput({ label, file, onFile, required }: { label: string; file: Bl
         const f = e.target.files?.[0];
         onFile(f ? await compressImage(f) : null);
       }} />
-      <button type="button" onClick={() => ref.current?.click()} className={cx('w-full h-28 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden', file ? 'border-emerald-400' : 'border-slate-300')}>
+      <button type="button" onClick={() => ref.current?.click()} className={cx('w-full h-20 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden', file ? 'border-emerald-400' : 'border-slate-300')}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {preview ? <img src={preview} alt={label} className="h-full w-full object-cover" /> : <span className="flex items-center gap-1 text-xs font-bold text-slate-500"><Camera className="h-4 w-4" />{t('Take photo')}</span>}
       </button>
@@ -1017,19 +1017,20 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
   return (
     <div className="space-y-3">
       {lines.map((l, idx) => (
-        <div key={l.productId} className="rounded-xl border border-slate-200 p-3">
-          <div className="text-sm font-black">{l.productName} <span className="text-slate-400 font-semibold text-xs">{t('(ordered {n})', { n: l.orderedQty })}</span></div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <Stepper size="lg" label={t('Delivered (full)')} value={Number(l.delivered) || 0} onChange={(n) => setLines(lines.map((x, i) => (i === idx ? { ...x, delivered: String(n) } : x)))} />
-            <Stepper size="lg" label={t('Empty received')} value={Number(l.empty) || 0} onChange={(n) => setLines(lines.map((x, i) => (i === idx ? { ...x, empty: String(n) } : x)))} />
+        <div key={l.productId} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <div className="text-[13px] font-bold text-slate-900 leading-snug">{l.productName} <span className="text-slate-400 font-medium text-[11px]">{t('(ordered {n})', { n: l.orderedQty })}</span></div>
+          <div className="grid grid-cols-2 gap-3 mt-1.5">
+            <Stepper size="sm" label={t('Delivered (full)')} value={Number(l.delivered) || 0} onChange={(n) => setLines(lines.map((x, i) => (i === idx ? { ...x, delivered: String(n) } : x)))} />
+            <Stepper size="sm" label={t('Empty received')} value={Number(l.empty) || 0} onChange={(n) => setLines(lines.map((x, i) => (i === idx ? { ...x, empty: String(n) } : x)))} />
           </div>
           {(Number(l.delivered) !== l.orderedQty || Number(l.empty) !== Number(l.delivered)) && (
             <div className="text-[10px] font-bold text-amber-700 mt-1">{t('Difference will be flagged for accounts.')}</div>
           )}
         </div>
       ))}
-      <div className="text-right text-lg font-black">{t('Bill')}: {inr(bill)}</div>
+      <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2"><span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t('Bill')}</span><span className="text-base font-bold tabular-nums text-slate-900">{inr(bill)}</span></div>
       <ChoiceTiles
+        compact
         value={mode}
         onChange={(m) => { setMode(m); if (m === 'CREDIT') setAmount('0'); else if (Number(amount) === 0) setAmount(String(bill)); }}
         options={[
@@ -1041,10 +1042,12 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
       />
       {mode !== 'CREDIT' && (
         <AmountPad
+          compact
+          otherLabel={t('Other amount')}
           label={t('Amount collected (₹)')}
           value={amount}
           onChange={setAmount}
-          quick={[{ label: t('Full bill {amount}', { amount: inr(bill) }), value: Math.round(bill * 100) / 100 }, ...[500, 1000, 2000].filter((n) => n < bill).map((n) => ({ label: `₹${n}`, value: n }))]}
+          quick={[{ label: t('Full bill {amount}', { amount: inr(bill) }), value: Math.round(bill * 100) / 100 }]}
         />
       )}
       {mode === 'ONLINE' && (

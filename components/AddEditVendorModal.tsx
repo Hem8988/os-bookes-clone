@@ -641,9 +641,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </h4>
             </div>
 
-            {/* Row 1: Party Name, Active Toggle, Due Days */}
+            {/* Row 1: Party Name, Active Toggle, (payment terms are in the Account card) */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-              <div className="md:col-span-9 space-y-1">
+              <div className="md:col-span-12 space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-900 dark:text-slate-100">
                     {partyCategory === 'Vendor' ? 'Vendor / Supplier Legal Name *' : 'Customer Legal Name *'}
@@ -676,34 +676,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   onChange={(e) => setPartyName(e.target.value)}
                   className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm${bad('name')}`}
                 />
-              </div>
-
-              {/* Due Days */}
-              <div className="md:col-span-3 space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Payment terms</label>
-                <AddableSelect
-                  value={paymentTerms}
-                  onChange={(v) => {
-                    const term = allTerms.find((p) => p.value === v);
-                    setPaymentTerms(v || 'COD');
-                    setDueDays(term ? term.days : termDays(v));
-                  }}
-                  options={allTerms.map((p) => ({ value: p.value, label: p.days && !/\d/.test(p.label) ? `${p.label} (${p.days} days)` : p.label }))}
-                  addLabel="New term (e.g. 45 days, Advance)"
-                  onAdd={async (name) => {
-                    const days = termDays(name);
-                    setCustomTerms((cur) => (cur.some((t) => t.value === name) ? cur : [...cur, { value: name, label: name, days }]));
-                    setDueDays(days);
-                    return name;
-                  }}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-                {!PAYMENT_TERMS.some((p) => p.value === paymentTerms) && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                    Credit days
-                    <input type="number" min={0} value={dueDays} onChange={(e) => setDueDays(e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value))))} className="w-16 px-1.5 py-0.5 rounded border border-slate-300 text-right font-bold text-slate-900" />
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1179,10 +1151,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 </div>
                 <div>
                   <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">
-                    Account Opening Balance Setup
+                    Account, Credit &amp; Opening Balance
                   </h4>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
-                    Initial Outstanding / Advance Balance (Dr = Receivable / Purana Udhaar, Cr = Advance / Payable)
+                    Payment terms, credit limit, interest and the opening balance (Dr = Receivable / Purana Udhaar, Cr = Advance / Payable)
                   </p>
                 </div>
               </div>
@@ -1192,6 +1164,41 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Payment terms</label>
+                <AddableSelect
+                  value={paymentTerms}
+                  onChange={(v) => {
+                    const term = allTerms.find((p) => p.value === v);
+                    setPaymentTerms(v || 'COD');
+                    setDueDays(term ? term.days : termDays(v));
+                  }}
+                  options={allTerms.map((p) => ({ value: p.value, label: p.days && !/\d/.test(p.label) ? `${p.label} (${p.days} days)` : p.label }))}
+                  addLabel="New term (e.g. 45 days, Advance)"
+                  onAdd={async (name) => {
+                    const days = termDays(name);
+                    setCustomTerms((cur) => (cur.some((t) => t.value === name) ? cur : [...cur, { value: name, label: name, days }]));
+                    setDueDays(days);
+                    return name;
+                  }}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+                {!PAYMENT_TERMS.some((p) => p.value === paymentTerms) && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                    Credit days
+                    <input type="number" min={0} value={dueDays} onChange={(e) => setDueDays(e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value))))} className="w-16 px-1.5 py-0.5 rounded border border-slate-300 text-right font-bold text-slate-900" />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Credit Limit / Party Limit (₹)</label>
+                <input
+                  type="number"
+                  value={partyLimit}
+                  onChange={(e) => setPartyLimit(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
               <div className="space-y-1">
                 <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
                   Opening Balance Amount (₹)
@@ -1217,6 +1224,15 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   <option value="Dr">Debit (Dr) - Customer Receivable / Purana Udhaar 🟢</option>
                   <option value="Cr">Credit (Cr) - Advance Received / Vendor Payable 🔴</option>
                 </select>
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Interest Rate/Month</label>
+                <input
+                  type="number"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
+                />
               </div>
             </div>
           </div>
@@ -1259,25 +1275,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Party Limit</label>
-              <input
-                type="number"
-                value={partyLimit}
-                onChange={(e) => setPartyLimit(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 dark:text-slate-100 block">Interest Rate/Month</label>
-              <input
-                type="number"
-                value={interestRate}
-                onChange={(e) => setInterestRate(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
             </div>
           </div>
 

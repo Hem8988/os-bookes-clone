@@ -29,9 +29,11 @@ export interface InvoicePrintExtra {
   cylinders?: { productName: string; delivered: number; emptyReceived: number }[];
   /** Typed in by the office from the print screen; challanNumber overrides deliveryNumber. */
   grnNumber?: string;
+  grnDate?: string;
   vehicleNumber?: string;
   challanNumber?: string;
   poNumber?: string;
+  poDate?: string;
 }
 
 /** Print references the office can fill in by hand. */

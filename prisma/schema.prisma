@@ -474,6 +474,13 @@ model Delivery {
   verifiedBy        String?
   verifiedAt        DateTime?
   verificationNotes String?
+  // Customer paperwork recorded by accounts when verifying (challan number required then; the rest optional).
+  challanNumber     String?
+  challanUrl        String?
+  grnNumber         String?
+  grnDate           String?
+  poNumber          String?
+  poDate            String?
   submittedAt       DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   items             DeliveryItem[]

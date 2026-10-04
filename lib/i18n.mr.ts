@@ -278,6 +278,7 @@ export const MR: Record<string, string> = {
   'Search cylinder to add…': 'जोडण्यासाठी सिलेंडर शोधा…',
   'Search above and tap a cylinder to add it': 'वर शोधा आणि सिलेंडरवर टॅप करून जोडा',
   'With me: {full} full · {empty} empty': 'माझ्याकडे: {full} भरलेले · {empty} रिकामे',
+  'Other amount': 'दुसरी रक्कम',
   Accept: 'स्वीकारा',
   Decline: 'नकार द्या',
   'Accept all ({n})': 'सर्व स्वीकारा ({n})',

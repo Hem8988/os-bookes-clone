@@ -287,16 +287,23 @@ export async function submitDelivery(tx: Tx, actor: Actor, input: DeliveryInput,
   return { delivery, duplicate: false };
 }
 
-/** Accountant approves a delivery: invoice → ledger → payment → completed. */
-export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, note: string | null, effects: Effects) {
+/** Customer paperwork recorded when accounts verify a delivery. */
+export interface DeliveryDocs { challanNumber?: string | null; challanUrl?: string | null; grnNumber?: string | null; grnDate?: string | null; poNumber?: string | null; poDate?: string | null }
+
+/** Accountant approves a delivery: invoice → ledger → payment → completed. The delivery challan number is required; its copy is optional. */
+export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, note: string | null, effects: Effects, docs: DeliveryDocs = {}) {
   const delivery = await tx.delivery.findFirst({ where: { id: deliveryId, tenantId: actor.tenantId }, include: { items: true, order: true } });
   if (!delivery) throw notFound('Delivery not found.');
   if (delivery.status !== 'PENDING_VERIFICATION') throw conflict('Delivery is not waiting for verification.');
   await assertDayOpen(tx, actor.tenantId, delivery.deliveryDate);
+  const doc = (v: string | null | undefined) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
+  const paper = { challanNumber: doc(docs.challanNumber), challanUrl: doc(docs.challanUrl), grnNumber: doc(docs.grnNumber), grnDate: doc(docs.grnDate), poNumber: doc(docs.poNumber), poDate: doc(docs.poDate) };
+  if (!paper.challanNumber) throw badRequest('Enter the delivery challan number.');
+  if (paper.challanUrl && !isStoredFile(paper.challanUrl)) throw badRequest('Upload the delivery challan again.');
 
   const order = delivery.order;
   const customer = await tx.customer.findUniqueOrThrow({ where: { id: delivery.customerId } });
-  await tx.delivery.update({ where: { id: delivery.id }, data: { status: 'VERIFIED', verifiedBy: actor.name, verifiedAt: new Date(), verificationNotes: note } });
+  await tx.delivery.update({ where: { id: delivery.id }, data: { status: 'VERIFIED', verifiedBy: actor.name, verifiedAt: new Date(), verificationNotes: note, ...paper } });
   await setOrderStatus(tx, order, 'VERIFIED', actor.name, note || undefined);
 
   // A pickup-only visit (empties collected, nothing delivered) has no invoice.
@@ -327,6 +334,12 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
         deliveryNumber: delivery.deliveryNumber,
         deliveryBoy: delivery.deliveryBoyName,
         cylinders: delivery.items.map((i) => ({ productName: i.productName, delivered: i.deliveredQty, emptyReceived: i.emptyReceivedQty })),
+        // Customer paperwork, printed on the invoice.
+        challanNumber: paper.challanNumber ?? undefined,
+        grnNumber: paper.grnNumber ?? undefined,
+        grnDate: paper.grnDate ?? undefined,
+        poNumber: paper.poNumber ?? undefined,
+        poDate: paper.poDate ?? undefined,
       },
     });
     await setOrderStatus(tx, order, 'INVOICED', actor.name, invoice.invoiceNumber);

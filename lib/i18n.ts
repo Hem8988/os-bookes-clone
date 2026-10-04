@@ -310,6 +310,7 @@ const HI: Record<string, string> = {
   'Search cylinder to add…': 'जोड़ने के लिए सिलेंडर खोजें…',
   'Search above and tap a cylinder to add it': 'ऊपर खोजें और सिलेंडर पर टैप करके जोड़ें',
   'With me: {full} full · {empty} empty': 'मेरे पास: {full} भरे · {empty} खाली',
+  'Other amount': 'दूसरी रकम',
   Accept: 'स्वीकार करें',
   Decline: 'मना करें',
   'Accept all ({n})': 'सब स्वीकार करें ({n})',

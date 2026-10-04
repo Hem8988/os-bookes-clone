@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Eye, FileUp, Pencil, IndianRupee, Landmark, PackageCheck, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { Eye, FileUp, Pencil, IndianRupee, PackageCheck, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
 import { useSession } from '../../lib/auth';
@@ -67,7 +67,6 @@ export default function PurchasesPanel() {
   const bills = billsQ.data ?? [];
   const live = bills.filter((b) => b.status !== 'Cancelled');
   const plantQ = useApiData<PlantRow[]>('/api/books/plant-balance', (m) => showToast(m, 'error'));
-  const [depositing, setDepositing] = useState<string | null>(null);
   const reload = () => {
     billsQ.reload();
     plantQ.reload();
@@ -131,7 +130,7 @@ export default function PurchasesPanel() {
   return (
     <div className="space-y-4">
       {toast}
-      <BooksHeader icon={ShoppingCart} title="Purchase bills" subtitle="Refill bills from the bottling plant and any other supplier. GST input credit, stock receipt into the godown and the supplier's ledger update together." actions={<><Button tone="secondary" onClick={() => setDepositing('')}><Landmark className="h-4 w-4" /> Add to plant balance</Button><Button onClick={() => setEditing('new')}><Plus className="h-4 w-4" /> New purchase bill</Button></>} />
+      <BooksHeader icon={ShoppingCart} title="Purchase bills" subtitle="Refill bills from the bottling plant and any other supplier. GST input credit, stock receipt into the godown and the supplier's ledger update together." actions={<Button onClick={() => setEditing('new')}><Plus className="h-4 w-4" /> New purchase bill</Button>} />
       <PeriodBar value={period} onChange={setPeriod} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card><div className="text-[10px] uppercase font-bold text-slate-500">Bills</div><div className="text-xl font-black">{live.length}</div></Card>
@@ -139,20 +138,8 @@ export default function PurchasesPanel() {
         <Card><div className="text-[10px] uppercase font-bold text-slate-500">Input GST (ITC)</div><div className="text-xl font-black font-mono text-emerald-700">{money(sum(live.filter((b) => b.itcEligible), (b) => b.totalCgst + b.totalSgst + b.totalIgst))}</div></Card>
         <Card><div className="text-[10px] uppercase font-bold text-slate-500">Still to pay</div><div className="text-xl font-black font-mono text-rose-600">{money(sum(live, (b) => b.grandTotal - b.paidAmount))}</div></Card>
       </div>
-      <PlantBalances rows={plantQ.data ?? []} onAdd={(id) => setDepositing(id)} />
+      <PlantBalances rows={plantQ.data ?? []} />
       <ReportTable rows={bills} columns={columns} rowKey={(b) => b.id} onRowClick={setViewing} empty="No purchase bills in this period." />
-      {depositing !== null && (
-        <PlantDeposit
-          supplierId={depositing}
-          onClose={() => setDepositing(null)}
-          onSaved={(m) => {
-            showToast(m);
-            setDepositing(null);
-            reload();
-          }}
-          onError={(m) => showToast(m, 'error')}
-        />
-      )}
 
       {editing && (
         <BillForm
@@ -204,82 +191,21 @@ export default function PurchasesPanel() {
 interface PlantRow { supplierId: string; name: string; balance: number; unpaidBills: number; unpaidAmount: number }
 
 /** Money lying with each plant / supplier (+) or owed to it (−), from the books. */
-function PlantBalances({ rows, onAdd }: { rows: PlantRow[]; onAdd: (supplierId: string) => void }) {
+function PlantBalances({ rows }: { rows: PlantRow[] }) {
   if (!rows.length) return null;
   // One slim strip: plant name, balance and a small "+" to add money.
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-[10px] uppercase font-bold text-slate-500">Plant balance</span>
       {rows.map((r) => (
-        <div key={r.supplierId} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white pl-3 pr-1 py-1 text-xs">
+        <div key={r.supplierId} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs">
           <span className="font-bold text-slate-700 max-w-[220px] truncate" title={r.name}>{r.name}</span>
           <span className={cx('font-black font-mono', r.balance >= 0 ? 'text-emerald-700' : 'text-rose-600')}>{money(Math.abs(r.balance))}</span>
           <span className={cx('text-[10px] font-bold', r.balance >= 0 ? 'text-emerald-700' : 'text-rose-600')}>{r.balance >= 0 ? 'CR' : 'DR · to pay'}</span>
           {r.unpaidBills > 0 && <span className="text-[10px] font-semibold text-rose-600">{r.unpaidBills} unpaid · {money(r.unpaidAmount)}</span>}
-          <button onClick={() => onAdd(r.supplierId)} title="Add money to the plant balance" className="rounded-lg bg-slate-100 p-1 text-slate-700 hover:bg-emerald-100 hover:text-emerald-800"><Plus className="h-3.5 w-3.5" /></button>
         </div>
       ))}
     </div>
-  );
-}
-
-/**
- * Money sent to the plant (Payment from cash / bank, no bill) or the opening
- * advance already lying there; the server then settles unpaid bills from it.
- */
-function PlantDeposit({ supplierId: initialSupplier, onClose, onSaved, onError }: { supplierId: string; onClose: () => void; onSaved: (m: string) => void; onError: (m: string) => void }) {
-  const ledgersQ = useApiData<LedgerOption[]>('/api/books/accounts', onError);
-  const moneyLedgers = (ledgersQ.data ?? []).filter((l) => l.groupName === 'Cash-in-Hand' || l.groupName === 'Bank Accounts');
-  const [supplierId, setSupplierId] = useState(initialSupplier);
-  const [opening, setOpening] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(today());
-  const [fromId, setFromId] = useState('');
-  const [reference, setReference] = useState('');
-  const [busy, setBusy] = useState(false);
-  const source = fromId || moneyLedgers.find((l) => l.groupName === 'Bank Accounts')?.id || moneyLedgers[0]?.id || '';
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      const v = await api<{ voucherNumber: string }>('/api/books/plant-balance', { body: { supplierId, amount: Number(amount), date, opening, fromAccountId: opening ? null : source, reference } });
-      onSaved(`${v.voucherNumber} saved — plant balance updated, unpaid bills settled from it.`);
-    } catch (e) {
-      onError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal open title="Add to plant balance" onClose={onClose} footer={<Button busy={busy} disabled={!supplierId || !(Number(amount) > 0) || (!opening && !source)} onClick={save}>Save</Button>}>
-      <Field label="Plant / supplier">
-        <SupplierSelect value={supplierId} showGstin onError={onError} onChange={(id) => setSupplierId(id)} />
-      </Field>
-      <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-        <button type="button" onClick={() => setOpening(false)} className={cx('rounded-xl border px-3 py-2 text-left', !opening ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-slate-200 text-slate-600')}>
-          Money sent now<div className="font-normal text-[11px]">RTGS / NEFT / cheque from your bank or cash</div>
-        </button>
-        <button type="button" onClick={() => setOpening(true)} className={cx('rounded-xl border px-3 py-2 text-left', opening ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-slate-200 text-slate-600')}>
-          Opening balance<div className="font-normal text-[11px]">Already with the plant before you started this software</div>
-        </button>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Amount"><input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={cx(inputClass, 'font-mono')} /></Field>
-        <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} /></Field>
-      </div>
-      {!opening && (
-        <Field label="Paid from">
-          <select value={source} onChange={(e) => setFromId(e.target.value)} className={inputClass}>
-            {moneyLedgers.length === 0 && <option value="">No bank / cash ledger — add one in Books → Ledgers</option>}
-            {moneyLedgers.map((l) => (
-              <option key={l.id} value={l.id}>{l.name} · balance {money(l.closing)}</option>
-            ))}
-          </select>
-        </Field>
-      )}
-      <Field label={opening ? 'Note (optional)' : 'UTR / cheque no. (optional)'}><input value={reference} onChange={(e) => setReference(e.target.value)} className={inputClass} /></Field>
-      <p className="text-[11px] text-slate-500">Unpaid bills of this plant are settled from the balance automatically, oldest first.</p>
-    </Modal>
   );
 }
 
@@ -340,7 +266,7 @@ function PlantCheck({ imported, grand }: { imported: ImportedInvoice; grand: num
   ) : (
     <div className="font-semibold text-amber-700">
       ⚠️ Plant balance: invoice says {crdr(imported.plantBalance)}, your books after this bill {crdr(after)} — difference {money(Math.abs(diff))}.{' '}
-      {diff > 0 ? 'Money sent to the plant (or the opening balance) is probably not entered yet — use "Add to plant balance".' : 'Check for a payment entered twice or a bill not yet entered by the plant.'}
+      {diff > 0 ? 'Money sent to the plant (or the opening balance) is probably not entered yet — pay the bill from the plant bank account.' : 'Check for a payment entered twice or a bill not yet entered by the plant.'}
     </div>
   );
 }

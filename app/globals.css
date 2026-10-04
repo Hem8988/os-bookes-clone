@@ -55,3 +55,29 @@ body {
     font-size: max(16px, 1em);
   }
 }
+
+/* Customer / supplier form: every field the same height, corner and type size. */
+.party-form label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
+}
+.party-form input:not([type='checkbox']):not([type='radio']),
+.party-form select {
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  border-color: #cbd5e1;
+  font-size: 0.8125rem;
+  background-color: #fff;
+}
+.party-form input:not([type='checkbox']):not([type='radio']):focus,
+.party-form select:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgb(20 184 166 / 0.15);
+  outline: none;
+}
+.party-form .party-card h4 {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: #0f172a;
+}

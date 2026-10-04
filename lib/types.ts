@@ -238,7 +238,11 @@ export interface Customer {
   deliveryAddresses?: CustomerAddress[];
   depositFeePerCylinder?: number;
   totalDepositAmount?: number;
-  depositStatus?: 'Paid' | 'Refunded' | 'Adjusted';
+  /** Cylinders the security deposit is taken for (total = fee × this). */
+  depositCylinderQty?: number;
+  /** Security deposit per cylinder type: rate (from the product master by default) × cylinders. */
+  depositLines?: { productId: string; fee: number; qty: number; status?: 'Pending' | 'Paid' | 'Refunded' | 'Adjusted' | 'Free'; voucherNo?: string }[];
+  depositStatus?: 'Pending' | 'Paid' | 'Refunded' | 'Adjusted' | 'Free';
   svVoucherNo?: string;
   openingBalance?: number;
   openingBalanceType?: 'Dr' | 'Cr';

@@ -540,7 +540,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
                             <div className="flex items-center gap-1.5 flex-wrap mt-1">
                               {c.totalDepositAmount ? (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${c.depositStatus === 'Pending' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
                                   Deposit ₹{c.totalDepositAmount.toLocaleString('en-IN')}{c.depositStatus ? ` (${c.depositStatus})` : ''}
                                 </span>
                               ) : null}

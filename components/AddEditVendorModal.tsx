@@ -18,6 +18,9 @@ interface AddEditVendorModalProps {
   onSave: (customer: Customer) => void;
 }
 
+/** Placeholder id for a new party until the server gives it one. */
+const tempPartyId = () => `party-${Date.now()}`;
+
 /** Create an area / route from just a name; its code is made from the name. */
 async function saveMaster<T>(url: string, body: Record<string, unknown>): Promise<T> {
   const base = String(body.name).toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 12) || 'NEW';
@@ -100,7 +103,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   // Cylinder Security Deposit & SV Voucher State
   const [depositFeePerCylinder, setDepositFeePerCylinder] = useState<number | ''>(2000);
   const [totalDepositAmount, setTotalDepositAmount] = useState<number | ''>(2000);
-  const [depositStatus, setDepositStatus] = useState<'Paid' | 'Refunded' | 'Adjusted'>('Paid');
+  const [depositQty, setDepositQty] = useState<number | ''>(1);
+  // Deposit per cylinder type: productId → rate and number of cylinders.
+  type DepositStatus = 'Pending' | 'Paid' | 'Refunded' | 'Adjusted' | 'Free';
+  const [depositLines, setDepositLines] = useState<Record<string, { fee: number | ''; qty: number | ''; status?: DepositStatus; voucherNo?: string }>>({});
+  const [depositStatus, setDepositStatus] = useState<DepositStatus>('Pending');
   const [svVoucherNo, setSvVoucherNo] = useState('');
 
   // Opening Balance State
@@ -195,7 +202,19 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setJoiningDate(customerToEdit.joiningDate || today);
       setDepositFeePerCylinder(customerToEdit.depositFeePerCylinder !== undefined ? customerToEdit.depositFeePerCylinder : 2000);
       setTotalDepositAmount(customerToEdit.totalDepositAmount !== undefined ? customerToEdit.totalDepositAmount : 2000);
-      setDepositStatus(customerToEdit.depositStatus || 'Paid');
+      // Older customers have no count saved: work it out from total ÷ fee when that divides evenly.
+      {
+        const fee = Number(customerToEdit.depositFeePerCylinder) || 0;
+        const total = Number(customerToEdit.totalDepositAmount) || 0;
+        const qty = customerToEdit.depositCylinderQty ?? (fee > 0 && total > 0 && Number.isInteger(total / fee) ? total / fee : 1);
+        setDepositQty(qty);
+        // Saved per-type lines; older customers had one rate and count, shown on their first cylinder type.
+        const saved = customerToEdit.depositLines;
+        const first = (customerToEdit.defaultProductIds || [])[0];
+        const oldStatus = customerToEdit.depositStatus || (total ? 'Paid' : 'Pending');
+        setDepositLines(saved?.length ? Object.fromEntries(saved.map((l) => [l.productId, { fee: l.fee, qty: l.qty, status: l.status || oldStatus, voucherNo: l.voucherNo ?? (l.productId === first ? customerToEdit.svVoucherNo : undefined) }])) : first && total > 0 ? { [first]: { fee, qty, status: oldStatus, voucherNo: customerToEdit.svVoucherNo } } : {});
+      }
+      setDepositStatus(customerToEdit.depositStatus || (customerToEdit.totalDepositAmount ? 'Paid' : 'Pending'));
       setSvVoucherNo(customerToEdit.svVoucherNo || `SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       
       const initOpBal = customerToEdit.openingBalance !== undefined ? customerToEdit.openingBalance : Math.abs(customerToEdit.balance || 0);
@@ -249,7 +268,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setJoiningDate(today);
       setDepositFeePerCylinder(2000);
       setTotalDepositAmount(2000);
-      setDepositStatus('Paid');
+      setDepositQty(1);
+      setDepositLines({});
+      setDepositStatus('Pending');
       setSvVoucherNo(`SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       setOpeningBalance(0);
       setOpeningBalanceType(defaultType === 'Vendor' ? 'Cr' : 'Dr');
@@ -282,8 +303,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     setPartyRates((rows) => rows.filter((_, i) => i !== index));
   };
 
-  // Short name → Hindi spelling for the delivery app; pressing again restores the English text.
-  const toggleShortNameHindi = async () => {
+  // Short name → Hindi / Marathi spelling for the delivery app; "English" restores the typed text.
+  const toggleShortNameHindi = async (lang: 'hi' | 'mr' = 'hi') => {
     setHindiError('');
     if (shortNameEnglish !== null) {
       setShortName(shortNameEnglish);
@@ -294,7 +315,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     if (!english) return;
     setHindiBusy(true);
     try {
-      const { text } = await api<{ text: string }>('/api/transliterate', { body: { text: english } });
+      const { text } = await api<{ text: string }>('/api/transliterate', { body: { text: english, lang } });
       setShortName(text);
       setShortNameEnglish(english);
     } catch (err) {
@@ -303,6 +324,21 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setHindiBusy(false);
     }
   };
+
+  const depositRows = products
+    .filter((p) => assignedCylinderTypes.includes(p.id))
+    .map((p) => {
+      const line = depositLines[p.id];
+      // The rate is set once per cylinder type in Masters → Products.
+      const fee = Number(p.emptyDepositValue) || 0;
+      const qty = line && line.qty !== '' ? Number(line.qty) : 0;
+      const status: DepositStatus = line?.status || 'Pending';
+      // Free = cylinders given without a deposit for this customer.
+      return { product: p, fee, qty, total: status === 'Free' ? 0 : fee * qty, status, voucherNo: line?.voucherNo ?? '' };
+    });
+  const depositTotal = depositRows.reduce((sum, r) => sum + r.total, 0);
+  const setDepositLine = (productId: string, patch: { fee?: number | ''; qty?: number | ''; status?: DepositStatus; voucherNo?: string }) =>
+    setDepositLines((all) => ({ ...all, [productId]: { fee: all[productId]?.fee ?? '', qty: all[productId]?.qty ?? '', ...patch } }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -315,7 +351,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     const finalBalance = openingBalanceType === 'Cr' ? -Math.abs(numericOpBal) : Math.abs(numericOpBal);
 
     const savedCustomer: Customer = {
-      id: customerToEdit?.id || `party-${Date.now()}`,
+      id: customerToEdit?.id || tempPartyId(),
       name: partyName.trim(),
       shortName: shortName.trim() || undefined,
       tradeName: tradeName.trim() || undefined,
@@ -368,10 +404,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       otherMobile: otherMobileNo,
       interestRate: Number(interestRate) || 0,
       joiningDate,
-      depositFeePerCylinder: Number(depositFeePerCylinder) || 0,
-      totalDepositAmount: Number(totalDepositAmount) || 0,
-      depositStatus,
-      svVoucherNo: svVoucherNo.trim() || undefined,
+      depositLines: depositRows.filter((r) => r.qty > 0 || r.voucherNo).map((r) => ({ productId: r.product.id, fee: r.fee, qty: r.qty, status: r.status, voucherNo: r.voucherNo.trim() || undefined })),
+      depositFeePerCylinder: depositRows.find((r) => r.qty > 0)?.fee ?? (Number(depositFeePerCylinder) || 0),
+      totalDepositAmount: depositRows.length ? depositTotal : Number(totalDepositAmount) || 0,
+      depositCylinderQty: depositRows.length ? depositRows.reduce((sum, r) => sum + r.qty, 0) : Number(depositQty) || 0,
+      // Overall status for the customer list: pending if any cylinder type's deposit is pending.
+      depositStatus: depositRows.length ? (depositRows.some((r) => r.qty > 0 && r.status === 'Pending') ? 'Pending' : (depositRows.find((r) => r.qty > 0 && r.status !== 'Free') || depositRows.find((r) => r.qty > 0))?.status || depositStatus) : depositStatus,
+      svVoucherNo: (depositRows.find((r) => r.voucherNo.trim())?.voucherNo || svVoucherNo).trim() || undefined,
       assignedCylinderTypes,
       // Drives the WhatsApp quick-order menu (SRS §5.2 Default Product(s)).
       defaultProductIds: assignedCylinderTypes.filter((id) => products.some((p) => p.id === id)),
@@ -385,7 +424,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex justify-end overflow-hidden animate-in fade-in duration-200">
       
       {/* Right Slide-Over Drawer Container */}
-      <div className="w-full max-w-4xl h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 border-l border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200">
+      <div className="w-full h-full bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 text-xs font-semibold text-slate-800 dark:text-slate-200">
         
         {/* Drawer Top Header Bar */}
         <div className={`${partyCategory === 'Vendor' ? 'bg-gradient-to-r from-amber-600 to-amber-700' : 'bg-[#00a8b5]'} px-6 py-4 flex items-center justify-between text-white shadow-md shrink-0`}>
@@ -419,12 +458,12 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-semibold text-slate-800 dark:text-slate-200">
           
           {/* Scrollable Form Body Container (Centered & Spacious) */}
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-5xl mx-auto w-full">
+          <div className="party-form flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-7xl mx-auto w-full">
           
 
 
           {/* Card 1: Billing & Official Details */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm">
+          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-indigo-500 space-y-4 shadow-sm">
             <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
               <h4 className="font-extrabold text-sm text-indigo-600 dark:text-indigo-400">
                 Billing & Official Details
@@ -536,7 +575,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
           {/* Card 2: Delivery & Local Details (Customers Only) */}
           {partyCategory === 'Customer' && (
-            <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-800/50 space-y-4 shadow-sm">
+            <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-teal-500 space-y-4 shadow-sm">
             <div className="flex items-center gap-2 border-b border-teal-100 dark:border-teal-800/50 pb-2">
               <h4 className="font-extrabold text-sm text-teal-700 dark:text-teal-400">
                 Delivery Location & Local Details
@@ -557,18 +596,36 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                       setShortNameEnglish(null);
                       setHindiError('');
                     }}
-                    className="w-full pl-3 pr-24 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                    className={`w-full pl-3 ${shortNameEnglish !== null ? 'pr-24' : 'pr-40'} py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm`}
                   />
-                  <button
-                    type="button"
-                    disabled={hindiBusy || (!shortName.trim() && shortNameEnglish === null)}
-                    onClick={toggleShortNameHindi}
-                    title={shortNameEnglish !== null ? 'Switch back to the English name' : 'Write this name in Hindi'}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded-md bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-[11px] font-black"
-                  >
-                    {hindiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
-                    {shortNameEnglish !== null ? 'English' : 'हिंदी'}
-                  </button>
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {hindiBusy && <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />}
+                    {shortNameEnglish !== null ? (
+                      <button
+                        type="button"
+                        disabled={hindiBusy}
+                        onClick={() => void toggleShortNameHindi()}
+                        title="Switch back to the English name"
+                        className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700 hover:bg-slate-800 disabled:opacity-40 text-white text-[11px] font-black"
+                      >
+                        <Languages className="h-3.5 w-3.5" /> English
+                      </button>
+                    ) : (
+                      (['hi', 'mr'] as const).map((lang) => (
+                        <button
+                          key={lang}
+                          type="button"
+                          disabled={hindiBusy || !shortName.trim()}
+                          onClick={() => void toggleShortNameHindi(lang)}
+                          title={lang === 'hi' ? 'Write this name in Hindi' : 'Write this name in Marathi'}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-md disabled:opacity-40 text-white text-[11px] font-black ${lang === 'hi' ? 'bg-teal-600 hover:bg-teal-700' : 'bg-orange-500 hover:bg-orange-600'}`}
+                        >
+                          {lang === 'hi' && <Languages className="h-3.5 w-3.5" />}
+                          {lang === 'hi' ? 'हिंदी' : 'मराठी'}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
                 {hindiError && <p className="text-[11px] font-semibold text-rose-600">{hindiError}</p>}
               </div>
@@ -634,8 +691,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
           )}
 
+          {/* Card: GST, State & Contact */}
+          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-sky-500 space-y-4 shadow-sm">
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+            <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">GST, State &amp; Contact</h4>
+          </div>
           {/* Row 6: Gst Applicable, Gstin (hidden for non-GST parties) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Gst Applicable</label>
               <div className="relative">
@@ -669,7 +731,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           </div>
 
           {/* Row 7: State, Email Address, Party Type */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">State</label>
               <div className="relative">
@@ -708,9 +770,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </div>
             </div>
           </div>
+          </div>
 
           {/* STAFF & FLEET ASSIGNMENTS CARD */}
-          <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-slate-800/80 border border-amber-200 dark:border-amber-900/60 space-y-3 shadow-sm my-2">
+          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-amber-500 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-amber-100 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 font-extrabold text-sm">
@@ -807,7 +870,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
           {/* AUTHORIZED / ASSIGNED LPG CYLINDER PRODUCTS CARD */}
           {partyCategory === 'Customer' && (
-            <div className="p-4 rounded-2xl bg-emerald-50/80 dark:bg-slate-800/90 border border-emerald-200 dark:border-emerald-900/60 space-y-3 shadow-sm my-2">
+            <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-emerald-500 space-y-4 shadow-sm">
               <div className="flex items-center justify-between border-b border-emerald-100 dark:border-slate-700 pb-2">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-extrabold text-sm">
@@ -872,7 +935,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
           )}
 
           {/* CYLINDER SECURITY DEPOSIT & SUBSCRIPTION VOUCHER (SV/TV) CARD */}
-          <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-slate-800/90 border border-teal-200 dark:border-teal-900/60 space-y-3 shadow-sm my-2">
+          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-cyan-500 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-teal-100 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-teal-500/20 text-teal-700 dark:text-teal-400 font-extrabold text-sm">
@@ -892,63 +955,54 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Security Fee / Cylinder (₹)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 2000"
-                  value={depositFeePerCylinder}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? '' : Number(e.target.value);
-                    setDepositFeePerCylinder(val);
-                    if (typeof val === 'number') {
-                      setTotalDepositAmount(val * (Number(openingEmptyQty) || 1));
-                    }
-                  }}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 font-black focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
+            {depositRows.length === 0 ? (
+              <p className="text-xs font-semibold text-slate-500">Tick the cylinder types above — each one gets its own deposit line here. The rate comes from Masters → Products (“Security deposit per cylinder ₹”).</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-teal-100 bg-white">
+                <table className="w-full text-xs">
+                  <thead className="bg-teal-50/60 text-slate-600">
+                    <tr><th className="p-2 text-left">Cylinder</th><th className="p-2 text-right">Deposit / cylinder (₹) <span className="font-normal text-[10px] text-slate-400">from product master</span></th><th className="p-2 text-right">No. of cylinders</th><th className="p-2 text-right">Amount (₹)</th><th className="p-2 text-left">Status</th><th className="p-2 text-left">SV Voucher #</th></tr>
+                  </thead>
+                  <tbody>
+                    {depositRows.map((r) => (
+                      <tr key={r.product.id} className="border-t border-slate-100">
+                        <td className="p-2 font-bold text-slate-800">{r.product.name}</td>
+                        <td className="p-2 text-right">
+                          <span className={`font-mono font-bold ${r.fee ? 'text-teal-700' : 'text-rose-600'}`} title={r.fee ? 'Set in Masters → Products' : 'No deposit set — add it in Masters → Products'}>{r.fee ? r.fee.toLocaleString('en-IN') : 'Not set'}</span>
+                        </td>
+                        <td className="p-2 text-right">
+                          <input type="number" min={0} value={depositLines[r.product.id]?.qty ?? ''} placeholder="0" onChange={(e) => setDepositLine(r.product.id, { qty: e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value))) })} className="w-20 px-2 py-1.5 rounded border border-slate-300 text-right font-bold focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                        </td>
+                        <td className="p-2 text-right font-mono font-black text-emerald-700">{r.status === 'Free' ? <span className="text-sky-700">Free</span> : r.total.toLocaleString('en-IN')}</td>
+                        <td className="p-2">
+                          <select value={r.status} onChange={(e) => setDepositLine(r.product.id, { status: e.target.value as DepositStatus })} className={`px-2 py-1.5 rounded border font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 ${r.status === 'Pending' ? 'border-orange-300 text-orange-700' : r.status === 'Paid' ? 'border-emerald-300 text-emerald-700' : r.status === 'Free' ? 'border-sky-300 text-sky-700' : 'border-slate-300 text-slate-700'}`}>
+                            <option value="Pending">🟠 Pending</option>
+                            <option value="Paid">🟢 Paid</option>
+                            <option value="Adjusted">🟡 Adjusted in bill</option>
+                            <option value="Refunded">🔴 Refunded</option>
+                            <option value="Free">🆓 Free (no deposit)</option>
+                          </select>
+                        </td>
+                        <td className="p-2">
+                          <input value={r.voucherNo} onChange={(e) => setDepositLine(r.product.id, { voucherNo: e.target.value.toUpperCase() })} placeholder="SV / TV no." className="w-36 px-2 py-1.5 rounded border border-slate-300 font-mono font-bold text-indigo-700 uppercase focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-teal-100 bg-teal-50/40 font-black">
+                      <td className="p-2" colSpan={2}>Total deposit</td>
+                      <td className="p-2 text-right">{depositRows.reduce((sum, r) => sum + r.qty, 0)}</td>
+                      <td className="p-2 text-right font-mono text-emerald-700">₹{depositTotal.toLocaleString('en-IN')}</td>
+                      <td className="p-2" colSpan={2}>{depositRows.some((r) => r.qty > 0 && r.status === 'Pending') && <span className="text-[11px] font-bold text-orange-700">Pending: ₹{depositRows.filter((r) => r.status === 'Pending').reduce((sum, r) => sum + r.total, 0).toLocaleString('en-IN')}</span>}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
+            )}
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Total Deposit Amount (₹)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 2000"
-                  value={totalDepositAmount}
-                  onChange={(e) => setTotalDepositAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 font-black focus:outline-none focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Deposit Status</label>
-                <select
-                  value={depositStatus}
-                  onChange={(e) => setDepositStatus(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-extrabold focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-                >
-                  <option value="Paid">🟢 Paid (Active Deposit)</option>
-                  <option value="Adjusted">🟡 Adjusted in Bill</option>
-                  <option value="Refunded">🔴 Refunded to Customer</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">SV Voucher # (Subscription)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. SV-2026-0089"
-                  value={svVoucherNo}
-                  onChange={(e) => setSvVoucherNo(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 uppercase"
-                />
-              </div>
-            </div>
           </div>
 
           {/* ACCOUNT OPENING BALANCE SETUP CARD */}
-          <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 space-y-3 shadow-sm my-2">
+          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-violet-500 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-indigo-100 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 font-extrabold text-sm">
@@ -998,8 +1052,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             </div>
           </div>
 
-          {/* Contact email (invoices and statements are emailed here) */}
-          <div className="space-y-1 max-w-md">
+          {/* Card: Other Details */}
+          <div className="party-card p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-slate-400 space-y-4 shadow-sm">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">Other Details</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+          <div className="space-y-1 md:col-span-2">
             <label className="font-bold text-slate-900 dark:text-slate-100 block">Email (for invoices)</label>
             <input
               type="email"
@@ -1009,9 +1068,17 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             />
             <p className="text-[10px] text-slate-500">Customer portal logins are created in Admin → Users.</p>
           </div>
-
-          {/* Row 8: Other Mobile No, Party Limit, Interest Rate/Month, Loyalty Points */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <label className="font-bold text-slate-900 dark:text-slate-100 block">Joining Date</label>
+            <div className="relative">
+              <input
+                type="date"
+                value={joiningDate}
+                onChange={(e) => setJoiningDate(e.target.value)}
+                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+              />
+            </div>
+          </div>
             <div className="space-y-1">
               <label className="font-bold text-slate-900 dark:text-slate-100 block">Other Mobile No</label>
               <input
@@ -1042,23 +1109,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
-
-          </div>
-
-          {/* Row 9: Joining Date */}
-          <div className="space-y-1 max-w-xs">
-            <label className="font-bold text-slate-900 dark:text-slate-100 block">Joining Date</label>
-            <div className="relative">
-              <input
-                type="date"
-                value={joiningDate}
-                onChange={(e) => setJoiningDate(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
-              />
             </div>
           </div>
-
-
 
           </div>
 

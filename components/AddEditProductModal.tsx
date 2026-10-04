@@ -124,7 +124,7 @@ const ProductForm: React.FC<AddEditProductModalProps> = ({ productToEdit, catego
             </div>
           </L>
           <L label="HSN code"><input className={input} value={form.hsnCode} onChange={(e) => set('hsnCode', e.target.value)} /></L>
-          <L label="Empty cylinder deposit ₹"><input type="number" className={input} value={form.emptyDepositValue || ''} onChange={num('emptyDepositValue')} /></L>
+          <L label="Security deposit per cylinder ₹"><input type="number" className={input} value={form.emptyDepositValue || ''} onChange={num('emptyDepositValue')} /></L>
           <L label="Low-stock alert (full cylinders in godown)"><input type="number" className={input} value={form.minStockAlert || ''} onChange={num('minStockAlert')} /></L>
           <L label="Unit">
             <select className={input} value={form.unit} onChange={(e) => set('unit', e.target.value)}>

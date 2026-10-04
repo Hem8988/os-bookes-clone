@@ -66,7 +66,7 @@ export const PurchaseOrderSummaryModule: React.FC<PurchaseOrderSummaryModuleProp
 
   const [filterByCompany, setFilterByCompany] = useState(false);
   const [vendorId, setVendorId] = useState(vendors[0]?.id || '');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('Today');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('All');
   const [sortDesc, setSortDesc] = useState(true);
 
   const today = new Date();
@@ -197,11 +197,11 @@ export const PurchaseOrderSummaryModule: React.FC<PurchaseOrderSummaryModuleProp
               onChange={(e) => setDateFilter(e.target.value as DateFilter)}
               className="py-2 px-3 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
             >
+              <option value="All">All</option>
               <option value="Today">Today</option>
               <option value="Yesterday">Yesterday</option>
               <option value="This Week">This Week</option>
               <option value="This Month">This Month</option>
-              <option value="All">All</option>
             </select>
           </div>
           <button

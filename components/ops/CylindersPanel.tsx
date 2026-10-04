@@ -71,7 +71,7 @@ export default function CylindersPanel() {
       )}
       <div className="flex flex-wrap items-center gap-3">
         <Tabs value={filter} onChange={setFilter} items={[['all', 'All'], ['due', 'Due soon'], ['overdue', 'Overdue']]} />
-        <div className="w-64"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search serial / location" className={cx(inputClass, 'py-1.5')} /></div>
+        <div className="w-full sm:w-64"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search serial / location" className={cx(inputClass, 'py-1.5')} /></div>
       </div>
       <ReportTable rows={q.data?.rows ?? []} columns={columns} rowKey={(a) => a.id} dense empty="No cylinders registered yet — add them or import your list." />
 

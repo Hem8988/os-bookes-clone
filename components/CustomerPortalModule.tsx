@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { LogOut, Plus, Printer, RefreshCw } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
 import { useT } from '../lib/i18n';
@@ -10,6 +10,9 @@ import { LanguageToggle } from './LanguageToggle';
 import CustomerComplaints from './ops/CustomerComplaints';
 import { PrintInvoiceModal, InvoiceView } from './PrintInvoiceModal';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, today, useToast } from './ui';
+import { cue } from '../lib/feedback';
+import { ChoiceTiles, PosButton, PosTotal, SoundToggle } from './pos';
+import { CartProduct, OrderTiles, useOrderCart } from './OrderCart';
 
 // Customer self-service portal (V2): balance, cylinders, orders, invoices,
 // payments and statement — the same data the WhatsApp bot answers from.
@@ -50,6 +53,7 @@ export function CustomerPortalModule() {
         </div>
         <div className="flex items-center gap-2">
           <LanguageToggle />
+          <SoundToggle className="hover:bg-slate-800" />
           <button onClick={() => void logout()} className="p-2 rounded-lg hover:bg-slate-800"><LogOut className="h-4 w-4" /></button>
         </div>
       </header>
@@ -136,7 +140,7 @@ export function CustomerPortalModule() {
           </>
         )}
       </main>
-      {ordering && data && <NewOrder defaultProductIds={data.customer.defaultProductIds} onClose={() => setOrdering(false)} onDone={(m) => { showToast(m); setOrdering(false); void load(); }} onError={(m) => showToast(m, 'error')} />}
+      {ordering && data && <NewOrder customerId={data.customer.id} defaultProductIds={data.customer.defaultProductIds} onClose={() => setOrdering(false)} onDone={(m) => { showToast(m); setOrdering(false); void load(); }} onError={(m) => showToast(m, 'error')} />}
       <PrintInvoiceModal
         invoice={shownInvoice}
         onClose={() => {
@@ -167,39 +171,57 @@ function PayNow({ invoiceId, onError }: { invoiceId?: string; onError: (m: strin
   return <Button size="sm" busy={busy} onClick={go}>{t('Pay now')}</Button>;
 }
 
-function NewOrder({ defaultProductIds, onClose, onDone, onError }: { defaultProductIds: string[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+function NewOrder({ customerId, defaultProductIds, onClose, onDone, onError }: { customerId: string; defaultProductIds: string[]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
   const { t } = useT();
-  const [products, setProducts] = useState<{ id: string; name: string; salePrice: number }[]>([]);
-  const [qty, setQty] = useState<Record<string, string>>({});
+  const products = useApiData<CartProduct[]>('/api/products', onError).data ?? [];
+  const cart = useOrderCart(products, customerId, defaultProductIds);
   const [date, setDate] = useState(today());
+  const [otherDate, setOtherDate] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    api<{ id: string; name: string; salePrice: number }[]>('/api/products')
-      .then((all) => setProducts(defaultProductIds.length ? all.filter((p) => defaultProductIds.includes(p.id)) : all))
-      .catch(() => {});
-  }, [defaultProductIds]);
   const submit = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/cylinder/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: Object.entries(qty).filter(([, q]) => Number(q) > 0).map(([productId, q]) => ({ productId, qty: Number(q) })), requestedDeliveryDate: date }) });
+      const res = await fetch('/api/cylinder/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: cart.items, requestedDeliveryDate: date }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
+      cue('success');
       onDone(json.message);
     } catch (e) {
+      cue('error');
       onError(errorMessage(e));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <Modal open title="New order" onClose={onClose} footer={<Button busy={busy} disabled={!Object.values(qty).some((q) => Number(q) > 0)} onClick={submit}>{t('Place order')}</Button>}>
-      {products.map((p) => (
-        <Field key={p.id} label={p.name}>
-          <input type="number" min={0} value={qty[p.id] || ''} onChange={(e) => setQty({ ...qty, [p.id]: e.target.value })} className={inputClass} placeholder="Quantity" />
-        </Field>
-      ))}
-      <Field label={t('Delivery date')}><input type="date" min={today()} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} /></Field>
-      <p className="text-[11px] text-slate-500">Your order goes to the office for approval; you will get WhatsApp updates at every step.</p>
+    <Modal
+      open
+      title={t('New order')}
+      onClose={onClose}
+      footer={
+        <PosTotal
+          lines={<div className="text-lg font-black text-slate-900">{t('{n} cylinders', { n: cart.count })}{cart.estimate ? ` · ${inr(cart.estimate)}` : ''}</div>}
+          action={<PosButton busy={busy} disabled={!cart.items.length} onClick={submit}>{t('Place order')}</PosButton>}
+        />
+      }
+    >
+      <OrderTiles cart={cart} />
+      <Field label={t('Delivery date')}>
+        <ChoiceTiles
+          value={otherDate ? 'other' : date === today() ? 'today' : 'tomorrow'}
+          onChange={(v) => {
+            setOtherDate(v === 'other');
+            if (v === 'today') setDate(today());
+            else if (v === 'tomorrow') setDate(tomorrow());
+          }}
+          options={[{ value: 'today', label: t('Today') }, { value: 'tomorrow', label: t('Tomorrow') }, { value: 'other', label: t('Other date'), tone: 'slate' }]}
+        />
+      </Field>
+      {otherDate && <input type="date" min={today()} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />}
+      <p className="text-[11px] text-slate-500">{t('Your order goes to the office for approval; you will get WhatsApp updates at every step.')}</p>
     </Modal>
   );
 }
+
+/** Tomorrow's date (YYYY-MM-DD, India time). */
+const tomorrow = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(Date.now() + 86_400_000));

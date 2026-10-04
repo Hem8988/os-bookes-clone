@@ -180,7 +180,7 @@ export const NotificationBell: React.FC<{ onNavigate?: (link: string) => void; t
         {unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl z-50 text-slate-900">
+        <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-1.5rem))] max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl z-50 text-slate-900">
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
             <span className="text-xs font-black">{t('Notifications')}</span>
             <div className="flex items-center gap-2">

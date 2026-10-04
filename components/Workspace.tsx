@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Menu } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { errorMessage } from '../lib/api';
 import { logout, useSession } from '../lib/auth';
 import type { Permission } from '../lib/permissions';
@@ -60,6 +60,7 @@ import ReportsModule from './ReportsModule';
 import RoutesModule from './RoutesModule';
 import { SettingsModule } from './SettingsModule';
 import { MENU, Sidebar } from './Sidebar';
+import { MobileMenu, MobileTabBar } from './MobileNav';
 import WhatsAppCenter from './WhatsAppInvoiceSenderModule';
 import { useToast } from './ui';
 
@@ -72,7 +73,7 @@ export default function Workspace() {
   const { session, loading, can } = useSession();
   const [tab, setTab] = useState('dashboard');
   const [sub, setSub] = useState<string | undefined>();
-  // Phones: the sidebar is a slide-in menu.
+  // Phones: the full-screen "More" menu (bottom tab bar → More).
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     const wide = window.matchMedia('(min-width: 768px)');
@@ -149,8 +150,10 @@ export default function Workspace() {
       const saved = await invoices.create(inv);
       showToast(`Invoice ${saved.invoiceNumber} created and posted to the ledger.`);
       setPrintInvoice(saved as unknown as InvoiceView);
+      return true;
     } catch (e) {
       showToast(errorMessage(e), 'error');
+      return false;
     }
   };
   const updateInvoice = async (inv: Invoice) => {
@@ -369,7 +372,7 @@ export default function Workspace() {
   const ledgerCustomer = ledgerCustomerId ? customers.items.find((c) => c.id === ledgerCustomerId) || ({ id: ledgerCustomerId, name: 'Customer', phone: '' } as Customer) : null;
 
   return (
-    <div className="h-screen w-full bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="h-[100dvh] w-full bg-slate-100 text-slate-900 font-sans flex flex-col">
       {toast}
       <Navbar
         userEmail={session.user.name}
@@ -387,30 +390,34 @@ export default function Workspace() {
         <div className="hidden md:block h-full flex-shrink-0">
           <Sidebar activeTab={tab} activeSub={sub} can={can} onNavigate={navigate} />
         </div>
-        {/* Phone: slide-in copy over the page, only while open. */}
-        {menuOpen && (
-          <div className="md:hidden absolute inset-0 z-40 flex">
-            <div className="h-full shadow-2xl">
-              <Sidebar
-                activeTab={tab}
-                activeSub={sub}
-                can={can}
-                onNavigate={(t, s) => {
-                  setMenuOpen(false);
-                  navigate(t, s);
-                }}
-              />
-            </div>
-            <div className="flex-1 bg-slate-900/40" onClick={() => setMenuOpen(false)} />
-          </div>
-        )}
-        <main className="flex-1 min-w-0 p-3 md:p-6 overflow-y-auto">
-          <button onClick={() => setMenuOpen(true)} className="md:hidden mb-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm">
-            <Menu className="h-4 w-4" /> Menu
-          </button>
-          {screen()}
-        </main>
+        {/* Phone: app-style "More" screen with every menu entry. */}
+        <MobileMenu
+          open={menuOpen}
+          activeTab={tab}
+          activeSub={sub}
+          can={can}
+          userName={session.user.name}
+          roleLabel={ROLE_LABELS[session.user.role]}
+          onNavigate={(t, s) => {
+            setMenuOpen(false);
+            navigate(t, s);
+          }}
+          onClose={() => setMenuOpen(false)}
+          onLogout={() => void logout()}
+        />
+        <main className="app-main flex-1 min-w-0 p-3 pb-24 md:p-6 overflow-y-auto">{screen()}</main>
       </div>
+      {/* Phone: bottom tab bar like a mobile app. */}
+      <MobileTabBar
+        activeTab={tab}
+        can={can}
+        moreOpen={menuOpen}
+        onMore={() => setMenuOpen(!menuOpen)}
+        onNavigate={(t, s) => {
+          setMenuOpen(false);
+          navigate(t, s);
+        }}
+      />
       <PrintInvoiceModal invoice={printInvoice} onClose={() => setPrintInvoice(null)} />
       <CustomerLedgerModal isOpen={!!ledgerCustomer} customer={ledgerCustomer} onClose={() => setLedgerCustomerId(null)} />
     </div>

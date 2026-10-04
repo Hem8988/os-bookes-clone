@@ -22,7 +22,7 @@ export default function Gstr2bPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState<'run' | 'xlsx' | null>(null);
-  const [filter, setFilter] = useState<'issues' | 'all'>('issues');
+  const [filter, setFilter] = useState<'issues' | 'all'>('all');
 
   const send = async (format?: 'xlsx') => {
     if (!file) return;
@@ -91,7 +91,7 @@ export default function Gstr2bPanel() {
             {result.summary.map((s) => <Kpi key={s.label} label={s.label} value={s.type === 'money' ? money(s.value) : String(s.value)} tone={/Only|differs/.test(s.label) && s.value ? 'red' : s.label === 'Matched' ? 'green' : 'slate'} />)}
           </div>
           <p className="text-xs text-slate-500">{result.uploaded} documents read from the file. {result.note}</p>
-          <Tabs value={filter} onChange={setFilter} items={[['issues', 'Needs attention'], ['all', 'All']]} />
+          <Tabs value={filter} onChange={setFilter} items={[['all', 'All'], ['issues', 'Needs attention']]} />
           <ReportTable rows={shown} columns={columns} rowKey={(_r, i) => String(i)} dense empty="Everything matches. 🎉" />
         </>
       )}

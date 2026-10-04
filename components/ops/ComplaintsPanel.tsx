@@ -27,7 +27,7 @@ const STATUS_TONE: Record<string, 'red' | 'amber' | 'green' | 'slate'> = { OPEN:
 export default function ComplaintsPanel() {
   const [toast, showToast] = useToast();
   const onError = (m: string) => showToast(m, 'error');
-  const [tab, setTab] = useState<'open' | 'all'>('open');
+  const [tab, setTab] = useState<'open' | 'all'>('all');
   const q = useApiData<{ rows: Complaint[]; staff: Staff[] }>(`/api/ops/complaints${tab === 'open' ? '?status=OPEN,ASSIGNED' : ''}`, onError);
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const [creating, setCreating] = useState(false);
@@ -62,7 +62,7 @@ export default function ComplaintsPanel() {
         <Kpi label="Urgent / leak" value={String(rows.filter((r) => r.priority === 'URGENT' && r.status !== 'CLOSED' && r.status !== 'RESOLVED').length)} tone="red" />
         <Kpi label="Avg. hours to resolve" value={(() => { const done = rows.filter((r) => r.resolvedAt); return done.length ? String(Math.round(done.reduce((s, r) => s + hours(r), 0) / done.length)) : '—'; })()} />
       </div>
-      <Tabs value={tab} onChange={setTab} items={[['open', 'Open & assigned'], ['all', 'All']]} />
+      <Tabs value={tab} onChange={setTab} items={[['all', 'All'], ['open', 'Open & assigned']]} />
       <div className="space-y-2">
         {rows.length === 0 && <div className="py-10 text-center text-xs text-slate-400 font-semibold">No complaints. 🎉</div>}
         {rows.map((c) => (

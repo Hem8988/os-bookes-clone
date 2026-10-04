@@ -33,7 +33,7 @@ export default function BankRecPanel() {
   const [accountId, setAccountId] = useState('');
   const bank = accountId || banks[0]?.id || '';
   const [asOf, setAsOf] = useState(today());
-  const [filter, setFilter] = useState<'UNMATCHED' | 'ALL'>('UNMATCHED');
+  const [filter, setFilter] = useState<'UNMATCHED' | 'ALL'>('ALL');
   const [busy, setBusy] = useState<string | null>(null);
   const [matching, setMatching] = useState<StatementLine | null>(null);
   const [creating, setCreating] = useState<StatementLine | null>(null);
@@ -131,7 +131,7 @@ export default function BankRecPanel() {
           </Card>
 
           <div className="grid xl:grid-cols-5 gap-4">
-            <Card className="xl:col-span-3" title="Bank statement" actions={<div className="flex gap-1">{(['UNMATCHED', 'ALL'] as const).map((f) => <button key={f} onClick={() => setFilter(f)} className={cx('px-2 py-1 rounded-lg text-[11px] font-bold', filter === f ? 'bg-slate-900 text-white' : 'text-slate-500')}>{f === 'ALL' ? 'All' : 'To match'}</button>)}</div>}>
+            <Card className="xl:col-span-3" title="Bank statement" actions={<div className="flex gap-1">{(['ALL', 'UNMATCHED'] as const).map((f) => <button key={f} onClick={() => setFilter(f)} className={cx('px-2 py-1 rounded-lg text-[11px] font-bold', filter === f ? 'bg-slate-900 text-white' : 'text-slate-500')}>{f === 'ALL' ? 'All' : 'To match'}</button>)}</div>}>
               {lines.length === 0 ? (
                 <Empty>{rec.counts.total ? 'Everything is matched. 🎉' : 'Upload a statement to begin.'}</Empty>
               ) : (

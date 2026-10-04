@@ -3,7 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Banknote,
   Camera,
+  Clock,
+  FileText,
+  Smartphone,
   CheckCircle2,
   ChevronRight,
   CloudOff,
@@ -18,7 +22,6 @@ import {
   RefreshCw,
   Send,
   StopCircle,
-  Trash2,
   Truck,
   UploadCloud,
   Wallet,
@@ -36,6 +39,9 @@ import { LanguageToggle } from './LanguageToggle';
 import { NotificationBell } from './NotificationBell';
 import { Badge, Button, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 import { DateInput } from './DateInput';
+import { cue } from '../lib/feedback';
+import { AmountPad, ChoiceTiles, PosButton, PosTotal, RecentChips, SoundToggle, Stepper, StockTile, useRecent } from './pos';
+import { CartProduct, OrderTiles, useOrderCart } from './OrderCart';
 
 // Delivery boy PWA (SRS §9, §14.2): Start Day → Stock → Today's Orders →
 // Delivery Entry → Payment → Photo → Submit → Day Closing.
@@ -227,6 +233,7 @@ export default function DeliveryBoyModule() {
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />} {online ? t('Online') : t('Offline')}
           </span>
           <LanguageToggle />
+          <SoundToggle className="hover:bg-slate-800" />
           <NotificationBell tone="dark" />
           <button onClick={() => void logout()} className="p-2 rounded-full hover:bg-slate-800" title={t('Logout')}>
             <LogOut className="h-4 w-4" />
@@ -289,9 +296,9 @@ export default function DeliveryBoyModule() {
       {creating && (
         <NewOrderSheet
           onClose={() => setCreating(false)}
-          onCreated={async () => {
+          onCreated={async (keepOpen) => {
             showToast('Order sent to the office for approval.');
-            setCreating(false);
+            if (!keepOpen) setCreating(false);
             await refresh();
           }}
           toast={showToast}
@@ -534,21 +541,24 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew }:
 interface PickCustomer { id: string; customerCode: string; name: string; shortName: string | null; phone: string; address?: string | null; area: string | null; defaultProductIds: string[]; deliveryAddresses: { id: string; address: string; isDefault: boolean }[] }
 
 /** Field order taken by the delivery boy; the office approves it, then it comes back to him. */
-function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onCreated: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
+function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onCreated: (keepOpen: boolean) => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
   const { t } = useT();
   const onError = (m: string) => toast(m, 'error');
-  const products = useApiData<{ id: string; name: string }[]>('/api/products', onError).data ?? [];
+  const products = useApiData<CartProduct[]>('/api/products', onError).data ?? [];
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<PickCustomer[] | null>(null);
   const [customer, setCustomer] = useState<PickCustomer | null>(null);
-  const [lines, setLines] = useState<{ productId: string; qty: string }[]>([{ productId: '', qty: '' }]);
+  const [recent, pushRecent] = useRecent('order-customers');
+  const [more, setMore] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState(today);
   const [priority, setPriority] = useState<'NORMAL' | 'URGENT'>('NORMAL');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const cart = useOrderCart(products, customer?.id ?? null, customer?.defaultProductIds ?? []);
 
   // Customer list: everyone as soon as the sheet opens, then a server search as you type (debounced).
   useEffect(() => {
+    if (customer) return;
     const q = query.trim();
     let alive = true;
     const timer = window.setTimeout(() => {
@@ -560,41 +570,52 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, customer]);
 
   const pick = (c: PickCustomer) => {
+    cue('tap');
     setCustomer(c);
     setQuery('');
-    setMatches(null);
-    const defaults = c.defaultProductIds.filter((id) => products.some((p) => p.id === id));
-    setLines(defaults.length ? defaults.map((id) => ({ productId: id, qty: '' })) : [{ productId: '', qty: '' }]);
+    pushRecent({ id: c.id, label: partyLabel(c.shortName, c.name), sub: c.phone });
+  };
+  /** Recent chip → the full customer record (from the list on screen, else a search by mobile). */
+  const pickRecent = async (id: string) => {
+    const known = matches?.find((c) => c.id === id);
+    if (known) return pick(known);
+    try {
+      const rows = await api<PickCustomer[]>(`/api/customers?search=${encodeURIComponent(recent.find((r) => r.id === id)?.sub || '')}`);
+      const hit = rows.find((c) => c.id === id);
+      if (hit) pick(hit);
+      else toast('No customer found.', 'error');
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    }
   };
 
-  // Only the cylinder types assigned to this customer (everything if none are assigned).
-  // If the assigned ones are switched off, show none rather than every product.
-  const assigned = customer?.defaultProductIds ?? [];
-  const own = assigned.filter((id) => products.some((p) => p.id === id));
-  const choices = assigned.length ? products.filter((p) => own.includes(p.id)) : products;
-  const assignedOff = !!customer && assigned.length > 0 && own.length === 0 && products.length > 0;
-
-  const items = lines.filter((l) => l.productId && Number(l.qty) > 0).map((l) => ({ productId: l.productId, qty: Number(l.qty) }));
-
-  const submit = async () => {
-    if (!customer || !items.length) return;
+  const submit = async (keepOpen: boolean) => {
+    if (!customer || !cart.items.length) return;
     setBusy(true);
     try {
       await api('/api/cylinder/orders', {
         body: {
           customerId: customer.id,
-          items,
+          items: cart.items,
           requestedDeliveryDate: deliveryDate,
           priority,
           deliveryAddressId: customer.deliveryAddresses.find((a) => a.isDefault)?.id || null,
           notes: notes.trim() || null,
         },
       });
-      await onCreated();
+      cue('success');
+      if (keepOpen) {
+        setCustomer(null);
+        setNotes('');
+        setPriority('NORMAL');
+        setMore(false);
+      }
+      await onCreated(keepOpen);
     } catch (e) {
+      cue('error');
       toast(errorMessage(e), 'error');
     } finally {
       setBusy(false);
@@ -607,19 +628,35 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
       title={t('New order')}
       onClose={onClose}
       footer={
-        <Button className="w-full" busy={busy} disabled={!customer || !items.length} onClick={submit}>
-          <Send className="h-4 w-4" />{t('Send for approval')}</Button>
+        customer ? (
+          <PosTotal
+            lines={
+              <>
+                <div className="text-lg font-black text-slate-900">{t('{n} cylinders', { n: cart.count })}</div>
+                <button type="button" disabled={busy || !cart.items.length} onClick={() => submit(true)} className="text-[11px] font-black text-emerald-700 disabled:opacity-40">
+                  {t('Send & next order')}
+                </button>
+              </>
+            }
+            action={
+              <PosButton busy={busy} disabled={!cart.items.length} onClick={() => submit(false)}>
+                <Send className="h-4 w-4" />{t('Send')}
+              </PosButton>
+            }
+          />
+        ) : undefined
       }
     >
       {!customer ? (
-        <Field label={t('Customer')}>
-          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search name, mobile or code')} className={inputClass} />
-          <div className="mt-2 max-h-[55vh] overflow-y-auto space-y-1.5 pr-1">
+        <div className="space-y-3">
+          <RecentChips title={t('Recent')} items={recent} onPick={(r) => void pickRecent(r.id)} />
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search name, mobile or code')} className={cx(inputClass, 'py-3 text-base')} />
+          <div className="max-h-[55vh] overflow-y-auto space-y-1.5 pr-1">
             {matches === null && <div className="py-4 text-center text-[11px] text-slate-400">{t('Loading…')}</div>}
             {matches?.length === 0 && <div className="py-4 text-center text-[11px] text-slate-400">{t('No customer found.')}</div>}
             {matches?.map((c) => (
-              <button key={c.id} onClick={() => pick(c)} className="w-full flex items-center gap-3 text-left px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 active:bg-emerald-100">
-                <span className="h-9 w-9 shrink-0 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-sm font-black">{(partyLabel(c.shortName, c.name) || '?').trim().charAt(0).toUpperCase()}</span>
+              <button key={c.id} onClick={() => pick(c)} className="w-full flex items-center gap-3 text-left px-3 py-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 active:bg-emerald-100">
+                <span className="h-10 w-10 shrink-0 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-base font-black">{(partyLabel(c.shortName, c.name) || '?').trim().charAt(0).toUpperCase()}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-black text-slate-900 truncate">{partyLabel(c.shortName, c.name)}</span>
                   <span className="block text-[11px] text-slate-500 truncate">{[c.area, c.deliveryAddresses.find((a) => a.isDefault)?.address || c.address].filter(Boolean).join(' · ') || c.customerCode}</span>
@@ -629,57 +666,35 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
             ))}
             {(matches?.length ?? 0) >= 100 && <div className="py-1 text-center text-[10px] text-slate-400">{t('Type to search more customers')}</div>}
           </div>
-        </Field>
-      ) : (
-        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center text-xs">
-          <div className="min-w-0">
-            <div className="font-black truncate">{partyLabel(customer.shortName, customer.name)}</div>
-            <div className="text-slate-500">{customer.phone}</div>
-          </div>
-          <Button tone="ghost" size="sm" onClick={() => setCustomer(null)}>{t('Change')}</Button>
         </div>
-      )}
-      {customer && (
+      ) : (
         <>
-          {assignedOff && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] font-semibold text-amber-800">{t('The cylinder assigned to this customer is switched off. Ask the office to fix it in the customer or product master.')}</p>}
-          <div className="space-y-2">
-            {lines.map((line, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2">
-                <select value={line.productId} onChange={(e) => setLines(lines.map((l, i) => (i === idx ? { ...l, productId: e.target.value } : l)))} className={cx(inputClass, 'col-span-7')}>
-                  <option value="">{t('Product…')}</option>
-                  {choices.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <input type="number" inputMode="numeric" min={1} value={line.qty} onChange={(e) => setLines(lines.map((l, i) => (i === idx ? { ...l, qty: e.target.value } : l)))} placeholder={t('Qty')} className={cx(inputClass, 'col-span-4')} />
-                <button onClick={() => setLines(lines.filter((_, i) => i !== idx))} className="col-span-1 text-rose-500 disabled:opacity-30" disabled={lines.length === 1}>
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-            <Button tone="ghost" size="sm" onClick={() => setLines([...lines, { productId: '', qty: '' }])}>
-              <Plus className="h-3.5 w-3.5" />{t('Add product')}</Button>
-          </div>
-          <Field label={t('Delivery date')}>
-            <DateInput min={today()} value={deliveryDate} onChange={setDeliveryDate} />
-          </Field>
-          <Field label={t('Priority')}>
-            <div className="grid grid-cols-2 gap-2">
-              {(['NORMAL', 'URGENT'] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPriority(p)}
-                  className={cx('py-2 rounded-xl text-xs font-black border', priority === p ? (p === 'URGENT' ? 'bg-rose-600 border-rose-600 text-white' : 'bg-emerald-600 border-emerald-600 text-white') : 'bg-white border-slate-300 text-slate-600')}
-                >
-                  {t(p === 'URGENT' ? 'Urgent' : 'Normal')}
-                </button>
-              ))}
+          <div className="p-3 rounded-xl bg-slate-900 text-white flex justify-between items-center">
+            <div className="min-w-0">
+              <div className="font-black truncate">{partyLabel(customer.shortName, customer.name)}</div>
+              <div className="text-[11px] opacity-70">{customer.phone}{customer.area ? ` · ${customer.area}` : ''}</div>
             </div>
-          </Field>
-          <Field label={t('Note (optional)')}>
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
-          </Field>
+            <button type="button" onClick={() => setCustomer(null)} className="shrink-0 px-3 py-1.5 rounded-lg bg-white/15 text-xs font-black">{t('Change')}</button>
+          </div>
+          {cart.assignedOff && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] font-semibold text-amber-800">{t('The cylinder assigned to this customer is switched off. Ask the office to fix it in the customer or product master.')}</p>}
+          <OrderTiles cart={cart} />
+          <button type="button" onClick={() => setMore(!more)} className="w-full flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700">
+            <span>{t('More options')} <span className="font-semibold text-slate-500">· {deliveryDate === today() ? t('Today') : deliveryDate} · {t(priority === 'URGENT' ? 'Urgent' : 'Normal')}</span></span>
+            <ChevronRight className={cx('h-4 w-4 transition', more && 'rotate-90')} />
+          </button>
+          {more && (
+            <div className="space-y-3">
+              <Field label={t('Delivery date')}>
+                <DateInput min={today()} value={deliveryDate} onChange={setDeliveryDate} />
+              </Field>
+              <Field label={t('Priority')}>
+                <ChoiceTiles value={priority} onChange={setPriority} options={[{ value: 'NORMAL', label: t('Normal') }, { value: 'URGENT', label: t('Urgent'), tone: 'rose' }]} />
+              </Field>
+              <Field label={t('Note (optional)')}>
+                <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+              </Field>
+            </div>
+          )}
           <p className="text-[11px] text-slate-500">{t('The office approves it, then it comes to your list to deliver.')}</p>
         </>
       )}
@@ -703,11 +718,11 @@ function OrderSheet({ order, stock, queued, dayStarted, onClose, onChanged, toas
     api<CustomerSnapshot>(`/api/customers/${order.customerId}/360`).then(setSnapshot).catch(() => {});
   }, [order.customerId]);
 
-  const act = async (action: 'accept' | 'dispatch') => {
+  const act = async (action: 'accept') => {
     setBusy(true);
     try {
       await api(`/api/cylinder/orders/${order.id}`, { body: { action } });
-      await onChanged(action === 'accept' ? 'Order accepted.' : 'Customer notified: out for delivery.');
+      await onChanged('Order accepted.');
     } catch (e) {
       toast(errorMessage(e), 'error');
     } finally {
@@ -786,10 +801,6 @@ function OrderSheet({ order, stock, queued, dayStarted, onClose, onChanged, toas
               <Button tone="secondary" busy={busy} onClick={() => act('accept')}>
                 <CheckCircle2 className="h-4 w-4" />{t('Accept order')}</Button>
             )}
-            {['ASSIGNED', 'ACCEPTED'].includes(order.status) && (
-              <Button tone="secondary" busy={busy} disabled={!dayStarted} onClick={() => act('dispatch')}>
-                <Truck className="h-4 w-4" />{t('Out for delivery')}</Button>
-            )}
             {canDeliver && (
               <Button onClick={() => setDelivering(true)}>
                 <Package className="h-4 w-4" /> {t(sentBack ? 'Correct & resubmit' : 'Enter delivery')}
@@ -844,10 +855,14 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!proof) return toast('Delivery proof photo is mandatory.', 'error');
-    if (mode !== 'CREDIT' && !(Number(amount) > 0)) return toast('Enter the amount collected.', 'error');
-    if (mode === 'ONLINE' && (!txn.trim() || !payProof)) return toast('Transaction ID and payment screenshot are required.', 'error');
-    if (mode === 'CHEQUE' && (!cheque.number || !cheque.bank || !cheque.date || !chequePhoto)) return toast('Cheque number, bank, date and photo are required.', 'error');
+    const fail = (m: string) => {
+      cue('error');
+      toast(m, 'error');
+    };
+    if (!proof) return fail('Delivery proof photo is mandatory.');
+    if (mode !== 'CREDIT' && !(Number(amount) > 0)) return fail('Enter the amount collected.');
+    if (mode === 'ONLINE' && (!txn.trim() || !payProof)) return fail('Transaction ID and payment screenshot are required.');
+    if (mode === 'CHEQUE' && (!cheque.number || !cheque.bank || !cheque.date || !chequePhoto)) return fail('Cheque number, bank, date and photo are required.');
     setBusy(true);
     const pos = await getLocation(8000);
     const id = crypto.randomUUID();
@@ -879,6 +894,7 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
     try {
       // Always save on the phone first; sync removes it once the server confirms.
       await queuePut(entry);
+      cue('success');
       await onQueued(navigator.onLine ? 'Delivery saved — syncing…' : 'Offline: delivery saved on phone (Pending Sync).');
     } catch (e) {
       toast(errorMessage(e), 'error');
@@ -891,32 +907,34 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
     <div className="space-y-3">
       {lines.map((l, idx) => (
         <div key={l.productId} className="rounded-xl border border-slate-200 p-3">
-          <div className="text-xs font-black">{l.productName} <span className="text-slate-400 font-semibold">{t('(ordered {n})', { n: l.orderedQty })}</span></div>
+          <div className="text-sm font-black">{l.productName} <span className="text-slate-400 font-semibold text-xs">{t('(ordered {n})', { n: l.orderedQty })}</span></div>
           <div className="grid grid-cols-2 gap-2 mt-2">
-            <Field label={t('Delivered (full)')}>
-              <input type="number" inputMode="numeric" min={0} value={l.delivered} onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, delivered: e.target.value } : x)))} className={inputClass} />
-            </Field>
-            <Field label={t('Empty received')}>
-              <input type="number" inputMode="numeric" min={0} value={l.empty} onChange={(e) => setLines(lines.map((x, i) => (i === idx ? { ...x, empty: e.target.value } : x)))} className={inputClass} />
-            </Field>
+            <Stepper size="lg" label={t('Delivered (full)')} value={Number(l.delivered) || 0} onChange={(n) => setLines(lines.map((x, i) => (i === idx ? { ...x, delivered: String(n) } : x)))} />
+            <Stepper size="lg" label={t('Empty received')} value={Number(l.empty) || 0} onChange={(n) => setLines(lines.map((x, i) => (i === idx ? { ...x, empty: String(n) } : x)))} />
           </div>
           {(Number(l.delivered) !== l.orderedQty || Number(l.empty) !== Number(l.delivered)) && (
             <div className="text-[10px] font-bold text-amber-700 mt-1">{t('Difference will be flagged for accounts.')}</div>
           )}
         </div>
       ))}
-      <div className="text-right text-sm font-black">{t('Bill')}: {inr(bill)}</div>
-      <div className="grid grid-cols-4 gap-1">
-        {(['CASH', 'ONLINE', 'CHEQUE', 'CREDIT'] as const).map((m) => (
-          <button key={m} onClick={() => { setMode(m); if (m === 'CREDIT') setAmount('0'); else if (Number(amount) === 0) setAmount(String(bill)); }} className={cx('py-2 rounded-xl text-[11px] font-black', mode === m ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600')}>
-            {t(m)}
-          </button>
-        ))}
-      </div>
+      <div className="text-right text-lg font-black">{t('Bill')}: {inr(bill)}</div>
+      <ChoiceTiles
+        value={mode}
+        onChange={(m) => { setMode(m); if (m === 'CREDIT') setAmount('0'); else if (Number(amount) === 0) setAmount(String(bill)); }}
+        options={[
+          { value: 'CASH', label: t('CASH'), icon: Banknote },
+          { value: 'ONLINE', label: t('ONLINE'), icon: Smartphone, tone: 'sky' },
+          { value: 'CHEQUE', label: t('CHEQUE'), icon: FileText, tone: 'slate' },
+          { value: 'CREDIT', label: t('CREDIT'), icon: Clock, tone: 'amber' },
+        ]}
+      />
       {mode !== 'CREDIT' && (
-        <Field label={t('Amount collected (₹)')}>
-          <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
-        </Field>
+        <AmountPad
+          label={t('Amount collected (₹)')}
+          value={amount}
+          onChange={setAmount}
+          quick={[{ label: t('Full bill {amount}', { amount: inr(bill) }), value: Math.round(bill * 100) / 100 }, ...[500, 1000, 2000].filter((n) => n < bill).map((n) => ({ label: `₹${n}`, value: n }))]}
+        />
       )}
       {mode === 'ONLINE' && (
         <>
@@ -940,10 +958,13 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
       <Field label={t('Remarks')}>
         <input value={remarks} onChange={(e) => setRemarks(e.target.value)} className={inputClass} placeholder={t('e.g. gate 2, call before delivery')} />
       </Field>
-      <div className="flex gap-2">
-        <Button tone="secondary" className="flex-1" onClick={onCancel}>{t('Back')}</Button>
-        <Button className="flex-1" busy={busy} onClick={submit}>
-          <Send className="h-4 w-4" />{t('Submit delivery')}</Button>
+      <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-3 bg-white border-t border-slate-100 flex gap-2">
+        <Button tone="secondary" className="py-3" onClick={onCancel}>{t('Back')}</Button>
+        <div className="flex-1 [&>button]:w-full">
+          <PosButton busy={busy} onClick={submit}>
+            <Send className="h-4 w-4" />{t('Submit delivery')}
+          </PosButton>
+        </div>
       </div>
     </div>
   );
@@ -972,6 +993,7 @@ function WalletTab({ toast }: { toast: (m: string, t?: 'ok' | 'error') => void }
     try {
       const proofUrl = photo ? await uploadFile(photo) : null;
       await api('/api/financial/cash-submission', { body: { amount: Number(amount), receiverId, proofUrl } });
+      cue('success');
       toast('Cash submission sent for confirmation.');
       setAmount('');
       setPhoto(null);
@@ -994,19 +1016,27 @@ function WalletTab({ toast }: { toast: (m: string, t?: 'ok' | 'error') => void }
       <div className="rounded-2xl bg-white border border-slate-200 p-3 space-y-3">
         <div className="text-xs font-black">{t('Submit cash')}</div>
         <Field label={t('Handing over to')}>
-          <select value={receiverId} onChange={(e) => setReceiverId(e.target.value)} className={inputClass}>
-            <option value="">{t('Select…')}</option>
+          <div className="grid grid-cols-2 gap-2">
             {info.receivers.map((r) => (
-              <option key={r.id} value={r.id}>{r.name} ({t(ROLE_LABELS[r.role as Role] || r.role)})</option>
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => { cue('tap'); setReceiverId(r.id); }}
+                className={cx('rounded-xl border-2 px-3 py-2.5 text-left active:scale-[0.97] transition', receiverId === r.id ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 bg-white text-slate-800')}
+              >
+                <span className="block text-sm font-black truncate">{r.name}</span>
+                <span className={cx('block text-[10px] font-semibold', receiverId === r.id ? 'text-emerald-100' : 'text-slate-500')}>{t(ROLE_LABELS[r.role as Role] || r.role)}</span>
+              </button>
             ))}
-          </select>
+          </div>
         </Field>
-        <Field label={t('Amount (₹)')}>
-          <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
-        </Field>
+        <AmountPad label={t('Amount (₹)')} value={amount} onChange={setAmount} quick={info.available > 0 ? [{ label: t('All {amount}', { amount: inr(info.available) }), value: info.available }] : []} />
         <PhotoInput label={t('Proof photo (optional)')} file={photo} onFile={setPhoto} />
-        <Button className="w-full" busy={busy} disabled={!receiverId || !(Number(amount) > 0)} onClick={submit}>
-          <Send className="h-4 w-4" />{t('Submit')}</Button>
+        <div className="[&>button]:w-full">
+          <PosButton busy={busy} disabled={!receiverId || !(Number(amount) > 0)} onClick={submit}>
+            <Send className="h-4 w-4" />{t('Submit')}
+          </PosButton>
+        </div>
       </div>
       <div className="rounded-2xl bg-white border border-slate-200 p-3 space-y-1">
         <div className="text-xs font-black mb-1">{t('My submissions')}</div>
@@ -1035,7 +1065,7 @@ function WalletTab({ toast }: { toast: (m: string, t?: 'ok' | 'error') => void }
 
 function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: StockRow[]; onChanged: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
   const { t, status } = useT();
-  const [form, setForm] = useState<{ kind: 'ISSUE' | 'RETURN'; warehouseId: string; productId: string; full: string; empty: string } | null>(null);
+  const [form, setForm] = useState<{ kind: 'ISSUE' | 'RETURN'; warehouseId: string; qty: Record<string, { full: number; empty: number }> } | null>(null);
   const [fieldRequest, setFieldRequest] = useState<{ kind: string; note: string; qty: string; amount: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const onError = (m: string) => toast(m, 'error');
@@ -1050,8 +1080,14 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
     requestsQ.reload();
   };
 
+  const transferItems = form ? Object.entries(form.qty).filter(([, q]) => q.full > 0 || q.empty > 0).map(([productId, q]) => ({ productId, fullQty: q.full, emptyQty: q.empty })) : [];
+  // Returning more than he holds is refused by the server; show it before sending.
+  const overReturn = form?.kind === 'RETURN' && transferItems.some((i) => { const s = stock.find((x) => x.productId === i.productId); return i.fullQty > (s?.fullQty ?? 0) || i.emptyQty > (s?.emptyQty ?? 0); });
+  const setQty = (productId: string, patch: Partial<{ full: number; empty: number }>) =>
+    form && setForm({ ...form, qty: { ...form.qty, [productId]: { ...(form.qty[productId] ?? { full: 0, empty: 0 }), ...patch } } });
+
   const submitTransfer = async () => {
-    if (!form) return;
+    if (!form || !transferItems.length) return;
     setBusy(true);
     try {
       const me = userId;
@@ -1060,13 +1096,15 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
           transferType: form.kind === 'ISSUE' ? 'WAREHOUSE_TO_DRIVER' : 'DRIVER_TO_WAREHOUSE',
           fromId: form.kind === 'ISSUE' ? form.warehouseId : me,
           toId: form.kind === 'ISSUE' ? me : form.warehouseId,
-          items: [{ productId: form.productId, fullQty: Number(form.full) || 0, emptyQty: Number(form.empty) || 0 }],
+          items: transferItems,
         },
       });
+      cue('success');
       toast('Request sent for manager approval.');
       setForm(null);
       await Promise.all([load(), onChanged()]);
     } catch (e) {
+      cue('error');
       toast(errorMessage(e), 'error');
     } finally {
       setBusy(false);
@@ -1101,8 +1139,8 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <Button onClick={() => setForm({ kind: 'ISSUE', warehouseId: warehouses[0]?.id || '', productId: products[0]?.id || '', full: '', empty: '' })}>{t('Request stock')}</Button>
-        <Button tone="secondary" onClick={() => setForm({ kind: 'RETURN', warehouseId: warehouses[0]?.id || '', productId: products[0]?.id || '', full: '', empty: '' })}>{t('Return to godown')}</Button>
+        <Button className="py-3" onClick={() => setForm({ kind: 'ISSUE', warehouseId: warehouses[0]?.id || '', qty: {} })}>{t('Request stock')}</Button>
+        <Button tone="secondary" className="py-3" onClick={() => setForm({ kind: 'RETURN', warehouseId: warehouses[0]?.id || '', qty: {} })}>{t('Return to godown')}</Button>
         <Button tone="secondary" className="col-span-2" onClick={() => setFieldRequest({ kind: 'EXTRA_CYLINDERS', note: '', qty: '', amount: '' })}>{t('Other request (advance, vehicle…)')}</Button>
       </div>
       <div className="rounded-2xl bg-white border border-slate-200 p-3">
@@ -1189,23 +1227,51 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
         )}
       </div>
 
-      <Modal open={!!form} title={t(form?.kind === 'ISSUE' ? 'Request stock from godown' : 'Return stock to godown')} onClose={() => setForm(null)} footer={<Button busy={busy} onClick={submitTransfer}>{t('Send for approval')}</Button>}>
+      <Modal
+        open={!!form}
+        title={t(form?.kind === 'ISSUE' ? 'Request stock from godown' : 'Return stock to godown')}
+        onClose={() => setForm(null)}
+        footer={
+          <PosTotal
+            lines={<div className="text-lg font-black text-slate-900">{t('{n} cylinders', { n: transferItems.reduce((s, i) => s + i.fullQty + i.emptyQty, 0) })}</div>}
+            action={
+              <PosButton busy={busy} disabled={!transferItems.length || !form?.warehouseId || overReturn} onClick={submitTransfer}>
+                <Send className="h-4 w-4" />{t('Send for approval')}
+              </PosButton>
+            }
+          />
+        }
+      >
         {form && (
           <>
             <Field label={t('Godown')}>
-              <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className={inputClass}>
-                {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
+              {warehouses.length <= 4 ? (
+                <ChoiceTiles value={form.warehouseId} onChange={(id) => setForm({ ...form, warehouseId: id })} cols={2} options={warehouses.map((w) => ({ value: w.id, label: w.name, tone: 'slate' as const }))} />
+              ) : (
+                <select value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} className={inputClass}>
+                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              )}
             </Field>
-            <Field label={t('Product')}>
-              <select value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })} className={inputClass}>
-                {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label={t('Full')}><input type="number" min={0} value={form.full} onChange={(e) => setForm({ ...form, full: e.target.value })} className={inputClass} /></Field>
-              <Field label={t('Empty')}><input type="number" min={0} value={form.empty} onChange={(e) => setForm({ ...form, empty: e.target.value })} className={inputClass} /></Field>
+            <div className="space-y-2">
+              {products.map((p) => {
+                const mine = stock.find((s) => s.productId === p.id);
+                const q = form.qty[p.id] || { full: 0, empty: 0 };
+                return (
+                  <StockTile
+                    key={p.id}
+                    name={p.name}
+                    available={form.kind === 'RETURN' ? { full: mine?.fullQty ?? 0, empty: mine?.emptyQty ?? 0 } : undefined}
+                    full={q.full}
+                    empty={q.empty}
+                    onFull={(n) => setQty(p.id, { full: n })}
+                    onEmpty={(n) => setQty(p.id, { empty: n })}
+                    labels={{ full: t('Full'), empty: t('Empty') }}
+                  />
+                );
+              })}
             </div>
+            {overReturn && <p className="text-xs font-semibold text-rose-600">{t('More than you hold — reduce the red quantities.')}</p>}
           </>
         )}
       </Modal>

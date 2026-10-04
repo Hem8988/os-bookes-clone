@@ -38,3 +38,20 @@ body {
     break-inside: avoid;
   }
 }
+
+/* Phones: a wide table scrolls sideways inside its card instead of stretching
+   the whole page (back office screens; print sheets live outside .app-main). */
+@media (max-width: 767px) {
+  .app-main table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-main input,
+  .app-main select,
+  .app-main textarea {
+    /* 16px stops iOS zooming into the page on focus. */
+    font-size: max(16px, 1em);
+  }
+}

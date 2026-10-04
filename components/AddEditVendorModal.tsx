@@ -137,10 +137,15 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   useEffect(() => {
     const today = getTodayDateString();
     if (customerToEdit) {
+      // Show exactly what is saved: old entries kept as product names are turned into ids,
+      // and ids of products that no longer exist are dropped.
       setAssignedCylinderTypes(
-        customerToEdit.defaultProductIds?.length
-          ? customerToEdit.defaultProductIds
-          : customerToEdit.assignedCylinderTypes || []
+        [...new Set(
+          (customerToEdit.defaultProductIds?.length ? customerToEdit.defaultProductIds : customerToEdit.assignedCylinderTypes || [])
+            // (until the product list has loaded, keep the saved values as they are)
+            .map((v) => (products.length ? products.find((p) => p.id === v || p.name === v)?.id : v))
+            .filter((id): id is string => !!id)
+        )]
       );
       setPartyCategory(customerToEdit.type || defaultType);
       setPartyName(customerToEdit.name || '');
@@ -838,7 +843,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   const masterList = cylinderProductsOnly;
 
                   return masterList.map((prod) => {
-                    const isChecked = assignedCylinderTypes.includes(prod.id) || assignedCylinderTypes.includes(prod.name);
+                    const isChecked = assignedCylinderTypes.includes(prod.id);
                     const displayName = `${prod.name} (₹${(prod.salePrice || 0).toLocaleString('en-IN')})${prod.active === false ? ' — inactive, cannot be ordered' : ''}`;
 
                     return (

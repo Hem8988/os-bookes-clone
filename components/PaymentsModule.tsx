@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Scale } from 'lucide-react';
+import { Banknote, FileText, Plus, Scale, Smartphone } from 'lucide-react';
+import { cue } from '../lib/feedback';
+import { AmountPad, ChoiceTiles, PosButton, PosTotal, RecentChips, useRecent } from './pos';
 import { api, errorMessage, inr, uploadFile } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
@@ -89,28 +91,47 @@ export default function PaymentsModule() {
 function useCustomerSearch() {
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<CustomerOption[]>([]);
-  const [selected, setSelected] = useState<CustomerOption | null>(null);
+  const [selected, setSelectedRaw] = useState<CustomerOption | null>(null);
+  const [recent, pushRecent] = useRecent('payment-customers');
+  const setSelected = (c: CustomerOption | null) => {
+    setSelectedRaw(c);
+    if (c) pushRecent({ id: c.id, label: c.name, sub: c.phone });
+  };
   useEffect(() => {
     if (selected || query.length < 2) return;
     const t = window.setTimeout(() => api<CustomerOption[]>(`/api/customers?search=${encodeURIComponent(query)}`).then(setOptions).catch(() => {}), 250);
     return () => window.clearTimeout(t);
   }, [query, selected]);
+  /** Recent chip → fresh customer record (current balance) by searching its mobile. */
+  const pickRecent = (id: string, phone: string) =>
+    api<CustomerOption[]>(`/api/customers?search=${encodeURIComponent(phone)}`)
+      .then((rows) => {
+        const hit = rows.find((c) => c.id === id);
+        if (hit) setSelected(hit);
+      })
+      .catch(() => {});
   const picker = (
     <Field label="Customer">
       {selected ? (
-        <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-          <span><strong>{selected.name}</strong> · outstanding {inr(selected.balance)}</span>
-          <button className="font-bold text-slate-500" onClick={() => { setSelected(null); setQuery(''); }}>Change</button>
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 text-white text-xs">
+          <span><strong className="text-sm">{selected.name}</strong><span className="block opacity-70">{selected.phone} · outstanding {inr(selected.balance)}</span></span>
+          <button className="px-3 py-1.5 rounded-lg bg-white/15 font-black" onClick={() => { setSelected(null); setQuery(''); }}>Change</button>
         </div>
       ) : (
-        <>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name / mobile / code" className={inputClass} />
-          {options.map((c) => (
-            <button key={c.id} onClick={() => setSelected(c)} className="block w-full text-left text-xs p-1.5 hover:bg-slate-50">
-              {c.name} · {c.phone} <span className="text-slate-400">{c.customerCode}</span>
-            </button>
-          ))}
-        </>
+        <div className="space-y-2">
+          <RecentChips items={recent} onPick={(r) => void pickRecent(r.id, r.sub || r.label)} />
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name / mobile / code" className={cx(inputClass, 'py-3 text-base')} />
+          {query.length >= 2 && (
+            <div className="grid sm:grid-cols-2 gap-1.5">
+              {options.map((c) => (
+                <button key={c.id} onClick={() => setSelected(c)} className="w-full text-left text-xs p-3 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50">
+                  <strong className="text-sm">{c.name}</strong>
+                  <span className="block text-slate-500">{c.phone} · {c.customerCode} · due {inr(c.balance)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </Field>
   );
@@ -130,26 +151,50 @@ function PaymentEntryModal({ onClose, onDone, onError }: { onClose: () => void; 
       const res = await fetch('/api/financial/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, amount: Number(form.amount), customerId: selected.id, proofUrl }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
+      cue('success');
       onDone(json.message);
     } catch (e) {
+      cue('error');
       onError(errorMessage(e));
     } finally {
       setBusy(false);
     }
   };
   return (
-    <Modal open title="Record customer payment" onClose={onClose} footer={<Button busy={busy} disabled={!selected || !(Number(form.amount) > 0)} onClick={submit}>Save for verification</Button>}>
+    <Modal
+      open
+      wide
+      title="Record customer payment"
+      onClose={onClose}
+      footer={
+        <PosTotal
+          lines={<div className="text-lg font-black text-slate-900">{inr(Number(form.amount) || 0)}{selected ? <span className="block text-[11px] font-semibold text-slate-500">{selected.name}</span> : null}</div>}
+          action={<PosButton busy={busy} disabled={!selected || !(Number(form.amount) > 0)} onClick={submit}>Save for verification</PosButton>}
+        />
+      }
+    >
       {picker}
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="Amount ₹"><input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={inputClass} /></Field>
-        <Field label="Mode">
-          <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })} className={inputClass}>
-            <option value="ONLINE">Online / UPI / NEFT</option>
-            <option value="CHEQUE">Cheque</option>
-            <option value="CASH">Cash</option>
-          </select>
-        </Field>
-        <Field label="Date"><input type="date" max={today()} value={form.paymentDate} onChange={(e) => setForm({ ...form, paymentDate: e.target.value })} className={inputClass} /></Field>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <AmountPad
+          label="Amount received"
+          value={form.amount}
+          onChange={(amount) => setForm({ ...form, amount })}
+          quick={[...(selected && selected.balance > 0 ? [{ label: `Full due ${inr(selected.balance)}`, value: selected.balance }] : []), ...[1000, 2000, 5000, 10000].map((n) => ({ label: `₹${n.toLocaleString('en-IN')}`, value: n }))]}
+        />
+        <div className="space-y-3">
+          <Field label="Mode">
+            <ChoiceTiles
+              value={form.mode as 'ONLINE' | 'CHEQUE' | 'CASH'}
+              onChange={(mode) => setForm({ ...form, mode })}
+              options={[
+                { value: 'ONLINE', label: 'Online / UPI', icon: Smartphone, tone: 'sky' },
+                { value: 'CHEQUE', label: 'Cheque', icon: FileText, tone: 'slate' },
+                { value: 'CASH', label: 'Cash', icon: Banknote },
+              ]}
+            />
+          </Field>
+          <Field label="Date"><input type="date" max={today()} value={form.paymentDate} onChange={(e) => setForm({ ...form, paymentDate: e.target.value })} className={inputClass} /></Field>
+        </div>
       </div>
       {form.mode === 'ONLINE' && <Field label="Transaction ID / UTR"><input value={form.transactionId} onChange={(e) => setForm({ ...form, transactionId: e.target.value })} className={inputClass} /></Field>}
       {form.mode === 'CHEQUE' && (

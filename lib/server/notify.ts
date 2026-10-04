@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import type { Role } from '@/lib/permissions';
+import { ROLE_HOME, type Role } from '@/lib/permissions';
 import { DEFAULT_TEMPLATES, renderTemplate } from '@/lib/whatsapp';
 import { sendEmail } from './messaging/email';
 import { sendPush } from './messaging/push';
@@ -57,8 +57,19 @@ export async function notifyRoles(tenantId: string, roles: Role[], message: { ti
 
 export async function notifyUsers(tenantId: string, userIds: string[], message: { title: string; body: string; link?: string }) {
   if (userIds.length === 0) return;
+  // Links are written for the admin portal; each person gets them on their own portal
+  // (an accountant's "/admin?tab=…" becomes "/accountant?tab=…").
+  const users = message.link?.startsWith('/admin') ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, role: true } }) : [];
+  const linkFor = (userId: string) => {
+    const role = users.find((u) => u.id === userId)?.role as Role | undefined;
+    const home = role ? ROLE_HOME[role] : null;
+    return home && home !== '/admin' && message.link ? message.link.replace(/^\/admin/, home) : message.link;
+  };
   await prisma.notification.createMany({
-    data: userIds.map((userId) => ({ tenantId, userId, title: message.title, body: message.body, link: message.link })),
+    data: userIds.map((userId) => ({ tenantId, userId, title: message.title, body: message.body, link: linkFor(userId) })),
   });
-  await sendPush(userIds, message);
+  // Push goes out per portal so each phone opens the right page.
+  const byLink = new Map<string | undefined, string[]>();
+  for (const id of userIds) byLink.set(linkFor(id), [...(byLink.get(linkFor(id)) || []), id]);
+  for (const [link, ids] of byLink) await sendPush(ids, { ...message, link });
 }

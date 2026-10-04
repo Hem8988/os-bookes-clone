@@ -294,6 +294,19 @@ const HI: Record<string, string> = {
   'This device could not be identified. Please use the DeskShark delivery app.': 'यह डिवाइस पहचाना नहीं गया। कृपया DeskShark डिलीवरी ऐप इस्तेमाल करें।',
   'Your account is not active. Contact the administrator.': 'आपका अकाउंट चालू नहीं है। एडमिन से बात करें।',
   'Cash submission to confirm': 'कैश जमा की पुष्टि करें',
+  // POS screens
+  '{n} cylinders': '{n} सिलेंडर',
+  'Send & next order': 'भेजें और अगला ऑर्डर',
+  Recent: 'हाल के',
+  'More options': 'और विकल्प',
+  'Filled from last order {no} ({date})': 'पिछले ऑर्डर {no} ({date}) से भरा गया',
+  Clear: 'हटाएँ',
+  'Tap a cylinder to add it': 'जोड़ने के लिए सिलेंडर पर टैप करें',
+  'Full bill {amount}': 'पूरा बिल {amount}',
+  'All {amount}': 'पूरा {amount}',
+  'More than you hold — reduce the red quantities.': 'आपके पास इससे कम है — लाल वाली संख्या कम करें।',
+  'Other date': 'दूसरी तारीख',
+  'Your order goes to the office for approval; you will get WhatsApp updates at every step.': 'आपका ऑर्डर मंज़ूरी के लिए ऑफ़िस जाएगा; हर कदम पर WhatsApp पर जानकारी मिलेगी।',
 };
 
 // Order / request statuses shown as badges.

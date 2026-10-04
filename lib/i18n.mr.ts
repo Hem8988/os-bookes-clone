@@ -262,6 +262,19 @@ export const MR: Record<string, string> = {
   'This device could not be identified. Please use the DeskShark delivery app.': 'हे डिव्हाइस ओळखता आले नाही. कृपया DeskShark डिलिव्हरी ॲप वापरा.',
   'Your account is not active. Contact the administrator.': 'तुमचे अकाउंट सुरू नाही. ॲडमिनशी बोला.',
   'Cash submission to confirm': 'कॅश जमेची खात्री करा',
+  // POS screens
+  '{n} cylinders': '{n} सिलेंडर',
+  'Send & next order': 'पाठवा आणि पुढची ऑर्डर',
+  Recent: 'अलीकडील',
+  'More options': 'अधिक पर्याय',
+  'Filled from last order {no} ({date})': 'मागील ऑर्डर {no} ({date}) वरून भरले',
+  Clear: 'काढा',
+  'Tap a cylinder to add it': 'जोडण्यासाठी सिलेंडरवर टॅप करा',
+  'Full bill {amount}': 'पूर्ण बिल {amount}',
+  'All {amount}': 'सर्व {amount}',
+  'More than you hold — reduce the red quantities.': 'तुमच्याकडे यापेक्षा कमी आहे — लाल संख्या कमी करा.',
+  'Other date': 'दुसरी तारीख',
+  'Your order goes to the office for approval; you will get WhatsApp updates at every step.': 'तुमची ऑर्डर मंजुरीसाठी ऑफिसला जाईल; प्रत्येक टप्प्यावर WhatsApp वर माहिती मिळेल.',
 };
 
 export const STATUS_MR: Record<string, string> = {

@@ -67,7 +67,7 @@ export const Modal: React.FC<{ open: boolean; title: string; onClose: () => void
   if (!open) return null;
   return (
     <div className={cx('fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-center', full ? 'items-stretch p-0' : 'items-end sm:items-center p-0 sm:p-4')} onClick={onClose}>
-      <div className={cx('bg-white w-full shadow-2xl flex flex-col', full ? 'h-full' : cx('rounded-t-2xl sm:rounded-2xl max-h-[92vh]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'))} onClick={(e) => e.stopPropagation()}>
+      <div className={cx('bg-white w-full shadow-2xl flex flex-col', full ? 'h-full' : cx('rounded-t-2xl sm:rounded-2xl max-h-[92dvh]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'))} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
           <h3 className="font-black text-slate-900 text-sm">{title}</h3>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500">
@@ -75,7 +75,7 @@ export const Modal: React.FC<{ open: boolean; title: string; onClose: () => void
           </button>
         </div>
         <div className={cx('p-5 overflow-y-auto space-y-4', full && 'flex-1')}>{children}</div>
-        {footer && <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">{footer}</div>}
+        {footer && <div className="px-5 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] sm:pb-3 border-t border-slate-100 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
@@ -159,7 +159,7 @@ export function useToast(): [React.ReactNode, (message: string, tone?: 'ok' | 'e
     return () => window.clearTimeout(t);
   }, [state]);
   const node = state ? (
-    <div className={cx('fixed bottom-4 right-4 left-4 sm:left-auto z-[60] max-w-sm px-4 py-3 rounded-xl shadow-lg text-sm font-bold', state.tone === 'ok' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white')}>
+    <div className={cx('fixed bottom-20 md:bottom-4 right-4 left-4 sm:left-auto z-[60] max-w-sm px-4 py-3 rounded-xl shadow-lg text-sm font-bold', state.tone === 'ok' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white')}>
       {state.message}
     </div>
   ) : null;

@@ -24,7 +24,7 @@ export default function EinvoicePanel() {
   const onError = (m: string) => showToast(m, 'error');
   const [period, setPeriod] = usePeriod('month');
   const q = useApiData<Row[]>(`/api/books/einvoice?from=${period.from}&to=${period.to}`, onError);
-  const [view, setView] = useState<'b2b' | 'all'>('b2b');
+  const [view, setView] = useState<'b2b' | 'all'>('all');
   const rows = useMemo(() => (q.data ?? []).filter((r) => view === 'all' || r.b2b), [q.data, view]);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export default function EinvoicePanel() {
         <Kpi label="E-way bills" value={String(data.filter((r) => r.ewbNo).length)} tone="blue" />
       </div>
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3">
-        <Tabs value={view} onChange={(v) => { setView(v); setPicked([]); }} items={[['b2b', 'B2B only'], ['all', 'All invoices']]} />
+        <Tabs value={view} onChange={(v) => { setView(v); setPicked([]); }} items={[['all', 'All invoices'], ['b2b', 'B2B only']]} />
         <div className="text-xs font-semibold text-slate-500">{picked.length} selected</div>
         <Button busy={busy === 'einvoice'} disabled={!picked.length} onClick={() => build('einvoice')}><FileJson className="h-4 w-4" /> E-invoice JSON</Button>
         <div className="w-44"><input value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value.toUpperCase())} placeholder="Vehicle no. (if not set)" className={`${inputClass} py-1.5`} /></div>

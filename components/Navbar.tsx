@@ -11,6 +11,7 @@ import {
   Truck,
   Package,
   FileText,
+  X,
 } from 'lucide-react';
 import { Customer, Product, Invoice } from '../lib/types';
 import { useCompany } from '../lib/useCompany';
@@ -81,6 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [mobileSearch, setMobileSearch] = useState(false);
   const authName = userEmail;
   const company = useCompany();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -146,17 +148,18 @@ export const Navbar: React.FC<NavbarProps> = ({
     setActiveTab(tab, subTab);
     setIsSearchOpen(false);
     setSearchQuery('');
+    setMobileSearch(false);
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur px-4 md:px-6 shadow-sm">
+    <header className="sticky top-0 z-30 flex h-14 md:h-16 w-full items-center justify-between gap-2 border-b border-slate-200 bg-white/95 backdrop-blur px-3 md:px-6 shadow-sm pt-[env(safe-area-inset-top)]">
       {/* Left section: Firm/Branch dropdown */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800">
-          <Building2 className="h-4 w-4 text-emerald-600" />
-          <span className="font-bold">{company.name}</span>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 md:px-3 py-1.5 text-xs md:text-sm font-semibold text-emerald-800">
+          <Building2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="font-bold truncate">{company.name}</span>
           {company.gstin && (
-            <span className="ml-1 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 font-extrabold font-mono">{company.gstin}</span>
+            <span className="hidden sm:inline ml-1 rounded bg-emerald-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-900 font-extrabold font-mono">{company.gstin}</span>
           )}
         </div>
 
@@ -172,9 +175,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </div>
 
-      {/* Center Search Bar */}
-      <div className="hidden md:flex flex-1 max-w-md mx-6 relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+      {/* Center Search Bar (phones: drops down under the header from the search icon) */}
+      <div className={`${mobileSearch ? 'flex absolute inset-x-0 top-full p-2 bg-white border-b border-slate-200 shadow-md' : 'hidden'} md:flex md:static md:p-0 md:bg-transparent md:border-0 md:shadow-none md:relative flex-1 max-w-none md:max-w-md md:mx-6`}>
+        <Search className="absolute left-5 md:left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
           ref={searchInputRef}
           type="text"
@@ -279,11 +282,24 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Right section: System User & Quick Controls */}
-      <div className="flex items-center gap-2 md:gap-3">
+      <div className="flex shrink-0 items-center gap-1 md:gap-3">
+        <button
+          onClick={() => {
+            const next = !mobileSearch;
+            setMobileSearch(next);
+            if (next) window.setTimeout(() => searchInputRef.current?.focus(), 0);
+            else setIsSearchOpen(false);
+          }}
+          className="md:hidden p-2 rounded-full text-slate-600 hover:bg-slate-100"
+          title="Search"
+        >
+          {mobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+        </button>
         <NotificationBell
           onNavigate={(link) => {
-            const tab = new URL(link, window.location.origin).searchParams.get('tab');
-            if (tab) setActiveTab(tab);
+            const url = new URL(link, window.location.origin);
+            const tab = url.searchParams.get('tab');
+            if (tab) setActiveTab(tab, url.searchParams.get('sub') || undefined);
           }}
         />
 
@@ -292,7 +308,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           const displayName = typeof authName === 'string' && authName.trim() ? authName.trim() : userEmail;
           const avatarInitials = displayName.substring(0, 2).toUpperCase();
           return (
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+            <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200">
               <div className="h-8 w-8 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-inner">
                 {avatarInitials}
               </div>

@@ -69,7 +69,8 @@ import { useToast } from './ui';
 // Back-office shell for Super Admin, Manager and Accountant. Screens and the
 // data they load follow the user's permissions; everything is server-backed.
 
-type Crud<T> = { add: (item: T) => void; update: (item: T) => void; remove: (id: string) => void };
+/** Save handlers resolve to null on success or the error message (already shown as a toast), so a form can stay open on failure. */
+type Crud<T> = { add: (item: T) => Promise<string | null>; update: (item: T) => Promise<string | null>; remove: (id: string) => Promise<string | null> };
 
 export default function Workspace() {
   const { session, loading, can } = useSession();
@@ -144,11 +145,24 @@ export default function Workspace() {
   const challans = useServerCollection<DeliveryChallan>('challans', need(['documents'], 'masters.view'));
   const quotations = useServerCollection<Quotation>('quotations', need(['documents'], 'masters.view'));
 
-  /** Wrap a collection so screens get fire-and-forget handlers with error toasts. */
+  /** Toast the outcome of a save; resolve to the error message (or null) instead of throwing. */
+  const run = (job: Promise<unknown>, done: string) =>
+    job.then(
+      () => {
+        showToast(done);
+        return null;
+      },
+      (e: unknown) => {
+        const message = errorMessage(e);
+        showToast(message, 'error');
+        return message;
+      }
+    );
+  /** Wrap a collection so screens get save handlers with toasts (await them to know if it worked). */
   const crud = <T extends { id: string }>(coll: ReturnType<typeof useServerCollection<T>>, label: string): Crud<T> => ({
-    add: (item) => void coll.create(item).then(() => showToast(`${label} saved.`)).catch((e) => showToast(errorMessage(e), 'error')),
-    update: (item) => void coll.update(item).then(() => showToast(`${label} updated.`)).catch((e) => showToast(errorMessage(e), 'error')),
-    remove: (id) => void coll.remove(id).then(() => showToast(`${label} removed.`)).catch((e) => showToast(errorMessage(e), 'error')),
+    add: (item) => run(coll.create(item), `${label} saved.`),
+    update: (item) => run(coll.update(item), `${label} updated.`),
+    remove: (id) => run(coll.remove(id), `${label} removed.`),
   });
   const cust = crud(customers, 'Party');
   const prod = crud(products, 'Product');

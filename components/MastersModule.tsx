@@ -90,8 +90,9 @@ interface MastersModuleProps {
   onAddCategory?: (category: CategoryMaster) => void;
   onUpdateCategory?: (category: CategoryMaster) => void;
   onDeleteCategory?: (id: string) => void;
-  onAddCustomer?: (customer: Customer) => void;
-  onUpdateCustomer?: (customer: Customer) => void;
+  /** Resolves to an error message when saving failed (null / nothing = saved). */
+  onAddCustomer?: (customer: Customer) => void | Promise<string | null>;
+  onUpdateCustomer?: (customer: Customer) => void | Promise<string | null>;
   onDeleteCustomer?: (id: string) => void;
   onAddStaff?: (employee: EmployeeMaster) => void;
   onUpdateStaff?: (employee: EmployeeMaster) => void;
@@ -352,12 +353,11 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
     setIsVendorModalOpen(true);
   };
 
-  const handleSaveCustomer = (savedCust: Customer) => {
-    if (editingCustomer && onUpdateCustomer) {
-      onUpdateCustomer(savedCust);
-    } else if (onAddCustomer) {
-      onAddCustomer(savedCust);
-    }
+  /** Saves; resolves to the error message so the form can stay open on failure. */
+  const handleSaveCustomer = async (savedCust: Customer) => {
+    if (editingCustomer && onUpdateCustomer) return (await onUpdateCustomer(savedCust)) ?? null;
+    if (onAddCustomer) return (await onAddCustomer(savedCust)) ?? null;
+    return null;
   };
 
   const handleDeleteCustomerClick = (cust: Customer) => {

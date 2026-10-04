@@ -59,8 +59,9 @@ function ratesThisMonth(c: Customer, products: Product[], month: string) {
 interface CustomersModuleProps {
   customers: Customer[];
   products?: Product[];
-  onAddCustomer: (customer: Customer) => void;
-  onUpdateCustomer?: (customer: Customer) => void;
+  /** Resolves to an error message when saving failed (null / nothing = saved). */
+  onAddCustomer: (customer: Customer) => void | Promise<string | null>;
+  onUpdateCustomer?: (customer: Customer) => void | Promise<string | null>;
   onUpdateCustomers?: (updatedCustomers: Customer[]) => void;
   onDeleteCustomer?: (id: string) => void;
   defaultType?: 'Customer' | 'Vendor' | 'ALL';
@@ -208,18 +209,14 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
   };
 
   // Handle Save (Add or Update)
-  const handleSaveCustomer = (savedCustomer: Customer) => {
-    if (editingCustomer) {
-      if (onUpdateCustomer) {
-        onUpdateCustomer(savedCustomer);
-      } else {
-        onAddCustomer(savedCustomer);
-      }
-    } else {
-      onAddCustomer(savedCustomer);
-    }
+  /** Saves; the form stays open with the error when the server refuses. */
+  const handleSaveCustomer = async (savedCustomer: Customer) => {
+    const save = editingCustomer && onUpdateCustomer ? onUpdateCustomer : onAddCustomer;
+    const error = await save(savedCustomer);
+    if (typeof error === 'string') return error;
     setIsModalOpen(false);
     setEditingCustomer(null);
+    return null;
   };
 
   // Handle Delete Click

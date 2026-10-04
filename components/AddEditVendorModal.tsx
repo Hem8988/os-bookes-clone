@@ -5,6 +5,7 @@ import { X, Settings, Image as ImageIcon, Calendar, ChevronDown, Plus, Trash2, L
 import { api, errorMessage } from '../lib/api';
 import { Customer, Product, PartyRate } from '../lib/types';
 import { CUSTOMER_SEGMENTS, PAYMENT_TERMS } from '../lib/settings';
+import { isValidGstin, isValidMobile } from '../lib/phone';
 import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
 import { AddableSelect } from './AddableSelect';
 import { Combobox } from './Combobox';
@@ -15,7 +16,8 @@ interface AddEditVendorModalProps {
   defaultType?: 'Vendor' | 'Customer';
   products?: Product[];
   onClose: () => void;
-  onSave: (customer: Customer) => void;
+  /** Save the party; resolve to an error message to keep the form open (nothing / null = saved). */
+  onSave: (customer: Customer) => void | Promise<string | null | void>;
 }
 
 /** Placeholder id for a new party until the server gives it one. */
@@ -128,6 +130,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const [areas, setAreas] = useState<{ id: string; name: string; route: { name: string } | null }[]>([]);
   const [routes, setRoutes] = useState<{ id: string; name: string; defaultDeliveryBoyId: string | null }[]>([]);
   const [paymentTerms, setPaymentTerms] = useState('COD');
+  // Save state: problems found by the checks or returned by the server keep the form open.
+  const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ field: string; message: string }[]>([]);
+  const formBodyRef = React.useRef<HTMLDivElement>(null);
   // Terms the business made itself ("45 days", "Advance"…), shared across parties.
   const [customTerms, setCustomTerms] = useState<{ value: string; label: string; days: number }[]>([]);
   useEffect(() => {
@@ -158,6 +164,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
 
   useEffect(() => {
     const today = getTodayDateString();
+    setFormErrors([]);
     if (customerToEdit) {
       // Show exactly what is saved: old entries kept as product names are turned into ids,
       // and ids of products that no longer exist are dropped.
@@ -359,17 +366,31 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   const setDepositLine = (productId: string, patch: { fee?: number | ''; qty?: number | ''; status?: DepositStatus; voucherNo?: string }) =>
     setDepositLines((all) => ({ ...all, [productId]: { fee: all[productId]?.fee ?? '', qty: all[productId]?.qty ?? '', ...patch } }));
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!partyName.trim()) {
-      alert('Please enter Party Name');
-      return;
-    }
+  /** Same checks the server makes, so mistakes show here with the form still filled in. */
+  const validate = () => {
+    const errors: { field: string; message: string }[] = [];
+    if (!partyName.trim()) errors.push({ field: 'name', message: 'Customer legal name is required.' });
+    if (!address.trim()) errors.push({ field: 'address', message: 'Billing address is required.' });
+    if (!isValidMobile(mobileNumber)) errors.push({ field: 'mobile', message: 'Enter a valid 10-digit billing mobile number.' });
+    if (whatsappNumber.trim() && !isValidMobile(whatsappNumber)) errors.push({ field: 'whatsapp', message: 'Enter a valid 10-digit WhatsApp number.' });
+    if (gstApplicable !== 'NON-GST' && gstin.trim() && !isValidGstin(gstin.trim())) errors.push({ field: 'gstin', message: 'GSTIN format is not valid — 15 characters like 23ABCDE1234F1Z5.' });
+    if (emailAddress.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress.trim())) errors.push({ field: 'email', message: 'Email is not valid.' });
     const noVoucher = depositRows.filter((r) => r.voucherMissing);
-    if (noVoucher.length) {
-      alert(`Enter the SV / TV voucher number for: ${noVoucher.map((r) => r.product.name).join(', ')} (needed when the deposit is Free or Paid).`);
-      return;
-    }
+    if (noVoucher.length) errors.push({ field: 'voucher', message: `Enter the SV / TV voucher number for: ${noVoucher.map((r) => r.product.name).join(', ')} (needed when the deposit is Free or Paid).` });
+    return errors;
+  };
+  /** Show the problems at the top of the form and mark the boxes. */
+  const showErrors = (errors: { field: string; message: string }[]) => {
+    setFormErrors(errors);
+    formBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    const errors = validate();
+    if (errors.length) return showErrors(errors);
+    setFormErrors([]);
 
     const numericOpBal = Number(openingBalance) || 0;
     const finalBalance = openingBalanceType === 'Cr' ? -Math.abs(numericOpBal) : Math.abs(numericOpBal);
@@ -440,9 +461,23 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       defaultProductIds: assignedCylinderTypes.filter((id) => products.some((p) => p.id === id)),
     };
 
-    onSave(savedCustomer);
-    onClose();
+    // Wait for the server: on an error the form stays open with everything still filled in.
+    setSaving(true);
+    try {
+      const error = await onSave(savedCustomer);
+      if (typeof error === 'string') {
+        const field = /gstin/i.test(error) ? 'gstin' : /whatsapp/i.test(error) ? 'whatsapp' : /mobile/i.test(error) ? 'mobile' : /address/i.test(error) ? 'address' : /email/i.test(error) ? 'email' : /name/i.test(error) ? 'name' : 'server';
+        return showErrors([{ field, message: error }]);
+      }
+      onClose();
+    } catch (err) {
+      showErrors([{ field: 'server', message: errorMessage(err) }]);
+    } finally {
+      setSaving(false);
+    }
   };
+  /** Red outline for a box the last check complained about. */
+  const bad = (field: string) => (formErrors.some((x) => x.field === field) ? ' border-rose-500! ring-2 ring-rose-200' : '');
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex justify-end overflow-hidden animate-in fade-in duration-200">
@@ -482,7 +517,16 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden text-xs font-semibold text-slate-800 dark:text-slate-200">
           
           {/* Scrollable Form Body Container (Centered & Spacious) */}
-          <div className="party-form flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-7xl mx-auto w-full">
+          <div ref={formBodyRef} className="party-form flex-1 overflow-y-auto p-6 sm:p-8 space-y-5 max-w-7xl mx-auto w-full">
+            {formErrors.length > 0 && (
+              <div role="alert" className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-800">
+                <div className="text-sm font-black">Not saved — please fix this:</div>
+                <ul className="mt-1 list-disc pl-5 text-xs font-semibold space-y-0.5">
+                  {formErrors.map((x) => <li key={x.field + x.message}>{x.message}</li>)}
+                </ul>
+                <div className="mt-1 text-[11px] text-rose-600">Everything you typed is still here.</div>
+              </div>
+            )}
           
 
 
@@ -527,7 +571,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   placeholder={partyCategory === 'Vendor' ? 'e.g. Indian Oil Corporation' : 'e.g. Rbrands Asia Pvt Ltd'}
                   value={partyName}
                   onChange={(e) => setPartyName(e.target.value)}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm"
+                  className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400 font-bold text-sm${bad('name')}`}
                 />
               </div>
 
@@ -568,7 +612,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 placeholder="Enter Official Billing Address"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400${bad('address')}`}
               />
             </div>
             
@@ -581,7 +625,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   placeholder="Official / Accounts Contact Number"
                   value={mobileNumber}
                   onChange={(e) => setMobileNumber(e.target.value)}
-                  className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                  className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400${bad('mobile')}`}
                 />
               </div>
 
@@ -758,7 +802,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 placeholder="Enter Gst Number"
                 value={gstin}
                 onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400${bad('gstin')}`}
               />
             </div>
             )}
@@ -781,7 +825,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 placeholder="Enter Email Address"
                 value={emailAddress}
                 onChange={(e) => setEmailAddress(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                className={`w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400${bad('email')}`}
               />
             </div>
 
@@ -1175,9 +1219,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             {/* Submit Button (Green) */}
             <button
               type="submit"
-              className="px-8 py-2.5 rounded-xl bg-[#28a745] hover:bg-emerald-600 text-white font-black text-xs shadow-lg transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+              disabled={saving}
+              className="px-8 py-2.5 rounded-xl bg-[#28a745] hover:bg-emerald-600 disabled:opacity-60 text-white font-black text-xs shadow-lg transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              <span>Submit</span>
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              <span>{saving ? "Saving…" : "Submit"}</span>
             </button>
 
             {/* Close Button (Red) */}

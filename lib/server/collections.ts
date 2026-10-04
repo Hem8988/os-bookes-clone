@@ -25,6 +25,14 @@ interface FlatCollection {
   where?: Row;
   defaults?: Row;
   softDelete?: Row;
+  /**
+   * Soft-delete only when the record is in use: rows in these models pointing at
+   * it (by `field`) keep it; otherwise it is removed for real. Soft-deleted rows
+   * get `extra.deleted` and drop out of the list.
+   */
+  usedBy?: { model: string; field: string }[];
+  /** Rows in these models (by `field`) are removed together with an unused record. */
+  cascade?: { model: string; field: string }[];
   orderBy?: Row;
 }
 
@@ -95,6 +103,9 @@ const COLLECTIONS: Record<string, FlatCollection | CustomCollection> = {
     },
     readOnly: ['stock'],
     softDelete: { active: false },
+    // A product with stock, orders, bills… stays for those records (hidden); an unused one is deleted.
+    usedBy: ['orderItem', 'deliveryItem', 'stockBalance', 'inventoryTransaction', 'stockTransferItem', 'customerCylinderBalance', 'invoiceItem', 'purchaseBillItem', 'creditNoteItem', 'debitNoteItem', 'cylinderVoucher', 'cylinderAsset'].map((model) => ({ model, field: 'productId' })),
+    cascade: [{ model: 'partyRate', field: 'productId' }],
     orderBy: { name: 'asc' },
   },
   followUps: {
@@ -270,6 +281,7 @@ type Delegate = {
   create: (args: unknown) => Promise<Row>;
   update: (args: unknown) => Promise<Row>;
   delete: (args: unknown) => Promise<Row>;
+  deleteMany: (args: unknown) => Promise<unknown>;
 };
 const delegate = (db: Tx | typeof prisma, model: string) => (db as unknown as Record<string, Delegate>)[model];
 
@@ -289,7 +301,8 @@ export async function listCollection(auth: AuthContext, name: string) {
   assertAccess(auth, cfg.read);
   if (cfg.kind === 'custom') return cfg.list(auth);
   const rows = await delegate(prisma, cfg.model).findMany({ where: { tenantId: auth.tenantId, ...(cfg.where || {}) }, orderBy: cfg.orderBy });
-  return rows.map(toClient);
+  // Deleted-but-still-referenced records stay in the database, not on screen.
+  return rows.filter((r) => !(r.extra as Row | null)?.deleted).map(toClient);
 }
 
 export type CollectionAction = { action: 'create' | 'update' | 'delete'; item?: Row; id?: string; reason?: string };
@@ -328,8 +341,19 @@ export async function mutateCollection(auth: AuthContext, name: string, input: C
       await audit(tx, auth, { action: `${name.toUpperCase()}_UPDATED`, entityType: cfg.model, entityId: id });
       return toClient(row);
     }
-    if (cfg.softDelete) await model.update({ where: { id }, data: cfg.softDelete });
-    else await model.delete({ where: { id } });
+    let inUse = !!cfg.softDelete;
+    if (cfg.softDelete && cfg.usedBy) {
+      inUse = false;
+      for (const ref of cfg.usedBy) if (await delegate(tx, ref.model).findFirst({ where: { [ref.field]: id }, select: { id: true } } as unknown)) inUse = true;
+    }
+    if (inUse) {
+      // Hidden from the list when the collection deletes for real otherwise; kept for old records.
+      const extra = cfg.usedBy ? ({ ...((existing.extra as Row) || {}), deleted: true, deletedBy: auth.name } as Prisma.InputJsonValue) : undefined;
+      await model.update({ where: { id }, data: { ...cfg.softDelete, ...(extra ? { extra } : {}) } });
+    } else {
+      for (const ref of cfg.cascade || []) await delegate(tx, ref.model).deleteMany({ where: { [ref.field]: id } });
+      await model.delete({ where: { id } });
+    }
     await audit(tx, auth, { action: `${name.toUpperCase()}_DELETED`, entityType: cfg.model, entityId: id, oldValue: existing });
     return null;
   });

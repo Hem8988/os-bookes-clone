@@ -332,9 +332,13 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       // The rate is set once per cylinder type in Masters → Products.
       const fee = Number(p.emptyDepositValue) || 0;
       const qty = line && line.qty !== '' ? Number(line.qty) : 0;
-      const status: DepositStatus = line?.status || 'Pending';
-      // Free = cylinders given without a deposit for this customer.
-      return { product: p, fee, qty, total: status === 'Free' ? 0 : fee * qty, status, voucherNo: line?.voucherNo ?? '' };
+      // No deposit set for the cylinder → always Free; a cylinder with a deposit can never be Free.
+      const saved: DepositStatus = line?.status || 'Pending';
+      const status: DepositStatus = !fee ? 'Free' : saved === 'Free' ? 'Pending' : saved;
+      const voucherNo = line?.voucherNo ?? '';
+      // Free and Paid cylinders must carry the SV / TV voucher number.
+      const voucherMissing = qty > 0 && (status === 'Free' || status === 'Paid') && !voucherNo.trim();
+      return { product: p, fee, qty, total: status === 'Free' ? 0 : fee * qty, status, voucherNo, voucherMissing };
     });
   const depositTotal = depositRows.reduce((sum, r) => sum + r.total, 0);
   const setDepositLine = (productId: string, patch: { fee?: number | ''; qty?: number | ''; status?: DepositStatus; voucherNo?: string }) =>
@@ -344,6 +348,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     e.preventDefault();
     if (!partyName.trim()) {
       alert('Please enter Party Name');
+      return;
+    }
+    const noVoucher = depositRows.filter((r) => r.voucherMissing);
+    if (noVoucher.length) {
+      alert(`Enter the SV / TV voucher number for: ${noVoucher.map((r) => r.product.name).join(', ')} (needed when the deposit is Free or Paid).`);
       return;
     }
 
@@ -630,9 +639,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 {hindiError && <p className="text-[11px] font-semibold text-rose-600">{hindiError}</p>}
               </div>
               <div className="space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Contact Person</label>
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Contact Person <span className="font-semibold text-slate-400">(Manager / Owner / Staff)</span></label>
                 <Combobox
-                  placeholder="Search your delivery boys or type a name"
+                  placeholder="e.g. Ramesh — Marketing Manager"
                   options={deliveryBoys.map((b) => ({ value: b.name, hint: b.mobile || 'Delivery boy' }))}
                   value={deliveryContactPerson}
                   onChange={(name) => {
@@ -661,10 +670,10 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
             {/* Row 3: Delivery Mobile, PIN & City */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
-                <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Mobile Number</label>
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Contact Person Mobile</label>
                 <input
                   type="text"
-                  placeholder="Manager / Shop Phone Number"
+                  placeholder="Mobile of the contact person"
                   value={deliveryPhone}
                   onChange={(e) => setDeliveryPhone(e.target.value)}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
@@ -975,16 +984,28 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                         </td>
                         <td className="p-2 text-right font-mono font-black text-emerald-700">{r.status === 'Free' ? <span className="text-sky-700">Free</span> : r.total.toLocaleString('en-IN')}</td>
                         <td className="p-2">
-                          <select value={r.status} onChange={(e) => setDepositLine(r.product.id, { status: e.target.value as DepositStatus })} className={`px-2 py-1.5 rounded border font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 ${r.status === 'Pending' ? 'border-orange-300 text-orange-700' : r.status === 'Paid' ? 'border-emerald-300 text-emerald-700' : r.status === 'Free' ? 'border-sky-300 text-sky-700' : 'border-slate-300 text-slate-700'}`}>
-                            <option value="Pending">🟠 Pending</option>
-                            <option value="Paid">🟢 Paid</option>
-                            <option value="Adjusted">🟡 Adjusted in bill</option>
-                            <option value="Refunded">🔴 Refunded</option>
-                            <option value="Free">🆓 Free (no deposit)</option>
-                          </select>
+                          {!r.fee ? (
+                            // No deposit in the product master: fixed as Free.
+                            <span title="No deposit set for this cylinder in Masters → Products, so it is always free" className="inline-flex items-center gap-1 px-2 py-1.5 rounded border border-sky-300 bg-sky-50 font-bold text-sky-700 cursor-not-allowed">
+                              🆓 Free (no deposit) 🔒
+                            </span>
+                          ) : (
+                            <select value={r.status} onChange={(e) => setDepositLine(r.product.id, { status: e.target.value as DepositStatus })} className={`px-2 py-1.5 rounded border font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 ${r.status === 'Pending' ? 'border-orange-300 text-orange-700' : r.status === 'Paid' ? 'border-emerald-300 text-emerald-700' : 'border-slate-300 text-slate-700'}`}>
+                              <option value="Pending">🟠 Pending</option>
+                              <option value="Paid">🟢 Paid</option>
+                              <option value="Adjusted">🟡 Adjusted in bill</option>
+                              <option value="Refunded">🔴 Refunded</option>
+                            </select>
+                          )}
                         </td>
                         <td className="p-2">
-                          <input value={r.voucherNo} onChange={(e) => setDepositLine(r.product.id, { voucherNo: e.target.value.toUpperCase() })} placeholder="SV / TV no." className="w-36 px-2 py-1.5 rounded border border-slate-300 font-mono font-bold text-indigo-700 uppercase focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                          <input
+                            value={r.voucherNo}
+                            onChange={(e) => setDepositLine(r.product.id, { voucherNo: e.target.value.toUpperCase() })}
+                            placeholder={r.qty > 0 && (r.status === 'Free' || r.status === 'Paid') ? 'SV / TV no. *' : 'SV / TV no.'}
+                            className={`w-36 px-2 py-1.5 rounded border font-mono font-bold text-indigo-700 uppercase focus:outline-none focus:ring-1 focus:ring-teal-500 ${r.voucherMissing ? 'border-rose-400 bg-rose-50 placeholder-rose-400' : 'border-slate-300'}`}
+                          />
+                          {r.voucherMissing && <div className="mt-0.5 text-[10px] font-bold text-rose-600">Required</div>}
                         </td>
                       </tr>
                     ))}

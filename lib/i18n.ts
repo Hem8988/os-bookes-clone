@@ -121,6 +121,7 @@ const HI: Record<string, string> = {
   Customer: 'ग्राहक',
   'Search name, mobile or code': 'नाम, मोबाइल या कोड से खोजें',
   'No customer found.': 'कोई ग्राहक नहीं मिला।',
+  'Type to search more customers': 'और ग्राहक देखने के लिए नाम लिखें',
   Change: 'बदलें',
   'Product…': 'प्रोडक्ट…',
   'Add product': 'प्रोडक्ट जोड़ें',

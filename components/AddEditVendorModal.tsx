@@ -7,6 +7,7 @@ import { Customer, Product, PartyRate } from '../lib/types';
 import { CUSTOMER_SEGMENTS, PAYMENT_TERMS } from '../lib/settings';
 import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
 import { AddableSelect } from './AddableSelect';
+import { Combobox } from './Combobox';
 
 interface AddEditVendorModalProps {
   isOpen: boolean;
@@ -552,14 +553,11 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </div>
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Contact Person</label>
-                <input
-                  type="text"
-                  list="delivery-contact-people"
-                  autoComplete="off"
+                <Combobox
                   placeholder="Search your delivery boys or type a name"
+                  options={deliveryBoys.map((b) => ({ value: b.name, hint: b.mobile || 'Delivery boy' }))}
                   value={deliveryContactPerson}
-                  onChange={(e) => {
-                    const name = e.target.value;
+                  onChange={(name) => {
                     setDeliveryContactPerson(name);
                     // Picking one of your delivery boys fills in his mobile (unless a different number is typed already).
                     const boy = deliveryBoys.find((b) => b.name.trim().toLowerCase() === name.trim().toLowerCase());
@@ -569,10 +567,6 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                 />
               </div>
             </div>
-
-            <datalist id="delivery-contact-people">
-              {deliveryBoys.map((b) => <option key={b.id} value={b.name}>{b.mobile || 'Delivery boy'}</option>)}
-            </datalist>
 
             {/* Row 2: Delivery Address */}
             <div className="space-y-1">
@@ -586,8 +580,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               />
             </div>
 
-            {/* Row 3: Delivery Mobile & City */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Row 3: Delivery Mobile, PIN & City */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Mobile Number</label>
                 <input
@@ -596,6 +590,18 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   value={deliveryPhone}
                   onChange={(e) => setDeliveryPhone(e.target.value)}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-900 dark:text-slate-100 block">Delivery Pin Code</label>
+                <PinInput
+                  value={deliveryPincode}
+                  onChange={setDeliveryPincode}
+                  onFound={(info) => {
+                    // A delivery PIN is specific to this address, so its city wins over the billing one.
+                    if (info.city) setDeliveryCity(info.city);
+                  }}
                 />
               </div>
 

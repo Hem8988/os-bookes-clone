@@ -531,7 +531,7 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew }:
   );
 }
 
-interface PickCustomer { id: string; customerCode: string; name: string; shortName: string | null; phone: string; area: string | null; defaultProductIds: string[]; deliveryAddresses: { id: string; address: string; isDefault: boolean }[] }
+interface PickCustomer { id: string; customerCode: string; name: string; shortName: string | null; phone: string; address?: string | null; area: string | null; defaultProductIds: string[]; deliveryAddresses: { id: string; address: string; isDefault: boolean }[] }
 
 /** Field order taken by the delivery boy; the office approves it, then it comes back to him. */
 function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onCreated: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
@@ -547,16 +547,15 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Server-side customer search (debounced).
+  // Customer list: everyone as soon as the sheet opens, then a server search as you type (debounced).
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) return;
     let alive = true;
     const timer = window.setTimeout(() => {
-      api<PickCustomer[]>(`/api/customers?search=${encodeURIComponent(q)}`)
-        .then((rows) => alive && setMatches(rows.slice(0, 10)))
+      api<PickCustomer[]>(`/api/customers${q ? `?search=${encodeURIComponent(q)}` : ''}`)
+        .then((rows) => alive && setMatches(rows))
         .catch(() => alive && setMatches([]));
-    }, 300);
+    }, q ? 250 : 0);
     return () => {
       alive = false;
       window.clearTimeout(timer);
@@ -570,6 +569,10 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
     const defaults = c.defaultProductIds.filter((id) => products.some((p) => p.id === id));
     setLines(defaults.length ? defaults.map((id) => ({ productId: id, qty: '' })) : [{ productId: '', qty: '' }]);
   };
+
+  // Only the cylinder types assigned to this customer; everything if none are assigned.
+  const own = customer?.defaultProductIds.filter((id) => products.some((p) => p.id === id)) ?? [];
+  const choices = own.length ? products.filter((p) => own.includes(p.id)) : products;
 
   const items = lines.filter((l) => l.productId && Number(l.qty) > 0).map((l) => ({ productId: l.productId, qty: Number(l.qty) }));
 
@@ -608,15 +611,20 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
       {!customer ? (
         <Field label={t('Customer')}>
           <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search name, mobile or code')} className={inputClass} />
-          <div className="mt-1 space-y-1">
-            {query.trim().length >= 2 && matches?.length === 0 && <div className="text-[11px] text-slate-400">{t('No customer found.')}</div>}
-            {query.trim().length >= 2 &&
-              matches?.map((c) => (
-                <button key={c.id} onClick={() => pick(c)} className="w-full text-left p-2 rounded-lg border border-slate-200 hover:border-emerald-500 text-xs">
-                  <strong>{partyLabel(c.shortName, c.name)}</strong> · {c.phone}
-                  <div className="text-[10px] text-slate-400">{[c.customerCode, c.area].filter(Boolean).join(' · ')}</div>
-                </button>
-              ))}
+          <div className="mt-2 max-h-[55vh] overflow-y-auto space-y-1.5 pr-1">
+            {matches === null && <div className="py-4 text-center text-[11px] text-slate-400">{t('Loading…')}</div>}
+            {matches?.length === 0 && <div className="py-4 text-center text-[11px] text-slate-400">{t('No customer found.')}</div>}
+            {matches?.map((c) => (
+              <button key={c.id} onClick={() => pick(c)} className="w-full flex items-center gap-3 text-left px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-500 hover:bg-emerald-50 active:bg-emerald-100">
+                <span className="h-9 w-9 shrink-0 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-sm font-black">{(partyLabel(c.shortName, c.name) || '?').trim().charAt(0).toUpperCase()}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-black text-slate-900 truncate">{partyLabel(c.shortName, c.name)}</span>
+                  <span className="block text-[11px] text-slate-500 truncate">{[c.area, c.deliveryAddresses.find((a) => a.isDefault)?.address || c.address].filter(Boolean).join(' · ') || c.customerCode}</span>
+                </span>
+                <span className="shrink-0 text-[11px] font-mono text-slate-600">{c.phone}</span>
+              </button>
+            ))}
+            {(matches?.length ?? 0) >= 100 && <div className="py-1 text-center text-[10px] text-slate-400">{t('Type to search more customers')}</div>}
           </div>
         </Field>
       ) : (
@@ -635,7 +643,7 @@ function NewOrderSheet({ onClose, onCreated, toast }: { onClose: () => void; onC
               <div key={idx} className="grid grid-cols-12 gap-2">
                 <select value={line.productId} onChange={(e) => setLines(lines.map((l, i) => (i === idx ? { ...l, productId: e.target.value } : l)))} className={cx(inputClass, 'col-span-7')}>
                   <option value="">{t('Product…')}</option>
-                  {products.map((p) => (
+                  {choices.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>

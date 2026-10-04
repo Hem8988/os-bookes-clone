@@ -6,6 +6,7 @@ import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
 import { SupplierSelect } from './books/SupplierSelect';
+import { Combobox } from './Combobox';
 import { TruckPicker } from './TruckPicker';
 import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
 
@@ -547,8 +548,7 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
       </div>
       {editor}
       <Field label="Vehicle (gaadi)" hint="Filled in from the delivery boy's vehicle — pick or type another if needed.">
-        <input list="transfer-vehicles" value={vehicle} onChange={(e) => setVehicle(e.target.value.toUpperCase())} placeholder="e.g. MH14LL3611" className={inputClass} />
-        <datalist id="transfer-vehicles">{vehicles.map((v) => <option key={v.number} value={v.number}>{v.driverName || ''}</option>)}</datalist>
+        <Combobox value={vehicle} onChange={(v) => setVehicle(v.toUpperCase())} placeholder="e.g. MH14LL3611" options={vehicles.map((v) => ({ value: v.number, hint: v.driverName || '' }))} className={inputClass} />
       </Field>
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
     </Modal>

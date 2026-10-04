@@ -106,6 +106,7 @@ export const MR: Record<string, string> = {
   Customer: 'ग्राहक',
   'Search name, mobile or code': 'नाव, मोबाइल किंवा कोडने शोधा',
   'No customer found.': 'ग्राहक सापडला नाही.',
+  'Type to search more customers': 'आणखी ग्राहकांसाठी नाव टाइप करा',
   Change: 'बदला',
   'Product…': 'प्रॉडक्ट…',
   'Add product': 'प्रॉडक्ट जोडा',

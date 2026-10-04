@@ -357,6 +357,10 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
     setLines(defaults.length ? defaults.map((id) => ({ productId: id, qty: '' })) : [{ productId: '', qty: '' }]);
   };
 
+  // Only the cylinder types assigned to this customer; everything if none are assigned.
+  const own = customer?.defaultProductIds.filter((id) => products.some((p) => p.id === id)) ?? [];
+  const choices = own.length ? products.filter((p) => own.includes(p.id)) : products;
+
   const estimate = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (products.find((p) => p.id === l.productId)?.salePrice || 0), 0);
 
   const submit = async () => {
@@ -422,7 +426,7 @@ function NewOrderModal({ open, boys, onClose, onCreated }: { open: boolean; boys
           <div key={idx} className="grid grid-cols-12 gap-2">
             <select value={line.productId} onChange={(e) => setLines(lines.map((l, i) => (i === idx ? { ...l, productId: e.target.value } : l)))} className={cx(inputClass, 'col-span-8')}>
               <option value="">Product…</option>
-              {products.map((p) => (
+              {choices.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>

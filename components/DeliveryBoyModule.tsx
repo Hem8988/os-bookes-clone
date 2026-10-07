@@ -760,6 +760,11 @@ function OrderCard({ order: o, queued, busy, onOpen, onAccept, onDecline }: { or
           {o.status === 'REJECTED' && o.rejectionReason && <div className="text-[11px] text-rose-700 font-semibold">{t('Reason: {reason}', { reason: o.rejectionReason })}</div>}
           <div className="mt-1 flex flex-wrap gap-1">
             <StatusBadge status={o.status} label={status(o.status)} />
+            {o.vehicleNumber && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-700">
+                <Truck className="h-3 w-3" />{o.vehicleNumber}
+              </span>
+            )}
             {queued && <Badge tone="amber">{t('Pending sync')}</Badge>}
           </div>
         </div>

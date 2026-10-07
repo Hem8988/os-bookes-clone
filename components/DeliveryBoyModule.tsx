@@ -25,6 +25,7 @@ import {
   StopCircle,
   Truck,
   UploadCloud,
+  Users,
   Wallet,
   Warehouse,
   Wifi,
@@ -237,6 +238,9 @@ export default function DeliveryBoyModule() {
   }, [summary?.status]);
 
   const pendingIds = useMemo(() => new Set(queue.map((q) => String(q.payload.orderId))), [queue]);
+  // Day not started or already closed: only Today is usable until he starts the (next) day.
+  const locked = !!summary && summary.status !== 'STARTED';
+  const activeTab: Tab = locked ? 'home' : tab;
 
   return (
     <div className="min-h-dvh w-full bg-slate-100 flex flex-col max-w-lg mx-auto overflow-x-hidden">
@@ -262,7 +266,7 @@ export default function DeliveryBoyModule() {
       </header>
 
       <main className="flex-1 p-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] space-y-3">
-        {tab === 'home' && (
+        {activeTab === 'home' && (
           <HomeTab
             summary={summary}
             error={summaryError}
@@ -278,12 +282,12 @@ export default function DeliveryBoyModule() {
             toast={showToast}
           />
         )}
-        {tab === 'orders' && (
+        {activeTab === 'orders' && (
           <OrdersTab orders={orders} pendingIds={pendingIds} dayStarted={summary?.status === 'STARTED'} onOpen={setOpenOrder} onRefresh={refresh} onNew={() => setCreating(true)} toast={showToast} />
         )}
-        {tab === 'collect' && <CollectTab dayStarted={summary?.status === 'STARTED'} onChanged={refresh} toast={showToast} />}
-        {tab === 'wallet' && <WalletTab toast={showToast} />}
-        {tab === 'stock' && <StockTab userId={session?.user.id || ''} stock={stock} onChanged={refresh} toast={showToast} />}
+        {activeTab === 'collect' && <CollectTab dayStarted={summary?.status === 'STARTED'} onChanged={refresh} toast={showToast} />}
+        {activeTab === 'wallet' && <WalletTab toast={showToast} />}
+        {activeTab === 'stock' && <StockTab userId={session?.user.id || ''} stock={stock} onChanged={refresh} toast={showToast} />}
       </main>
 
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white border-t border-slate-200 grid grid-cols-5 z-30 pb-[env(safe-area-inset-bottom)]">
@@ -294,7 +298,7 @@ export default function DeliveryBoyModule() {
           ['wallet', Wallet, 'Cash'],
           ['stock', Package, 'Stock'],
         ] as const).map(([key, Icon, label]) => (
-          <button key={key} onClick={() => setTab(key)} className={cx('relative py-2.5 flex flex-col items-center gap-0.5 text-[10px] font-black', tab === key ? 'text-emerald-700' : 'text-slate-400')}>
+          <button key={key} disabled={locked && key !== 'home'} onClick={() => setTab(key)} className={cx('relative py-2.5 flex flex-col items-center gap-0.5 text-[10px] font-black disabled:opacity-35', activeTab === key ? 'text-emerald-700' : 'text-slate-400')}>
             <Icon className="h-5 w-5" />
             {t(label)}
             {key === 'home' && queue.length > 0 && <span className="absolute top-2 right-1/3 h-2 w-2 rounded-full bg-amber-500" />}
@@ -340,6 +344,15 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
   const { t } = useT();
   const [busy, setBusy] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Day-end stock hand-over: godown (default), one of our trucks, or another delivery boy.
+  const [handTo, setHandTo] = useState<'GODOWN' | 'TRUCK' | 'BOY'>('GODOWN');
+  const [handId, setHandId] = useState('');
+  const [targets, setTargets] = useState<{ trucks: { number: string; type: string; driverName: string | null }[]; deliveryBoys: { id: string; name: string }[] } | null>(null);
+  const hasStockToReturn = (summary?.stockReturn?.toReturn.length ?? 0) > 0;
+  useEffect(() => {
+    if (!confirmClose || !hasStockToReturn || targets) return;
+    api<NonNullable<typeof targets>>('/api/delivery/day-log?targets=1').then(setTargets).catch((e) => toast(errorMessage(e), 'error'));
+  }, [confirmClose, hasStockToReturn, targets, toast]);
 
   const startDay = async () => {
     setBusy(true);
@@ -373,8 +386,10 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
   const returnStock = async () => {
     setBusy(true);
     try {
-      await api('/api/delivery/day-log', { body: { action: 'RETURN_STOCK' } });
-      toast('Stock return sent — the admin accepts it into the godown.');
+      await api('/api/delivery/day-log', {
+        body: { action: 'RETURN_STOCK', to: handTo, vehicleNumber: handTo === 'TRUCK' ? handId : null, deliveryBoyId: handTo === 'BOY' ? handId : null },
+      });
+      toast('Stock hand-over sent — the admin accepts it.');
       await onChanged();
     } catch (e) {
       toast(errorMessage(e), 'error');
@@ -417,7 +432,13 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
         )}
       </div>
 
-      {/* Quick actions: everything the day needs, one tap from Today. */}
+      {/* Quick actions: everything the day needs, one tap from Today (locked until the day is started). */}
+      {s.status !== 'STARTED' && (
+        <div className="rounded-xl p-3 bg-sky-50 text-sky-800 text-xs font-bold flex gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {t(s.status === 'CLOSED' ? 'Day closed — everything opens again when you start your next day.' : 'Start your day to use orders, collection, cash and stock.')}
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-2">
         {([
           [Plus, 'New order', onNew, 'bg-emerald-600 text-white'],
@@ -425,7 +446,7 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
           [Wallet, 'Submit cash', () => onGo('wallet'), 'bg-white text-sky-700'],
           [Package, 'Stock', () => onGo('stock'), 'bg-white text-violet-700'],
         ] as const).map(([Icon, label, onClick, tone]) => (
-          <button key={label} type="button" onClick={onClick} className={cx('rounded-2xl border border-slate-200 py-3 px-1 flex flex-col items-center gap-1 text-[11px] font-black leading-tight text-center active:scale-95 transition', tone)}>
+          <button key={label} type="button" disabled={s.status !== 'STARTED'} onClick={onClick} className={cx('rounded-2xl border border-slate-200 py-3 px-1 flex flex-col items-center gap-1 text-[11px] font-black leading-tight text-center active:scale-95 transition disabled:opacity-40 disabled:active:scale-100', tone)}>
             <Icon className="h-5 w-5" />
             {t(label)}
           </button>
@@ -450,7 +471,7 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
         </div>
       )}
 
-      {s.status !== 'CLOSED' && <TodayOrders orders={orders} pendingIds={pendingIds} onOpen={onOpen} onSeeAll={() => onGo('orders')} onRefresh={onChanged} toast={toast} />}
+      {s.status === 'STARTED' && <TodayOrders orders={orders} pendingIds={pendingIds} onOpen={onOpen} onSeeAll={() => onGo('orders')} onRefresh={onChanged} toast={toast} />}
 
       <div className="grid grid-cols-2 gap-2">
         <Tile label={t('Deliveries')} value={s.deliveries.count} sub={t('{n} awaiting accounts', { n: s.deliveries.pendingVerification })} />
@@ -510,7 +531,7 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold space-y-2">
             <div className="flex gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              {t('Send your stock back to the godown before closing the day.')}
+              {t('Hand over your stock (godown, truck or another delivery boy) before closing the day.')}
             </div>
             {toReturn.map((r) => (
               <div key={r.productId} className="flex justify-between font-semibold">
@@ -518,8 +539,32 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
                 <span>{r.fullQty} {t('full')} · {r.emptyQty} {t('empty')}</span>
               </div>
             ))}
-            <Button size="sm" className="w-full" busy={busy} onClick={returnStock}>
-              <Truck className="h-3.5 w-3.5" />{t('Send all to godown')}</Button>
+            <div className="text-[10px] uppercase tracking-wider text-amber-800/80 pt-1">{t('Send to')}</div>
+            <ChoiceTiles
+              compact
+              value={handTo}
+              onChange={(v) => { setHandTo(v); setHandId(''); }}
+              options={[
+                { value: 'GODOWN', label: t('Godown'), icon: Warehouse },
+                { value: 'TRUCK', label: t('Truck'), icon: Truck, tone: 'sky' },
+                { value: 'BOY', label: t('Delivery boy'), icon: Users, tone: 'slate' },
+              ]}
+            />
+            {handTo === 'TRUCK' && (
+              <select value={handId} onChange={(e) => setHandId(e.target.value)} className={cx(inputClass, 'font-semibold text-slate-900')}>
+                <option value="">{targets ? t('Choose truck…') : t('Loading…')}</option>
+                {targets?.trucks.map((v) => <option key={v.number} value={v.number}>{v.number}{v.driverName ? ` · ${v.driverName}` : ''}</option>)}
+              </select>
+            )}
+            {handTo === 'TRUCK' && targets && targets.trucks.length === 0 && <div className="font-semibold">{t('No trucks yet — ask the office to add one in Operations → Vehicles.')}</div>}
+            {handTo === 'BOY' && (
+              <select value={handId} onChange={(e) => setHandId(e.target.value)} className={cx(inputClass, 'font-semibold text-slate-900')}>
+                <option value="">{targets ? t('Choose delivery boy…') : t('Loading…')}</option>
+                {targets?.deliveryBoys.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            )}
+            <Button size="sm" className="w-full" busy={busy} disabled={handTo !== 'GODOWN' && !handId} onClick={returnStock}>
+              <Truck className="h-3.5 w-3.5" />{t(handTo === 'GODOWN' ? 'Send all to godown' : handTo === 'TRUCK' ? 'Send all to truck' : 'Send all to delivery boy')}</Button>
           </div>
         )}
         {pendingReturns.length > 0 && (

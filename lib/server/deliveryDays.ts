@@ -3,7 +3,7 @@ import { audit, Actor } from './audit';
 import { assertDayOpen } from './dayLocks';
 import { ApiError, businessDate, conflict, round2 } from './http';
 import type { Effects } from './effects';
-import { getDefaultWarehouse, stockAt } from './inventory';
+import { getDefaultWarehouse, stockAt, truckGodown } from './inventory';
 import { requestTransfer } from './stock';
 import { getSetting } from './settings';
 import { availableToSubmit, getWallet } from './wallet';
@@ -36,15 +36,34 @@ export async function stockToReturn(db: Db, tenantId: string, deliveryBoyId: str
   };
 }
 
-/** One request sending everything still with the boy back to the godown (accepted by the admin). */
-export async function returnStockToGodown(tx: Tx, actor: Actor, effects: Effects) {
+/** Where the day-end stock can go: the godown, one of our trucks, or another delivery boy. */
+export type ReturnTarget = { kind: 'GODOWN' } | { kind: 'TRUCK'; vehicleNumber: string } | { kind: 'BOY'; deliveryBoyId: string };
+
+/** Choices for the day-end hand-over: our own vehicles and the other active delivery boys. */
+export async function returnTargets(db: Db, tenantId: string, deliveryBoyId: string) {
+  const [trucks, boys] = await Promise.all([
+    db.vehicle.findMany({ where: { tenantId, active: true }, select: { number: true, type: true, driverName: true }, orderBy: { number: 'asc' } }),
+    db.user.findMany({ where: { tenantId, role: 'DELIVERY_BOY', status: 'ACTIVE', NOT: { id: deliveryBoyId } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+  ]);
+  return { trucks, deliveryBoys: boys };
+}
+
+/** One request sending everything still with the boy to the godown, a truck or another boy (accepted by the admin). */
+export async function returnStock(tx: Tx, actor: Actor, target: ReturnTarget, effects: Effects) {
   const { toReturn } = await stockToReturn(tx, actor.tenantId, actor.userId);
   if (!toReturn.length) throw conflict('No stock left to return.');
-  const godown = await getDefaultWarehouse(tx, actor.tenantId);
+  const items = toReturn.map((r) => ({ productId: r.productId, fullQty: r.fullQty, emptyQty: r.emptyQty }));
+  const notes = `Day-end hand-over · ${businessDate()}`;
+  if (target.kind === 'BOY') {
+    if (target.deliveryBoyId === actor.userId) throw conflict('Choose another delivery boy.');
+    return requestTransfer(tx, actor, { transferType: 'DRIVER_TO_DRIVER', fromId: actor.userId, toId: target.deliveryBoyId, items, notes }, effects);
+  }
+  // A truck is a godown underneath (TRK-<number>), so it is a normal godown return.
+  const godown = target.kind === 'TRUCK' ? await truckGodown(tx, actor.tenantId, target.vehicleNumber) : await getDefaultWarehouse(tx, actor.tenantId);
   return requestTransfer(
     tx,
     actor,
-    { transferType: 'DRIVER_TO_WAREHOUSE', fromId: actor.userId, toId: godown.id, items: toReturn.map((r) => ({ productId: r.productId, fullQty: r.fullQty, emptyQty: r.emptyQty })), notes: `Day-end return · ${businessDate()}` },
+    { transferType: 'DRIVER_TO_WAREHOUSE', fromId: actor.userId, toId: godown.id, items, notes, vehicleNumber: target.kind === 'TRUCK' ? target.vehicleNumber : null },
     effects
   );
 }
@@ -158,9 +177,9 @@ export async function closeDay(tx: Tx, actor: Actor) {
   // All cash in hand must be handed over (a submission awaiting confirmation counts) before closing.
   const { available } = await availableToSubmit(tx, actor.tenantId, actor.userId, actor.name);
   if (available > 0.009) throw new ApiError(409, `Submit your cash in hand (₹${available.toLocaleString('en-IN')}) from the Cash tab before closing the day.`, 'CASH_NOT_SUBMITTED');
-  // Likewise all stock goes back to the godown (a return awaiting the admin counts).
+  // Likewise all stock is handed over — godown, truck or another boy (a request awaiting the admin counts).
   const { toReturn } = await stockToReturn(tx, actor.tenantId, actor.userId);
-  if (toReturn.length) throw new ApiError(409, 'Send your stock back to the godown before closing the day.', 'STOCK_NOT_RETURNED');
+  if (toReturn.length) throw new ApiError(409, 'Hand over your stock (godown, truck or another delivery boy) before closing the day.', 'STOCK_NOT_RETURNED');
 
   const summary = await daySummary(tx, actor.tenantId, actor.userId, date);
   const closed = await tx.deliveryDay.update({

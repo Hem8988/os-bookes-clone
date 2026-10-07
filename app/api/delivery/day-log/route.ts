@@ -2,7 +2,7 @@ import { prisma, transaction } from '@/lib/db';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { requestDayReopen } from '@/lib/server/closing';
-import { closeDay, daySummary, returnStockToGodown, startDay } from '@/lib/server/deliveryDays';
+import { closeDay, daySummary, returnStock, returnTargets, startDay, type ReturnTarget } from '@/lib/server/deliveryDays';
 import { Effects } from '@/lib/server/effects';
 import { badRequest, businessDate, forbidden, handle, ok, readJson, str } from '@/lib/server/http';
 
@@ -12,6 +12,8 @@ export const GET = handle(async (request: Request) => {
   const url = new URL(request.url);
   const date = url.searchParams.get('date') || businessDate();
   let deliveryBoyId = auth.userId;
+  // Day-end hand-over choices (trucks, other delivery boys) for the boy himself.
+  if (url.searchParams.get('targets') && auth.role === 'DELIVERY_BOY') return ok(await returnTargets(prisma, auth.tenantId, auth.userId));
   if (auth.role !== 'DELIVERY_BOY') {
     if (!can(auth.role, 'wallet.viewAll') && !can(auth.role, 'orders.assign')) throw forbidden();
     const requested = url.searchParams.get('deliveryBoyId');
@@ -33,13 +35,20 @@ export const POST = handle(async (request: Request) => {
   const result = await transaction(async (tx) => {
     if (action === 'START_DAY') return startDay(tx, auth, { latitude: num(body.latitude), longitude: num(body.longitude) });
     if (action === 'CLOSE_DAY') return closeDay(tx, auth);
-    if (action === 'RETURN_STOCK') return returnStockToGodown(tx, auth, effects);
+    if (action === 'RETURN_STOCK') {
+      const to = String(body.to || 'GODOWN');
+      const target: ReturnTarget =
+        to === 'TRUCK' ? { kind: 'TRUCK', vehicleNumber: str(body.vehicleNumber, 'Truck', { required: true, max: 20 }) }
+        : to === 'BOY' ? { kind: 'BOY', deliveryBoyId: str(body.deliveryBoyId, 'Delivery boy', { required: true }) }
+        : { kind: 'GODOWN' };
+      return returnStock(tx, auth, target, effects);
+    }
     if (action === 'REQUEST_REOPEN') {
       return requestDayReopen(tx, auth, { scope: 'DELIVERY_DAY', date: str(body.date, 'Date', { required: true }), reason: str(body.reason, 'Reason', { required: true, max: 300 }) }, effects);
     }
     throw badRequest('Unknown action.');
   });
   effects.schedule();
-  const messages: Record<string, string> = { START_DAY: 'Day started.', CLOSE_DAY: 'Day closed. Entries are now locked.', RETURN_STOCK: 'Stock return sent — the admin accepts it into the godown.', REQUEST_REOPEN: 'Re-open request sent to admin.' };
+  const messages: Record<string, string> = { START_DAY: 'Day started.', CLOSE_DAY: 'Day closed. Entries are now locked.', RETURN_STOCK: 'Stock hand-over sent — the admin accepts it.', REQUEST_REOPEN: 'Re-open request sent to admin.' };
   return ok(result, messages[action]);
 });

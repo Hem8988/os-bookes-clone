@@ -43,6 +43,7 @@ import { LanguageToggle } from './LanguageToggle';
 import { NotificationBell } from './NotificationBell';
 import { Badge, Button, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 import { DateInput } from './DateInput';
+import { MicButton } from './MicButton';
 import { cue } from '../lib/feedback';
 import { AmountPad, ChoiceTiles, PickerField, PosButton, PosTotal, RecentChips, SearchPick, SoundToggle, Stepper, StockTile, useRecent } from './pos';
 import { CartProduct, OrderTiles, useOrderCart } from './OrderCart';
@@ -67,6 +68,7 @@ interface Order {
   deliveryAddress: string | null;
   area: string | null;
   totalAmount: number;
+  vehicleNumber?: string | null;
   items: OrderItem[];
   deliveries: DeliveryRow[];
   customer?: { contactPerson: string | null; phone: string; balance: number; area: string | null };
@@ -466,7 +468,10 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
       >
         <p className="text-xs text-slate-600">{t('The admin approves it, then your day opens again and all buttons work.')}</p>
         <Field label={t('Reason')}>
-          <input value={reopenReason ?? ''} onChange={(e) => setReopenReason(e.target.value)} className={inputClass} placeholder={t('e.g. one more delivery, wrong entry')} />
+          <div className="flex gap-2">
+            <input value={reopenReason ?? ''} onChange={(e) => setReopenReason(e.target.value)} className={inputClass} placeholder={t('e.g. one more delivery, wrong entry')} />
+            <MicButton value={reopenReason ?? ''} onChange={setReopenReason} onError={(m) => toast(m, 'error')} />
+          </div>
         </Field>
       </Modal>
 
@@ -968,6 +973,10 @@ function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const cart = useOrderCart(products, customer?.id ?? null, customer?.defaultProductIds ?? []);
+  // Vehicle for this order: his own one pre-filled, any active vehicle can be picked.
+  const vehiclesQ = useApiData<{ vehicles: { id: string; number: string; type: string; driverName: string | null }[]; mine: string | null }>('/api/cylinder/orders/vehicles', onError);
+  const [vehicle, setVehicle] = useState<string | null>(null);
+  const vehicleValue = vehicle ?? vehiclesQ.data?.mine ?? '';
 
   // Customer list: everyone as soon as the sheet opens, then a server search as you type (debounced).
   useEffect(() => {
@@ -1017,6 +1026,7 @@ function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]
           priority,
           deliveryAddressId: customer.deliveryAddresses.find((a) => a.isDefault)?.id || null,
           notes: notes.trim() || null,
+          vehicleNumber: vehicleValue || null,
         },
       });
       cue('success');
@@ -1104,6 +1114,19 @@ function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]
               );
             }}
           />
+          <Field label={t('Vehicle (gaadi)')}>
+            <div className="flex items-center gap-2">
+              <Truck className="h-5 w-5 shrink-0 text-slate-500" />
+              <select value={vehicleValue} onChange={(e) => setVehicle(e.target.value)} className={cx(inputClass, 'font-semibold')}>
+                <option value="">{vehiclesQ.data ? t('No vehicle') : t('Loading…')}</option>
+                {/* His vehicle may come from a past stock issue and not be in the list. */}
+                {vehicleValue && !vehiclesQ.data?.vehicles.some((v) => v.number === vehicleValue) && <option value={vehicleValue}>{vehicleValue}</option>}
+                {vehiclesQ.data?.vehicles.map((v) => (
+                  <option key={v.id} value={v.number}>{v.number}{v.number === vehiclesQ.data?.mine ? ` · ${t('my vehicle')}` : v.driverName ? ` · ${v.driverName}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </Field>
           <button type="button" onClick={() => setMore(!more)} className="w-full flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700">
             <span>{t('More options')} <span className="font-semibold text-slate-500">· {deliveryDate === today() ? t('Today') : deliveryDate} · {t(priority === 'URGENT' ? 'Urgent' : 'Normal')}</span></span>
             <ChevronRight className={cx('h-4 w-4 transition', more && 'rotate-90')} />
@@ -1194,6 +1217,11 @@ function OrderSheet({ order, stock, queued, dayStarted, onClose, onChanged, toas
               <span>{t('Bill')}</span>
               <span>{inr(order.totalAmount)}</span>
             </div>
+          </div>
+          {/* The vehicle printed on the invoice — wrong one? He tells the office. */}
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+            <span className="flex items-center gap-1.5 font-bold text-slate-500"><Truck className="h-4 w-4" />{t('Vehicle (gaadi)')}</span>
+            <span className={cx('font-black', order.vehicleNumber ? 'text-slate-900' : 'text-amber-700')}>{order.vehicleNumber || t('Not set — tell the office')}</span>
           </div>
           {snapshot && (
             <div className="rounded-xl border border-slate-200 p-3 space-y-1">

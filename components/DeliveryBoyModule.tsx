@@ -87,6 +87,7 @@ interface TransferRow {
 }
 interface StockRow { productId: string; productName: string; fullQty: number; emptyQty: number }
 interface DaySummary {
+  date: string;
   status: 'NOT_STARTED' | 'STARTED' | 'CLOSED';
   deliveries: { count: number; cylindersDelivered: number; emptiesCollected: number; pendingVerification: number; sentBack: number };
   stock: { productId: string; productName: string; openingFull: number; received: number; delivered: number; returned: number; emptyCollected: number; closingFull: number; closingEmpty: number }[];
@@ -383,6 +384,22 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
     }
   };
 
+  // null = dialog closed.
+  const [reopenReason, setReopenReason] = useState<string | null>(null);
+  const requestReopen = async () => {
+    if (!summary || !reopenReason?.trim()) return;
+    setBusy(true);
+    try {
+      await api('/api/delivery/day-log', { body: { action: 'REQUEST_REOPEN', date: summary.date, reason: reopenReason.trim() } });
+      setReopenReason(null);
+      toast('Re-open request sent to admin.');
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const returnStock = async () => {
     setBusy(true);
     try {
@@ -430,7 +447,28 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
           <Button tone="plain" className="mt-3 w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => setConfirmClose(true)}>
             <StopCircle className="h-4 w-4" />{t('Close day')}</Button>
         )}
+        {/* Same day can't be started again; the admin re-opens it on request. */}
+        {s.status === 'CLOSED' && (
+          <Button tone="plain" className="mt-3 w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => setReopenReason('')}>
+            <RefreshCw className="h-4 w-4" />{t('Request re-open (admin)')}</Button>
+        )}
       </div>
+      <Modal
+        open={reopenReason !== null}
+        title={t('Re-open today')}
+        onClose={() => setReopenReason(null)}
+        footer={
+          <>
+            <Button tone="secondary" onClick={() => setReopenReason(null)}>{t('Back')}</Button>
+            <Button busy={busy} disabled={!reopenReason?.trim()} onClick={requestReopen}>{t('Send request')}</Button>
+          </>
+        }
+      >
+        <p className="text-xs text-slate-600">{t('The admin approves it, then your day opens again and all buttons work.')}</p>
+        <Field label={t('Reason')}>
+          <input value={reopenReason ?? ''} onChange={(e) => setReopenReason(e.target.value)} className={inputClass} placeholder={t('e.g. one more delivery, wrong entry')} />
+        </Field>
+      </Modal>
 
       {/* Quick actions: everything the day needs, one tap from Today (locked until the day is started). */}
       {s.status !== 'STARTED' && (

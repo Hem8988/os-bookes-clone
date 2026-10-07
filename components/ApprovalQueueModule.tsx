@@ -487,12 +487,69 @@ function Detail({ item }: { item: ApprovalItem }) {
       </div>
     );
   }
+  if (item.type === 'DAY_REOPEN' && item.payload?.scope === 'DELIVERY_DAY') return <DayReopenDetail item={item} />;
+  // Anything else: the request's fields as readable lines (ids are noise for the approver).
+  const fields = Object.entries(item.payload || {}).filter(([k, v]) => v != null && v !== '' && !/id$/i.test(k));
   return (
     <div className="space-y-2">
       {item.summary && <p className="text-xs text-slate-700">{item.summary}</p>}
-      {item.payload && (
-        <pre className="text-[11px] bg-slate-50 border border-slate-100 rounded-lg p-3 overflow-x-auto">{JSON.stringify(item.payload, null, 2)}</pre>
+      {fields.map(([k, v]) => (
+        <Line key={k} label={humanize(k)} value={typeof v === 'object' ? JSON.stringify(v) : String(v)} />
+      ))}
+    </div>
+  );
+}
+
+const humanize = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+interface DeliveryDayView {
+  status: string;
+  deliveries: { count: number; cylindersDelivered: number; emptiesCollected: number };
+  cash: { collected: number; submitted: number; closing: number; online: number; cheque: number; credit: number };
+  stock: { productId: string; productName: string; closingFull: number; closingEmpty: number }[];
+}
+
+/** Delivery boy asks to re-open his closed day: who, which day, why, and what that day looked like. */
+function DayReopenDetail({ item }: { item: ApprovalItem }) {
+  const p = item.payload as { date?: string; reason?: string; deliveryBoyId?: string };
+  const dayQ = useApiData<DeliveryDayView>(p.deliveryBoyId && p.date ? `/api/delivery/day-log?${new URLSearchParams({ deliveryBoyId: p.deliveryBoyId, date: p.date })}` : null);
+  const d = dayQ.data;
+  return (
+    <div className="space-y-3">
+      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs">
+        <div className="text-[10px] font-bold uppercase text-amber-700">Reason</div>
+        <div className="font-semibold text-amber-950 mt-0.5">{p.reason || '—'}</div>
+      </div>
+      <div>
+        <Line label="Delivery boy" value={item.requestedByName} />
+        <Line label="Day" value={p.date || '—'} />
+        <Line label="Current status" value={d ? d.status.replace(/_/g, ' ') : '…'} />
+      </div>
+      {d && (
+        <>
+          <div className="grid sm:grid-cols-2 gap-x-6">
+            <div>
+              <Line label="Deliveries" value={d.deliveries.count} />
+              <Line label="Cylinders delivered" value={`${d.deliveries.cylindersDelivered} full · ${d.deliveries.emptiesCollected} empty back`} />
+              <Line label="Credit given" value={inr(d.cash.credit)} />
+            </div>
+            <div>
+              <Line label="Cash collected" value={inr(d.cash.collected)} />
+              <Line label="Online / cheque" value={inr(d.cash.online + d.cash.cheque)} />
+              <Line label="Cash still in hand" value={inr(d.cash.closing)} tone={d.cash.closing > 0 ? 'text-amber-700' : undefined} />
+            </div>
+          </div>
+          {d.stock.some((s) => s.closingFull || s.closingEmpty) && (
+            <div>
+              <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Stock with him</div>
+              {d.stock.filter((s) => s.closingFull || s.closingEmpty).map((s) => (
+                <Line key={s.productId} label={s.productName} value={`${s.closingFull} full / ${s.closingEmpty} empty`} />
+              ))}
+            </div>
+          )}
+        </>
       )}
+      <p className="text-[11px] text-slate-500">Approve → his day becomes “On duty” again and he can enter deliveries, collections and stock. He must close it again at the end.</p>
     </div>
   );
 }

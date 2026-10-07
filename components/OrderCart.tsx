@@ -80,7 +80,7 @@ export function useOrderCart(products: CartProduct[], customerId: string | null,
 type Cart = ReturnType<typeof useOrderCart>;
 
 /** Product tiles for the cart, with the "filled from last order" strip. */
-export function OrderTiles({ cart, showPrice = true, cols = 2 }: { cart: Cart; showPrice?: boolean; cols?: 2 | 3 }) {
+export function OrderTiles({ cart, showPrice = true, cols = 2, note }: { cart: Cart; showPrice?: boolean; cols?: 2 | 3; note?: (productId: string, qty: number) => React.ReactNode }) {
   const { t } = useT();
   const many = cart.choices.length > 8;
   const shown = many ? cart.choices.filter((p) => cart.qty[p.id]) : cart.choices;
@@ -107,7 +107,7 @@ export function OrderTiles({ cart, showPrice = true, cols = 2 }: { cart: Cart; s
       )}
       <div className={cols === 3 ? 'grid grid-cols-2 sm:grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
         {shown.map((p) => (
-          <ProductTile key={p.id} name={p.name} sub={showPrice && p.salePrice ? inr(p.salePrice) : undefined} qty={cart.qty[p.id] || 0} onChange={(n) => cart.set(p.id, n)} />
+          <ProductTile key={p.id} name={p.name} sub={showPrice && p.salePrice ? inr(p.salePrice) : undefined} qty={cart.qty[p.id] || 0} onChange={(n) => cart.set(p.id, n)} note={note?.(p.id, cart.qty[p.id] || 0)} />
         ))}
       </div>
       {cart.choices.length > 0 && cart.count === 0 && <p className="text-center text-[11px] font-semibold text-slate-400">{t(many ? 'Search above and tap a cylinder to add it' : 'Tap a cylinder to add it')}</p>}

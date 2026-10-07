@@ -6,7 +6,7 @@ import { Effects } from '@/lib/server/effects';
 import { businessDate, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 import { recordFieldCollection } from '@/lib/server/payments';
 
-/** Payment-only visits: the delivery boy's customers with dues, and what he collected today. */
+/** Payment-only visits: all the delivery boy's customers (dues first, advance from anyone), and what he collected today. */
 export const GET = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'delivery.execute');
   const search = new URL(request.url).searchParams.get('search')?.trim();
@@ -18,8 +18,6 @@ export const GET = handle(async (request: Request) => {
       { customerCode: { contains: search, mode: 'insensitive' } },
       { phone: { contains: search } },
     ];
-  } else {
-    where.balance = { gt: 0.009 };
   }
   const [customers, collections] = await Promise.all([
     prisma.customer.findMany({

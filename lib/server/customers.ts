@@ -124,7 +124,8 @@ async function assertUniquePhone(tx: Tx, tenantId: string, type: string, phone: 
  */
 export async function deliveryBoyCustomers(db: Db, tenantId: string, userId: string): Promise<Prisma.CustomerWhereInput> {
   const myRoutes = (await db.route.findMany({ where: { tenantId, defaultDeliveryBoyId: userId }, select: { name: true } })).map((r) => r.name);
-  return { OR: [{ defaultDeliveryBoyId: userId }, ...(myRoutes.length ? [{ defaultDeliveryBoyId: null, route: { in: myRoutes } }] : [])] };
+  // Also anyone whose order was assigned to him, so he can collect dues/advance from them.
+  return { OR: [{ defaultDeliveryBoyId: userId }, { orders: { some: { assignedDeliveryBoyId: userId } } }, ...(myRoutes.length ? [{ defaultDeliveryBoyId: null, route: { in: myRoutes } }] : [])] };
 }
 
 export async function createCustomer(tx: Tx, actor: Actor, input: Row) {

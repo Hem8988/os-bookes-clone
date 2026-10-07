@@ -142,7 +142,8 @@ export function ChoiceTiles<T extends string>({ value, onChange, options, cols, 
 
 /** Amount entry: ₹ display, quick amounts and a numpad (`compact`: small, numpad behind "Other amount"). */
 export function AmountPad({ value, onChange, quick = [], label, compact, otherLabel = "Other amount" }: { value: string; onChange: (v: string) => void; quick?: { label: string; value: number }[]; label?: string; compact?: boolean; otherLabel?: string }) {
-  const [padOpen, setPadOpen] = useState(!compact);
+  // No quick amounts (e.g. advance with nothing due) → no "Other amount" chip, so start with the pad open.
+  const [padOpen, setPadOpen] = useState(!compact || quick.length === 0);
   const press = (k: string) => {
     cue(k === 'del' ? 'remove' : 'tap');
     if (k === 'del') return onChange(value.slice(0, -1));

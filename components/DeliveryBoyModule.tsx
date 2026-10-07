@@ -1363,11 +1363,11 @@ function CollectTab({ dayStarted, onChanged, toast }: { dayStarted: boolean; onC
       {!dayStarted && <div className="rounded-xl p-3 bg-sky-50 text-sky-800 text-xs font-bold">{t('Start your day to collect payments.')}</div>}
       <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search name, mobile or code')} className={cx(inputClass, 'py-3 text-base')} />
       <div className="flex justify-between items-center">
-        <div className="text-[11px] font-black uppercase text-slate-500">{searching ? t('Customers') : t('Customers with dues ({n})', { n: data?.customers.length ?? 0 })}</div>
+        <div className="text-[11px] font-black uppercase text-slate-500">{searching ? t('Customers') : t('My customers ({n})', { n: data?.customers.length ?? 0 })}</div>
         {!searching && totalDue > 0 && <div className="text-[11px] font-black text-rose-700">{inr(totalDue)}</div>}
       </div>
       {!data && <Empty>{t('Loading…')}</Empty>}
-      {data?.customers.length === 0 && <Empty>{t(searching ? 'No customer found.' : 'No dues pending with your customers.')}</Empty>}
+      {data?.customers.length === 0 && <Empty>{t(searching ? 'No customer found.' : 'No customers assigned to you yet.')}</Empty>}
       <div className="space-y-1.5">
         {data?.customers.map((c) => {
           const done = collections.filter((x) => x.customerId === c.id && x.status !== 'REJECTED').reduce((s, x) => s + x.amount, 0);
@@ -1507,6 +1507,7 @@ function CollectSheet({ customer, onClose, onDone, toast }: { customer: DueCusto
         onChange={setAmount}
         quick={due > 0 ? [{ label: t('Full due {amount}', { amount: inr(due) }), value: due }] : []}
       />
+      {due === 0 && <p className="text-[11px] font-bold text-sky-700">{t('No dues — this amount is saved as advance.')}</p>}
       {due > 0 && Number(amount) > due && <p className="text-[11px] font-bold text-amber-700">{t('More than the due — the extra stays as advance.')}</p>}
       {mode === 'ONLINE' && (
         <>

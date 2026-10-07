@@ -7,6 +7,7 @@ import {
   Camera,
   Clock,
   FileText,
+  HandCoins,
   Smartphone,
   CheckCircle2,
   ChevronRight,
@@ -89,6 +90,8 @@ interface DaySummary {
   deliveries: { count: number; cylindersDelivered: number; emptiesCollected: number; pendingVerification: number; sentBack: number };
   stock: { productId: string; productName: string; openingFull: number; received: number; delivered: number; returned: number; emptyCollected: number; closingFull: number; closingEmpty: number }[];
   cash: { opening: number; collected: number; submitted: number; pendingSubmission: number; closing: number; online: number; cheque: number; credit: number };
+  // Old dues collected on payment-only visits (already inside the cash figures).
+  collections?: { count: number; amount: number };
   // Day-end: stock still to send to the godown, and returns waiting for the admin.
   stockReturn?: {
     toReturn: { productId: string; productName: string; fullQty: number; emptyQty: number }[];
@@ -103,7 +106,7 @@ interface WalletInfo {
   receivers: { id: string; name: string; role: string }[];
 }
 
-type Tab = 'home' | 'orders' | 'wallet' | 'stock';
+type Tab = 'home' | 'orders' | 'collect' | 'wallet' | 'stock';
 const ORDERS_CACHE = 'deskshark.delivery.orders';
 
 /** Resize camera photos before upload (saves mobile data). */
@@ -128,6 +131,7 @@ export default function DeliveryBoyModule() {
   const [tab, setTab] = useState<Tab>('home');
   const [online, setOnline] = useState(true);
   const [summary, setSummary] = useState<DaySummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
   const [queue, setQueue] = useState<QueuedEntry[]>([]);
@@ -149,26 +153,33 @@ export default function DeliveryBoyModule() {
   // Today's day summary, orders and stock; offline → last cached order list.
   useEffect(() => {
     let alive = true;
-    Promise.all([api<DaySummary>('/api/delivery/day-log'), api<Order[]>('/api/cylinder/orders'), api<{ stock: StockRow[] }>('/api/cylinder/inventory')])
-      .then(
-        ([day, list, inv]) => {
-          if (!alive) return;
-          setSummary(day);
-          setOrders(list);
-          setStock(inv.stock);
+    // Each part loads on its own, so one failing call doesn't blank the whole app.
+    Promise.allSettled([api<DaySummary>('/api/delivery/day-log'), api<Order[]>('/api/cylinder/orders'), api<{ stock: StockRow[] }>('/api/cylinder/inventory')])
+      .then(([day, list, inv]) => {
+        if (!alive) return;
+        if (day.status === 'fulfilled') {
+          setSummary(day.value);
+          setSummaryError(null);
+        } else setSummaryError(errorMessage(day.reason));
+        if (list.status === 'fulfilled') {
+          setOrders(list.value);
           try {
-            window.localStorage.setItem(ORDERS_CACHE, JSON.stringify(list));
+            window.localStorage.setItem(ORDERS_CACHE, JSON.stringify(list.value));
           } catch {
             /* storage full */
           }
-        },
-        (e) => {
-          if (!alive) return;
-          const cached = window.localStorage.getItem(ORDERS_CACHE);
-          if (cached) setOrders(JSON.parse(cached));
-          if (navigator.onLine) showToast(errorMessage(e), 'error');
+        } else {
+          try {
+            const cached = window.localStorage.getItem(ORDERS_CACHE);
+            if (cached) setOrders(JSON.parse(cached));
+          } catch {
+            /* storage blocked */
+          }
         }
-      )
+        if (inv.status === 'fulfilled') setStock(inv.value.stock);
+        const failed = [day, list, inv].find((r) => r.status === 'rejected');
+        if (failed && navigator.onLine) showToast(errorMessage(failed.reason), 'error');
+      })
       .then(() => queueAll().catch(() => [] as QueuedEntry[]))
       .then((q) => {
         if (alive) setQueue(q);
@@ -228,30 +239,33 @@ export default function DeliveryBoyModule() {
   const pendingIds = useMemo(() => new Set(queue.map((q) => String(q.payload.orderId))), [queue]);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col max-w-lg mx-auto">
+    <div className="min-h-dvh w-full bg-slate-100 flex flex-col max-w-lg mx-auto overflow-x-hidden">
       {toast}
-      <header className="sticky top-0 z-30 bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
-        <div>
-          <div className="text-sm font-black">{session?.user.name || t('Delivery')}</div>
-          <div className="text-[10px] text-emerald-300 font-semibold">{session?.company.name}</div>
+      <header className="sticky top-0 z-30 bg-slate-900 text-white pl-3 pr-1.5 pb-2.5 pt-[max(env(safe-area-inset-top),10px)] flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-black truncate">{session?.user.name || t('Delivery')}</div>
+          <div className="text-[10px] text-emerald-300 font-semibold truncate">{session?.company.name}</div>
         </div>
-        <div className="flex items-center gap-1">
-          <span className={cx('flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black', online ? 'bg-emerald-600' : 'bg-rose-600')}>
-            {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />} {online ? t('Online') : t('Offline')}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {/* Narrow phones: just the coloured wifi dot; the word shows from 420px up. */}
+          <span title={online ? t('Online') : t('Offline')} className={cx('flex items-center gap-1 p-1.5 min-[420px]:px-2 min-[420px]:py-1 rounded-full text-[10px] font-black', online ? 'bg-emerald-600' : 'bg-rose-600')}>
+            {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            <span className="hidden min-[420px]:inline">{online ? t('Online') : t('Offline')}</span>
           </span>
           <LanguageToggle />
           <SoundToggle className="hover:bg-slate-800" />
           <NotificationBell tone="dark" />
-          <button onClick={() => void logout()} className="p-2 rounded-full hover:bg-slate-800" title={t('Logout')}>
+          <button onClick={() => void logout()} className="p-2 rounded-full hover:bg-slate-800" title={t('Logout')} aria-label={t('Logout')}>
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </header>
 
-      <main className="flex-1 p-3 pb-24 space-y-3">
+      <main className="flex-1 p-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] space-y-3">
         {tab === 'home' && (
           <HomeTab
             summary={summary}
+            error={summaryError}
             toDeliver={orders.filter((o) => ['ASSIGNED', 'ACCEPTED', 'OUT_FOR_DELIVERY', 'SENT_BACK'].includes(o.status)).length}
             onOpenOrders={() => setTab('orders')}
             onOpenCash={() => setTab('wallet')}
@@ -265,14 +279,16 @@ export default function DeliveryBoyModule() {
         {tab === 'orders' && (
           <OrdersTab orders={orders} pendingIds={pendingIds} dayStarted={summary?.status === 'STARTED'} onOpen={setOpenOrder} onRefresh={refresh} onNew={() => setCreating(true)} toast={showToast} />
         )}
+        {tab === 'collect' && <CollectTab dayStarted={summary?.status === 'STARTED'} onChanged={refresh} toast={showToast} />}
         {tab === 'wallet' && <WalletTab toast={showToast} />}
         {tab === 'stock' && <StockTab userId={session?.user.id || ''} stock={stock} onChanged={refresh} toast={showToast} />}
       </main>
 
-      <nav className="fixed bottom-0 inset-x-0 max-w-lg mx-auto bg-white border-t border-slate-200 grid grid-cols-4 z-30">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white border-t border-slate-200 grid grid-cols-5 z-30 pb-[env(safe-area-inset-bottom)]">
         {([
           ['home', Home, 'Today'],
           ['orders', Truck, 'Orders'],
+          ['collect', HandCoins, 'Collect'],
           ['wallet', Wallet, 'Cash'],
           ['stock', Package, 'Stock'],
         ] as const).map(([key, Icon, label]) => (
@@ -317,7 +333,7 @@ export default function DeliveryBoyModule() {
 
 // ───────────────────────── Home ─────────────────────────
 
-function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing, onSync, onChanged, toast }: { summary: DaySummary | null; toDeliver: number; onOpenOrders: () => void; onOpenCash: () => void; queue: QueuedEntry[]; syncing: boolean; onSync: () => void; onChanged: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
+function HomeTab({ summary, error, toDeliver, onOpenOrders, onOpenCash, queue, syncing, onSync, onChanged, toast }: { summary: DaySummary | null; error: string | null; toDeliver: number; onOpenOrders: () => void; onOpenCash: () => void; queue: QueuedEntry[]; syncing: boolean; onSync: () => void; onChanged: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
   const { t } = useT();
   const [busy, setBusy] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
@@ -364,6 +380,18 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
     }
   };
 
+  if (!summary && error) {
+    return (
+      <div className="rounded-2xl p-4 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold space-y-3">
+        <div className="flex gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{t('Could not load today’s summary.')} {t(error)}</span>
+        </div>
+        <Button size="sm" className="w-full" onClick={() => void onChanged()}>
+          <RefreshCw className="h-3.5 w-3.5" />{t('Try again')}</Button>
+      </div>
+    );
+  }
   if (!summary) return <Empty>{t('Loading…')}</Empty>;
   const s = summary;
   // Cash still to hand over; the day cannot be closed until it is submitted.
@@ -423,6 +451,12 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
         <Tile label={t('Cash in hand')} value={inr(s.cash.closing)} sub={t('{amount} pending submission', { amount: inr(s.cash.pendingSubmission) })} />
         <Tile label={t('Online / cheque')} value={inr(s.cash.online + s.cash.cheque)} sub={t('Credit given {amount}', { amount: inr(s.cash.credit) })} />
       </div>
+      {s.collections && s.collections.count > 0 && (
+        <div className="rounded-xl p-3 bg-white border border-slate-200 text-xs flex justify-between">
+          <span className="font-bold text-slate-600 flex items-center gap-2"><HandCoins className="h-4 w-4 text-emerald-600" />{t('Dues collected today ({n})', { n: s.collections.count })}</span>
+          <strong>{inr(s.collections.amount)}</strong>
+        </div>
+      )}
       {s.deliveries.sentBack > 0 && (
         <div className="rounded-xl p-3 bg-rose-50 text-rose-800 text-xs font-bold flex gap-2">
           <AlertTriangle className="h-4 w-4" /> {t('{n} delivery(s) sent back by accounts — open Orders to correct.', { n: s.deliveries.sentBack })}
@@ -492,7 +526,8 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
             <div className="text-[10px] text-sky-700">{t('Stock stays in your name until accepted (full/empty).')}</div>
           </div>
         )}
-        <table className="w-full text-xs">
+        <div className="-mx-1 overflow-x-auto px-1">
+        <table className="w-full min-w-[300px] text-xs tabular-nums">
           <thead className="text-slate-500">
             <tr>
               <th className="text-left">{t('Product')}</th>
@@ -516,6 +551,7 @@ function HomeTab({ summary, toDeliver, onOpenOrders, onOpenCash, queue, syncing,
             ))}
           </tbody>
         </table>
+        </div>
         <div className="text-xs space-y-1">
           <div className="flex justify-between"><span>{t('Opening cash')}</span><strong>{inr(s.cash.opening)}</strong></div>
           <div className="flex justify-between"><span>{t('+ Cash collected')}</span><strong>{inr(s.cash.collected)}</strong></div>
@@ -555,12 +591,12 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew, t
   const newlyAssigned = orders.filter((o) => o.status === 'ASSIGNED' && !pendingIds.has(o.id));
 
   /** Accept / out for delivery / decline straight from the list. */
-  const act = async (o: Order, action: 'accept' | 'dispatch' | 'decline', why?: string) => {
+  const act = async (o: Order, action: 'accept' | 'decline', why?: string) => {
     setBusyId(o.id);
     try {
       await api(`/api/cylinder/orders/${o.id}`, { body: { action, reason: why } });
       cue(action === 'decline' ? 'remove' : 'success');
-      toast(action === 'accept' ? 'Order accepted.' : action === 'dispatch' ? 'Customer notified: out for delivery.' : 'Order declined — sent back to the office.');
+      toast(action === 'accept' ? 'Order accepted.' : 'Order declined — sent back to the office.');
       await onRefresh();
       return true;
     } catch (e) {
@@ -644,16 +680,6 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew, t
                       </button>
                       <button disabled={busy} onClick={() => void act(o, 'accept')} className="flex items-center gap-1 px-4 py-1.5 rounded-lg bg-emerald-600 text-xs font-black text-white active:scale-95 disabled:opacity-50">
                         <CheckCircle2 className="h-3.5 w-3.5" />{t('Accept')}
-                      </button>
-                    </div>
-                  )}
-                  {!queued && o.status === 'ACCEPTED' && (
-                    <div className="flex justify-end gap-2 px-3 pb-2.5 -mt-1">
-                      <button disabled={busy} onClick={() => { setReason(''); setDeclining(o); }} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-xs font-black text-rose-700 active:scale-95 disabled:opacity-50">
-                        <XCircle className="h-3.5 w-3.5" />{t('Decline')}
-                      </button>
-                      <button disabled={busy || !dayStarted} onClick={() => void act(o, 'dispatch')} className="flex items-center gap-1 px-4 py-1.5 rounded-lg bg-violet-600 text-xs font-black text-white active:scale-95 disabled:opacity-50">
-                        <Truck className="h-3.5 w-3.5" />{t('Out for delivery')}
                       </button>
                     </div>
                   )}
@@ -1129,6 +1155,218 @@ function DeliveryForm({ order, previous, onCancel, onQueued, toast }: { order: O
         </div>
       </div>
     </div>
+  );
+}
+
+// ───────────────────────── Collect (payment-only visits) ─────────────────────────
+
+interface DueCustomer { id: string; customerCode: string; name: string; shortName: string | null; phone: string; address: string | null; area: string | null; balance: number }
+interface FieldCollection { id: string; paymentNumber: string; customerId: string; customerName: string; mode: string; amount: number; status: string; rejectionReason: string | null; createdAt: string }
+
+/** Customer was served earlier; today the boy only goes to collect the old dues. */
+function CollectTab({ dayStarted, onChanged, toast }: { dayStarted: boolean; onChanged: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
+  const { t, status } = useT();
+  const [query, setQuery] = useState('');
+  const [data, setData] = useState<{ customers: DueCustomer[]; collections: FieldCollection[] } | null>(null);
+  const [tick, setTick] = useState(0);
+  const [collecting, setCollecting] = useState<DueCustomer | null>(null);
+
+  // Customers with dues first; typing searches all his customers (debounced).
+  useEffect(() => {
+    const q = query.trim();
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      api<{ customers: DueCustomer[]; collections: FieldCollection[] }>(`/api/delivery/collections${q ? `?search=${encodeURIComponent(q)}` : ''}`)
+        .then((d) => alive && setData(d))
+        .catch((e) => alive && toast(errorMessage(e), 'error'));
+    }, q ? 250 : 0);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [query, tick, toast]);
+
+  const searching = !!query.trim();
+  const collections = data?.collections ?? [];
+  const total = collections.filter((c) => c.status !== 'REJECTED').reduce((s, c) => s + c.amount, 0);
+  const totalDue = (data?.customers ?? []).reduce((s, c) => s + Math.max(c.balance, 0), 0);
+
+  return (
+    <>
+      <div className="rounded-2xl p-4 bg-emerald-700 text-white">
+        <div className="text-[11px] font-bold uppercase opacity-80">{t('Collected today')}</div>
+        <div className="text-2xl font-black">{inr(total)}</div>
+        <div className="text-[11px] opacity-80">{t('{n} payment(s) · submit the cash from the Cash tab', { n: collections.length })}</div>
+      </div>
+      {!dayStarted && <div className="rounded-xl p-3 bg-sky-50 text-sky-800 text-xs font-bold">{t('Start your day to collect payments.')}</div>}
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search name, mobile or code')} className={cx(inputClass, 'py-3 text-base')} />
+      <div className="flex justify-between items-center">
+        <div className="text-[11px] font-black uppercase text-slate-500">{searching ? t('Customers') : t('Customers with dues ({n})', { n: data?.customers.length ?? 0 })}</div>
+        {!searching && totalDue > 0 && <div className="text-[11px] font-black text-rose-700">{inr(totalDue)}</div>}
+      </div>
+      {!data && <Empty>{t('Loading…')}</Empty>}
+      {data?.customers.length === 0 && <Empty>{t(searching ? 'No customer found.' : 'No dues pending with your customers.')}</Empty>}
+      <div className="space-y-1.5">
+        {data?.customers.map((c) => {
+          const done = collections.filter((x) => x.customerId === c.id && x.status !== 'REJECTED').reduce((s, x) => s + x.amount, 0);
+          return (
+            <button key={c.id} disabled={!dayStarted} onClick={() => setCollecting(c)} className="w-full flex items-center gap-3 text-left px-3 py-3 rounded-2xl border border-slate-200 bg-white active:bg-emerald-50 disabled:opacity-60">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-black text-slate-900 truncate">{partyLabel(c.shortName, c.name)}</span>
+                <span className="block text-[11px] text-slate-500 truncate">{[c.area, c.phone].filter(Boolean).join(' · ')}</span>
+                {done > 0 && <span className="block text-[11px] font-bold text-emerald-700">{t('Collected today {amount}', { amount: inr(done) })}</span>}
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block text-[10px] font-bold uppercase text-slate-400">{t('Due')}</span>
+                <span className={cx('block text-sm font-black', c.balance > 0 ? 'text-rose-700' : 'text-slate-500')}>{inr(c.balance)}</span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-slate-300" />
+            </button>
+          );
+        })}
+      </div>
+      <div className="rounded-2xl bg-white border border-slate-200 p-3 space-y-1">
+        <div className="text-xs font-black mb-1">{t('Today’s collections')}</div>
+        {collections.length === 0 && <div className="text-[11px] text-slate-400">{t('None yet.')}</div>}
+        {collections.map((c) => (
+          <div key={c.id} className="flex justify-between items-center text-xs py-1 border-b border-slate-50">
+            <span className="min-w-0">
+              <span className="block font-semibold truncate">{c.customerName}</span>
+              <span className="block text-[10px] text-slate-400">{c.paymentNumber} · {t(c.mode)} · {dateTime(c.createdAt)}{c.rejectionReason ? ` · ${c.rejectionReason}` : ''}</span>
+            </span>
+            <span className="text-right shrink-0"><strong>{inr(c.amount)}</strong><div><StatusBadge status={c.status} label={status(c.status)} /></div></span>
+          </div>
+        ))}
+      </div>
+      {collecting && (
+        <CollectSheet
+          customer={collecting}
+          onClose={() => setCollecting(null)}
+          onDone={async () => {
+            setCollecting(null);
+            setTick((n) => n + 1);
+            await onChanged();
+          }}
+          toast={toast}
+        />
+      )}
+    </>
+  );
+}
+
+function CollectSheet({ customer, onClose, onDone, toast }: { customer: DueCustomer; onClose: () => void; onDone: () => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
+  const { t } = useT();
+  const due = Math.max(0, Math.round(customer.balance * 100) / 100);
+  const [mode, setMode] = useState<'CASH' | 'ONLINE' | 'CHEQUE'>('CASH');
+  const [amount, setAmount] = useState(due > 0 ? String(due) : '');
+  const [txn, setTxn] = useState('');
+  const [cheque, setCheque] = useState({ number: '', bank: '', date: '' });
+  const [photo, setPhoto] = useState<Blob | null>(null);
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    const fail = (m: string) => {
+      cue('error');
+      toast(m, 'error');
+    };
+    if (!(Number(amount) > 0)) return fail('Enter the amount collected.');
+    if (mode === 'ONLINE' && (!txn.trim() || !photo)) return fail('Transaction ID and payment screenshot are required.');
+    if (mode === 'CHEQUE' && (!cheque.number || !cheque.bank || !cheque.date || !photo)) return fail('Cheque number, bank, date and photo are required.');
+    setBusy(true);
+    try {
+      const proofUrl = photo ? await uploadFile(photo) : null;
+      await api('/api/delivery/collections', {
+        body: {
+          customerId: customer.id,
+          mode,
+          amount: Number(amount),
+          transactionId: mode === 'ONLINE' ? txn.trim() : null,
+          chequeNumber: mode === 'CHEQUE' ? cheque.number : null,
+          chequeBank: mode === 'CHEQUE' ? cheque.bank : null,
+          chequeDate: mode === 'CHEQUE' ? cheque.date : null,
+          proofUrl,
+          notes: notes.trim() || null,
+        },
+      });
+      cue('success');
+      toast(t('{amount} collected — sent to accounts for verification.', { amount: inr(Number(amount)) }));
+      await onDone();
+    } catch (e) {
+      fail(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      title={t('Collect payment')}
+      onClose={onClose}
+      footer={
+        <PosTotal
+          lines={<div className="text-base font-bold text-slate-900">{inr(Number(amount) || 0)}</div>}
+          action={
+            <PosButton busy={busy} disabled={!(Number(amount) > 0)} onClick={submit}>
+              <Send className="h-4 w-4" />{t('Save payment')}
+            </PosButton>
+          }
+        />
+      }
+    >
+      <div className="p-3 rounded-xl bg-slate-900 text-white flex justify-between items-center">
+        <div className="min-w-0">
+          <div className="font-black truncate">{partyLabel(customer.shortName, customer.name)}</div>
+          <div className="text-[11px] opacity-70">{customer.phone}{customer.area ? ` · ${customer.area}` : ''}</div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-[10px] uppercase opacity-70">{t('Due')}</div>
+          <div className="font-black">{inr(customer.balance)}</div>
+        </div>
+      </div>
+      <a href={`tel:${customer.phone}`} className="py-2 rounded-xl bg-slate-100 text-xs font-bold flex items-center justify-center gap-1">
+        <Phone className="h-4 w-4" />{t('Call')}</a>
+      <ChoiceTiles
+        compact
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: 'CASH', label: t('CASH'), icon: Banknote },
+          { value: 'ONLINE', label: t('ONLINE'), icon: Smartphone, tone: 'sky' },
+          { value: 'CHEQUE', label: t('CHEQUE'), icon: FileText, tone: 'slate' },
+        ]}
+      />
+      <AmountPad
+        compact
+        otherLabel={t('Other amount')}
+        label={t('Amount collected (₹)')}
+        value={amount}
+        onChange={setAmount}
+        quick={due > 0 ? [{ label: t('Full due {amount}', { amount: inr(due) }), value: due }] : []}
+      />
+      {due > 0 && Number(amount) > due && <p className="text-[11px] font-bold text-amber-700">{t('More than the due — the extra stays as advance.')}</p>}
+      {mode === 'ONLINE' && (
+        <>
+          <Field label={t('Transaction ID / UTR')}>
+            <input value={txn} onChange={(e) => setTxn(e.target.value)} className={inputClass} />
+          </Field>
+          <PhotoInput label={t('Payment screenshot')} file={photo} onFile={setPhoto} required />
+        </>
+      )}
+      {mode === 'CHEQUE' && (
+        <>
+          <Field label={t('Cheque no.')}><input value={cheque.number} onChange={(e) => setCheque({ ...cheque, number: e.target.value })} className={inputClass} /></Field>
+          <Field label={t('Cheque date')}><DateInput value={cheque.date} onChange={(date) => setCheque({ ...cheque, date })} /></Field>
+          <Field label={t('Bank')}><input value={cheque.bank} onChange={(e) => setCheque({ ...cheque, bank: e.target.value })} className={inputClass} /></Field>
+          <PhotoInput label={t('Cheque photo')} file={photo} onFile={setPhoto} required />
+        </>
+      )}
+      {mode === 'CASH' && <PhotoInput label={t('Receipt photo (optional)')} file={photo} onFile={setPhoto} />}
+      <Field label={t('Remarks')}>
+        <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+      </Field>
+    </Modal>
   );
 }
 

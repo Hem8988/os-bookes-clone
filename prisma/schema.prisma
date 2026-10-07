@@ -740,7 +740,8 @@ model Payment {
   paymentNumber   String
   customerId      String
   customerName    String
-  source          String // DELIVERY | LATE_ENTRY | GATEWAY
+  source          String // DELIVERY | LATE_ENTRY | GATEWAY | FIELD (dues collected by a delivery boy)
+  collectedById   String? // delivery boy who collected it (FIELD only)
   deliveryId      String?
   invoiceId       String?
   mode            String // CASH | ONLINE | CHEQUE
@@ -767,6 +768,7 @@ model Payment {
 
   @@unique([tenantId, paymentNumber])
   @@index([tenantId, customerId])
+  @@index([tenantId, collectedById, paymentDate])
   @@map("payments")
 }
 

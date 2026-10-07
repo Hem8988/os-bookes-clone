@@ -68,9 +68,9 @@ export const Modal: React.FC<{ open: boolean; title: string; onClose: () => void
   return (
     <div className={cx('fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-center', full ? 'items-stretch p-0' : 'items-end sm:items-center p-0 sm:p-4')} onClick={onClose}>
       <div className={cx('bg-white w-full shadow-2xl flex flex-col', full ? 'h-full' : cx('rounded-t-2xl sm:rounded-2xl max-h-[92dvh]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'))} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-          <h3 className="font-black text-slate-900 text-sm">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100">
+          <h3 className="min-w-0 truncate font-black text-slate-900 text-sm" title={title}>{title}</h3>
+          <button onClick={onClose} aria-label="Close" className="shrink-0 p-1 rounded-lg hover:bg-slate-100 text-slate-500">
             <X className="h-5 w-5" />
           </button>
         </div>

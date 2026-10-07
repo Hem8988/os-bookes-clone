@@ -1,4 +1,4 @@
-import type { Tx } from '@/lib/db';
+import type { Db, Tx } from '@/lib/db';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { isValidGstin, isValidMobile, phoneKey } from '@/lib/phone';
 import { audit, Actor } from './audit';
@@ -116,6 +116,15 @@ async function assertUniquePhone(tx: Tx, tenantId: string, type: string, phone: 
   if (type !== 'Customer') return;
   const clash = await tx.customer.findFirst({ where: { tenantId, type: 'Customer', phone, NOT: exceptId ? { id: exceptId } : undefined } });
   if (clash) throw conflict(`Mobile ${phone} is already registered for ${clash.name}.`);
+}
+
+/**
+ * A delivery boy's own customers: those with him as their delivery boy,
+ * plus customers with no delivery boy of their own on a route he is the default for.
+ */
+export async function deliveryBoyCustomers(db: Db, tenantId: string, userId: string): Promise<Prisma.CustomerWhereInput> {
+  const myRoutes = (await db.route.findMany({ where: { tenantId, defaultDeliveryBoyId: userId }, select: { name: true } })).map((r) => r.name);
+  return { OR: [{ defaultDeliveryBoyId: userId }, ...(myRoutes.length ? [{ defaultDeliveryBoyId: null, route: { in: myRoutes } }] : [])] };
 }
 
 export async function createCustomer(tx: Tx, actor: Actor, input: Row) {

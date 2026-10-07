@@ -88,6 +88,8 @@ export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string
     where: { tenantId, createdAt: { gte: start, lte: end }, OR: [{ fromType: 'DELIVERY_BOY', fromId: deliveryBoyId }, { toType: 'DELIVERY_BOY', toId: deliveryBoyId }] },
   });
   const submissions = await db.cashSubmission.findMany({ where: { tenantId, deliveryBoyId, date } });
+  // Old dues collected on payment-only visits (rejected ones are reversed out of the wallet).
+  const fieldPayments = await db.payment.findMany({ where: { tenantId, source: 'FIELD', collectedById: deliveryBoyId, paymentDate: date, status: { not: 'REJECTED' } }, select: { mode: true, amount: true } });
   const wallet = await getWallet(db, tenantId, 'DELIVERY_BOY', deliveryBoyId, day?.deliveryBoyName || '');
   const closingStock = await snapshot(db, tenantId, deliveryBoyId);
 
@@ -113,7 +115,8 @@ export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string
     }
   }
 
-  const byMode = (mode: string) => round2(deliveries.filter((d) => d.paymentMode === mode).reduce((s, d) => s + d.paymentAmount, 0));
+  const byMode = (mode: string) =>
+    round2(deliveries.filter((d) => d.paymentMode === mode).reduce((s, d) => s + d.paymentAmount, 0) + fieldPayments.filter((p) => p.mode === mode).reduce((s, p) => s + p.amount, 0));
   const creditGiven = round2(deliveries.reduce((s, d) => s + Math.max(d.invoiceAmount - d.paymentAmount, 0), 0));
   const submitted = round2(submissions.filter((s) => s.status === 'APPROVED').reduce((s, x) => s + x.amount, 0));
   const pendingSubmission = round2(submissions.filter((s) => s.status === 'PENDING').reduce((s, x) => s + x.amount, 0));
@@ -130,6 +133,7 @@ export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string
       sentBack: deliveries.filter((d) => d.status === 'SENT_BACK').length,
     },
     stock: [...products.values()],
+    collections: { count: fieldPayments.length, amount: round2(fieldPayments.reduce((s, p) => s + p.amount, 0)) },
     stockReturn: await stockToReturn(db, tenantId, deliveryBoyId),
     cash: {
       opening: day?.openingCash ?? 0,

@@ -253,7 +253,7 @@ export async function acceptOrder(tx: Tx, actor: Actor, order: Order) {
  */
 export async function declineOrder(tx: Tx, actor: Actor, order: Order, reason: string, effects: Effects) {
   if (order.assignedDeliveryBoyId !== actor.userId) throw forbidden('This order is not assigned to you.');
-  if (!['ASSIGNED', 'ACCEPTED'].includes(order.status)) throw conflict('Only orders not yet out for delivery can be declined.');
+  if (order.status !== 'ASSIGNED') throw conflict('An accepted order cannot be declined. Ask the office to reassign it.');
   if (!reason.trim()) throw badRequest('Give a reason for declining.');
   await setOrderStatus(tx, order, 'APPROVED', actor.name, `Declined by ${actor.name}: ${reason}`, { assignedDeliveryBoyId: null, assignedDeliveryBoyName: null, assignedAt: null, acceptedAt: null, vehicleNumber: null });
   await audit(tx, actor, { action: 'ORDER_DECLINED', entityType: 'Order', entityId: order.id, reference: order.orderNumber, reason });

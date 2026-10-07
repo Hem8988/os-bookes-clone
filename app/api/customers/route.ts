@@ -2,7 +2,7 @@ import { prisma, transaction } from '@/lib/db';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
-import { createCustomer, customerToClient } from '@/lib/server/customers';
+import { createCustomer, customerToClient, deliveryBoyCustomers } from '@/lib/server/customers';
 import { forbidden, handle, ok, readJson } from '@/lib/server/http';
 
 /** Customer search for pickers (orders, payments, field orders). */
@@ -28,10 +28,8 @@ export const GET = handle(async (request: Request) => {
     ];
   }
   if (auth.role === 'DELIVERY_BOY') {
-    // A delivery boy sees only his own customers: those with him as their delivery boy,
-    // plus customers with no delivery boy of their own on a route he is the default for.
-    const myRoutes = (await prisma.route.findMany({ where: { tenantId: auth.tenantId, defaultDeliveryBoyId: auth.userId }, select: { name: true } })).map((r) => r.name);
-    where.AND = [{ OR: [{ defaultDeliveryBoyId: auth.userId }, ...(myRoutes.length ? [{ defaultDeliveryBoyId: null, route: { in: myRoutes } }] : [])] }];
+    // A delivery boy sees only his own customers.
+    where.AND = [await deliveryBoyCustomers(prisma, auth.tenantId, auth.userId)];
     const rows = await prisma.customer.findMany({
       where,
       select: { id: true, customerCode: true, name: true, shortName: true, phone: true, address: true, area: true, defaultProductIds: true, deliveryAddresses: true },

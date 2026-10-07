@@ -1,5 +1,6 @@
 import type { Tx } from '@/lib/db';
 import { createApproval } from './approvals';
+import { deliveryBoyCustomers } from './customers';
 import { audit, Actor } from './audit';
 import { assertDayOpen } from './dayLocks';
 import type { Effects } from './effects';
@@ -23,6 +24,7 @@ export interface LatePaymentInput {
   chequeDate?: string | null;
   proofUrl?: string | null;
   notes?: string | null;
+  collectedById?: string | null;
 }
 
 /**
@@ -30,7 +32,7 @@ export interface LatePaymentInput {
  * then verified before it reaches the ledger. Gateway payments use the same
  * path with source GATEWAY.
  */
-export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInput, source: 'LATE_ENTRY' | 'GATEWAY', effects: Effects) {
+export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInput, source: 'LATE_ENTRY' | 'GATEWAY' | 'FIELD', effects: Effects) {
   const customer = await tx.customer.findFirst({ where: { id: input.customerId, tenantId: actor.tenantId } });
   if (!customer) throw notFound('Customer not found.');
   const amount = round2(Number(input.amount));
@@ -55,6 +57,7 @@ export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInpu
       customerId: customer.id,
       customerName: customer.name,
       source,
+      collectedById: input.collectedById || null,
       invoiceId: input.invoiceId || null,
       mode: input.mode,
       amount,
@@ -76,7 +79,7 @@ export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInpu
       referenceType: 'PAYMENT',
       referenceId: payment.id,
       title: `${payment.paymentNumber} · ${customer.name}`,
-      summary: `${input.mode} ₹${amount.toLocaleString('en-IN')} on ${paymentDate}${input.transactionId ? ` · Txn ${input.transactionId}` : ''}${input.chequeNumber ? ` · Chq ${input.chequeNumber}` : ''}`,
+      summary: `${source === 'FIELD' ? `Collected by ${actor.name} · ` : ''}${input.mode} ₹${amount.toLocaleString('en-IN')} on ${paymentDate}${input.transactionId ? ` · Txn ${input.transactionId}` : ''}${input.chequeNumber ? ` · Chq ${input.chequeNumber}` : ''}`,
       payload: { customerId: customer.id, amount, mode: input.mode, source },
       requestedById: actor.userId === 'system' ? null : actor.userId,
       requestedByName: actor.name,
@@ -86,6 +89,30 @@ export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInpu
   await audit(tx, actor, { action: 'PAYMENT_ENTERED', entityType: 'Payment', entityId: payment.id, reference: payment.paymentNumber, newValue: { amount, mode: input.mode, customer: customer.name } });
   return payment;
 }
+
+/**
+ * Old dues collected by a delivery boy on a payment-only visit. Goes to Payment
+ * Verification like a late entry; cash sits in his wallet until he submits it.
+ */
+export async function recordFieldCollection(tx: Tx, actor: Actor, input: Omit<LatePaymentInput, 'paymentDate' | 'invoiceId' | 'collectedById'>, effects: Effects) {
+  const date = businessDate();
+  const day = await tx.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId: actor.tenantId, deliveryBoyId: actor.userId, date } } });
+  if (day?.status !== 'STARTED') throw conflict('Start your day before collecting payments.');
+  if (input.mode === 'ONLINE' && !input.proofUrl) throw badRequest('Payment screenshot is required for online payment.');
+  if (input.mode === 'CHEQUE' && !input.proofUrl) throw badRequest('Cheque photo is required.');
+  const mine = await deliveryBoyCustomers(tx, actor.tenantId, actor.userId);
+  if (!(await tx.customer.count({ where: { id: input.customerId, tenantId: actor.tenantId, AND: [mine] } }))) throw notFound('Customer not found.');
+
+  const payment = await recordPayment(tx, actor, { ...input, paymentDate: date, collectedById: actor.userId }, 'FIELD', effects);
+  if (payment.mode === 'CASH') {
+    const wallet = await getWallet(tx, actor.tenantId, 'DELIVERY_BOY', actor.userId, actor.name);
+    await postWallet(tx, wallet.id, { type: 'COLLECTION', amount: payment.amount, referenceType: 'PAYMENT', referenceId: payment.id, notes: `Dues collected ${payment.paymentNumber} (${payment.customerName})`, performedBy: actor.name });
+  }
+  return payment;
+}
+
+/** Field cash reaches company cash through the boy's cash submission, not on verification. */
+const viaCashSubmission = (p: { source: string; mode: string }) => p.source === 'FIELD' && p.mode === 'CASH';
 
 export async function verifyPayment(tx: Tx, actor: Actor, paymentId: string, effects: Effects) {
   const payment = await tx.payment.findFirst({ where: { id: paymentId, tenantId: actor.tenantId } });
@@ -107,11 +134,11 @@ export async function verifyPayment(tx: Tx, actor: Actor, paymentId: string, eff
     createdBy: actor.name,
   });
 
-  if (payment.mode === 'CASH') {
+  if (payment.mode === 'CASH' && !viaCashSubmission(payment)) {
     const wallet = await getWallet(tx, actor.tenantId, 'COMPANY', COMPANY_WALLET.ownerId, COMPANY_WALLET.ownerName);
     await postWallet(tx, wallet.id, { type: 'RECEIPT', amount: payment.amount, referenceType: 'PAYMENT', referenceId: payment.id, notes: `Cash from ${payment.customerName}`, performedBy: actor.name });
   }
-  await postBookEntry(tx, {
+  if (!viaCashSubmission(payment)) await postBookEntry(tx, {
     tenantId: actor.tenantId,
     ledgerType: payment.mode === 'CASH' ? 'CASH' : 'BANK',
     accountName: payment.mode === 'CASH' ? 'Company Cash' : 'Bank (Receipts)',
@@ -146,5 +173,10 @@ export async function rejectPayment(tx: Tx, actor: Actor, paymentId: string, rea
   if (!payment) throw notFound('Payment not found.');
   if (payment.status !== 'PENDING_VERIFICATION') throw conflict('Payment is already processed.');
   await tx.payment.update({ where: { id: payment.id }, data: { status: 'REJECTED', rejectionReason: reason, verifiedBy: actor.name, verifiedAt: new Date() } });
+  if (viaCashSubmission(payment) && payment.collectedById) {
+    // The cash went into his wallet on entry; take it back out.
+    const wallet = await getWallet(tx, actor.tenantId, 'DELIVERY_BOY', payment.collectedById, payment.enteredBy);
+    await postWallet(tx, wallet.id, { type: 'REVERSAL', amount: -payment.amount, referenceType: 'PAYMENT', referenceId: payment.id, notes: `Reversal of ${payment.paymentNumber} (rejected: ${reason})`, performedBy: actor.name });
+  }
   await audit(tx, actor, { action: 'PAYMENT_REJECTED', entityType: 'Payment', entityId: payment.id, reference: payment.paymentNumber, reason });
 }

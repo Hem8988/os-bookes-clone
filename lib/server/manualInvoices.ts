@@ -177,7 +177,7 @@ export async function createManualInvoice(tx: Tx, actor: Actor, data: Row, effec
   const saved = await tx.invoice.update({ where: { id: invoice.id }, data: { balanceAfter: balance }, include: { items: true } });
   await audit(tx, actor, { action: 'INVOICE_CREATED', entityType: 'Invoice', entityId: invoice.id, reference: invoice.invoiceNumber, newValue: { grandTotal: invoice.grandTotal, paid } });
   effects.add('invoice message', () =>
-    notifyCustomer(actor.tenantId, customer, 'INVOICE', { invoiceNumber: saved.invoiceNumber, date, amount: saved.grandTotal.toLocaleString('en-IN'), paid: paid.toLocaleString('en-IN'), outstanding: balance.toLocaleString('en-IN'), link: '' }, `Invoice ${saved.invoiceNumber}`)
+    notifyCustomer(actor.tenantId, customer, 'INVOICE', { invoiceNumber: saved.invoiceNumber, date, amount: saved.grandTotal.toLocaleString('en-IN'), paid: paid.toLocaleString('en-IN'), outstanding: balance.toLocaleString('en-IN'), link: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/+$/, '')}/customer?invoice=${saved.id}` : '' }, `Invoice ${saved.invoiceNumber}`)
   );
   return saved;
 }

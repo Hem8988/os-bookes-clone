@@ -300,7 +300,7 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
   const paper = { challanNumber: doc(docs.challanNumber), challanUrl: doc(docs.challanUrl), grnNumber: doc(docs.grnNumber), grnDate: doc(docs.grnDate), poNumber: doc(docs.poNumber), poDate: doc(docs.poDate) };
   if (!paper.challanNumber) throw badRequest('Enter the delivery challan number.');
   if (paper.challanUrl && !isStoredFile(paper.challanUrl)) throw badRequest('Upload the delivery challan again.');
-  // Vehicle on the invoice: as typed, else the one set on the order, else the delivery boy's (Operations → Vehicles → Driver).
+  // Vehicle on the invoice: as typed, else the one set on the order, else the delivery boy's (Masters → Vehicles / trucks → Driver).
   const vehicleNumber = doc(docs.vehicleNumber)?.toUpperCase() || delivery.order.vehicleNumber || (await deliveryBoyVehicle(tx, actor.tenantId, delivery.deliveryBoyId, delivery.deliveryBoyName));
 
   const order = delivery.order;

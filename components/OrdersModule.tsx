@@ -332,7 +332,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
   );
 }
 
-/** The vehicle given to this delivery boy in Operations → Vehicles. */
+/** The vehicle given to this delivery boy in Masters → Vehicles / trucks. */
 const boyVehicle = (vehicles: Vehicle[], boy?: Boy) =>
   boy ? vehicles.find((v) => v.driverUserId === boy.id)?.number || vehicles.find((v) => v.driverName && v.driverName.trim().toLowerCase() === boy.name.trim().toLowerCase())?.number || '' : '';
 

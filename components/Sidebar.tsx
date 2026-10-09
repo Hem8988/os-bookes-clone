@@ -50,7 +50,6 @@ export const MENU: MenuSection[] = [
       { tab: 'registers', sub: 'route', label: 'Route plan', permission: 'ops.view' },
       { tab: 'registers', sub: 'complaints', label: 'Complaints', permission: 'ops.view' },
       { tab: 'registers', sub: 'cylinders', label: 'Cylinder register & testing', permission: 'ops.view' },
-      { tab: 'registers', sub: 'vehicles', label: 'Vehicles', permission: 'ops.view' },
     ],
   },
   {
@@ -146,13 +145,18 @@ export const MENU: MenuSection[] = [
       { tab: 'masters', sub: 'employee', label: 'Employees', permission: 'masters.view' },
       { tab: 'masters', sub: 'expense', label: 'Expense heads', permission: 'masters.view' },
       { tab: 'masters', sub: 'company', label: 'Branches', permission: 'masters.view' },
+      // Trucks / tempos (fuel, service, documents) and the delivery boy who drives each.
+      { tab: 'registers', sub: 'vehicles', label: 'Vehicles / trucks', permission: 'ops.view' },
     ],
   },
   {
     key: 'whatsapp',
     label: 'WhatsApp',
     icon: MessageSquare,
-    items: [{ tab: 'whatsapp', label: 'Bot, templates & log', permission: 'whatsapp.manage' }],
+    items: [
+      { tab: 'whatsapp', sub: 'chats', label: 'Chats', permission: 'whatsapp.chat' },
+      { tab: 'whatsapp', label: 'Bot, templates & log', permission: 'whatsapp.manage' },
+    ],
   },
   {
     key: 'admin',

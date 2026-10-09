@@ -176,7 +176,7 @@ export async function sendMonthlyStatements(tenantId: string, month: string) {
   for (const c of customers) {
     const r = by.get(c.id)!;
     if (!r.active && Math.abs(r.closing) < 1) continue;
-    await notifyCustomer(tenantId, c, 'MONTHLY_STATEMENT', { month: monthName(month), opening: f(r.opening), billed: f(r.billed), paid: f(r.paid), closing: f(r.closing), link: appUrl ? `Full statement: ${appUrl}/customer` : '' }, `Statement for ${monthName(month)}`);
+    await notifyCustomer(tenantId, c, 'MONTHLY_STATEMENT', { month: monthName(month), opening: f(r.opening), billed: f(r.billed), paid: f(r.paid), closing: f(r.closing), link: appUrl ? `${appUrl}/customer` : '' }, `Statement for ${monthName(month)}`);
     sent++;
   }
   return { sent, month };

@@ -504,7 +504,7 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
   const { items, editor, over } = useTransferLines(data.products, available);
   const { trucks, resolve, vehicles } = useTruckLocations(data.warehouses, onError);
   const [fromKind, toKind] = type.split('_TO_') as [Side, Side];
-  /** Picking a delivery boy fills in the vehicle he drives (Operations → Vehicles). */
+  /** Picking a delivery boy fills in the vehicle he drives (Masters → Vehicles / trucks). */
   const pickBoy = (id: string) => {
     const boy = data.deliveryBoys.find((b) => b.id === id);
     const own = boy && vehicles.find((v) => v.own && v.driverName && v.driverName.trim().toLowerCase() === boy.name.trim().toLowerCase());
@@ -547,7 +547,7 @@ function TransferModal({ data, onClose, onDone, onError }: ModalProps) {
           <option value="DRIVER_TO_DRIVER">Delivery boy → Delivery boy</option>
         </select>
       </Field>
-      {(fromKind === 'TRUCK' || toKind === 'TRUCK') && trucks.length === 0 && <p className="text-xs font-semibold text-amber-700">No trucks yet — add your truck in Operations → Vehicles first.</p>}
+      {(fromKind === 'TRUCK' || toKind === 'TRUCK') && trucks.length === 0 && <p className="text-xs font-semibold text-amber-700">No trucks yet — add your truck in Masters → Vehicles / trucks first.</p>}
       <div className="grid grid-cols-2 gap-2">
         <Field label="From">
           <select value={fromId} onChange={(e) => { setFromId(e.target.value); if (fromKind === 'DRIVER') pickBoy(e.target.value); }} className={inputClass}>

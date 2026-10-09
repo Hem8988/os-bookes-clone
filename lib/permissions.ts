@@ -69,6 +69,8 @@ export const PERMISSIONS = {
   'audit.view': [SA],
   'settings.manage': [SA],
   'whatsapp.manage': [SA],
+  // Team inbox: read and reply to customers' WhatsApp chats.
+  'whatsapp.chat': [SA, MG, AC],
   'users.manage': [SA],
   'devices.approve': [SA],
   'tracking.view': [SA, MG],
@@ -95,6 +97,8 @@ export const APPROVAL_TYPES = {
   DAY_REOPEN: { label: 'Day Reopen', approvers: [SA], slaHours: 4 },
   DEVICE_APPROVAL: { label: 'New Device Login', approvers: [SA], slaHours: 4 },
   FIELD_REQUEST: { label: 'Delivery Boy Request', approvers: [SA, MG], slaHours: 12 },
+  // A delivery boy wants to start his day with a vehicle not assigned to him.
+  VEHICLE_REQUEST: { label: 'Vehicle Request', approvers: [SA, MG], slaHours: 2 },
 } as const satisfies Record<string, { label: string; approvers: Role[]; slaHours: number }>;
 
 export type ApprovalType = keyof typeof APPROVAL_TYPES;

@@ -8,6 +8,7 @@ import { addDays, ApiError, businessDate } from './http';
 import { sendWhatsAppButtons, sendWhatsAppList, sendWhatsAppText } from './messaging/whatsapp';
 import { createOrder } from './orders';
 import { resolveRate } from './pricing';
+import { notifyRoles } from './notify';
 import { getSetting } from './settings';
 
 // Official-number ordering bot (SRS §7.3, §13). One conversation row per
@@ -190,7 +191,10 @@ async function menuAction(choice: string, conv: WhatsAppConversation, phone: str
       break;
     }
     case '7':
-      await sendWhatsAppText(TENANT, phone, await supportText());
+      // Hand the chat to a person: the bot stays quiet until the team gives it back (WhatsApp → Chats).
+      await prisma.whatsAppConversation.update({ where: { id: conv.id }, data: { botPaused: true } });
+      await sendWhatsAppText(TENANT, phone, `Hamari team jaldi aapse yahin baat karegi. 🙏\nAap apna sawal likh kar bhej dijiye.\n${await supportText()}`);
+      await notifyRoles(TENANT, ['SUPER_ADMIN', 'MANAGER'], { title: `WhatsApp: ${customer.name} wants to talk`, body: 'Customer chose Contact Support in the WhatsApp menu.', link: `/admin?tab=whatsapp&sub=chats&chat=${phone}` });
       break;
     default:
       return retry(conv, phone, () => showMenu(phone, customer), 'Menu se 1 se 7 tak koi option chunein.');

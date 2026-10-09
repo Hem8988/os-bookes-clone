@@ -91,6 +91,9 @@ interface StockRow { productId: string; productName: string; fullQty: number; em
 interface DaySummary {
   date: string;
   status: 'NOT_STARTED' | 'STARTED' | 'CLOSED';
+  // Vehicle of the current trip (null on days started before vehicles were recorded); trip 2, 3… after a vehicle change.
+  vehicle?: string | null;
+  trips?: { trip: number; vehicleNumber: string | null; status: string }[];
   deliveries: { count: number; cylindersDelivered: number; emptiesCollected: number; pendingVerification: number; sentBack: number };
   stock: { productId: string; productName: string; openingFull: number; received: number; delivered: number; returned: number; emptyCollected: number; closingFull: number; closingEmpty: number }[];
   cash: { opening: number; collected: number; submitted: number; pendingSubmission: number; closing: number; online: number; cheque: number; credit: number };
@@ -328,6 +331,7 @@ export default function DeliveryBoyModule() {
       {creating && (
         <NewOrderSheet
           stock={stock}
+          tripVehicle={summary?.status === 'STARTED' ? summary.vehicle ?? null : null}
           onClose={() => setCreating(false)}
           onCreated={async (keepOpen) => {
             showToast('Order sent to the office for approval.');
@@ -357,11 +361,16 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
     api<NonNullable<typeof targets>>('/api/delivery/day-log?targets=1').then(setTargets).catch((e) => toast(errorMessage(e), 'error'));
   }, [confirmClose, hasStockToReturn, targets, toast]);
 
-  const startDay = async () => {
+  // Start Day asks which vehicle; everything on the trip then goes in it.
+  const [picking, setPicking] = useState(false);
+  // Changing vehicle = close this trip completely (stock + cash), then start again with the new one.
+  const [changingVehicle, setChangingVehicle] = useState(false);
+  const startDay = async (vehicleId: string) => {
     setBusy(true);
     try {
       const pos = await getLocation();
-      await api('/api/delivery/day-log', { body: { action: 'START_DAY', latitude: pos?.latitude ?? null, longitude: pos?.longitude ?? null } });
+      await api('/api/delivery/day-log', { body: { action: 'START_DAY', vehicleId, latitude: pos?.latitude ?? null, longitude: pos?.longitude ?? null } });
+      setPicking(false);
       toast('Day started. Drive safe!');
       await onChanged();
     } catch (e) {
@@ -378,6 +387,10 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
       await api('/api/delivery/day-log', { body: { action: 'CLOSE_DAY' } });
       setConfirmClose(false);
       toast('Day closed. Entries are locked.');
+      if (changingVehicle) {
+        setChangingVehicle(false);
+        setPicking(true);
+      }
       await onChanged();
     } catch (e) {
       toast(errorMessage(e), 'error');
@@ -441,20 +454,36 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
       <div className={cx('rounded-2xl p-4 text-white', s.status === 'STARTED' ? 'bg-emerald-600' : s.status === 'CLOSED' ? 'bg-slate-700' : 'bg-sky-700')}>
         <div className="text-[11px] font-bold uppercase opacity-80">{t('Day status')}</div>
         <div className="text-xl font-black">{t(s.status === 'STARTED' ? 'On duty' : s.status === 'CLOSED' ? 'Day closed' : 'Not started')}</div>
+        {s.vehicle && s.status !== 'NOT_STARTED' && (
+          <div className="mt-1 flex items-center gap-1.5 text-sm font-bold">
+            <Truck className="h-4 w-4 shrink-0" />
+            <span className="font-black">{s.vehicle}</span>
+            {(s.trips?.length ?? 0) > 1 && <span className="opacity-80">· {t('Trip {n}', { n: s.trips?.length ?? 1 })}</span>}
+          </div>
+        )}
         {s.status === 'NOT_STARTED' && (
-          <Button tone="plain" className="mt-3 w-full py-3 text-sm bg-white text-sky-800 hover:bg-sky-50 shadow" busy={busy} onClick={startDay}>
-            <PlayCircle className="h-4 w-4" />{t('Start day (location check)')}</Button>
+          <Button tone="plain" className="mt-3 w-full py-3 text-sm bg-white text-sky-800 hover:bg-sky-50 shadow" busy={busy} onClick={() => setPicking(true)}>
+            <PlayCircle className="h-4 w-4" />{t('Start day — choose vehicle')}</Button>
         )}
         {s.status === 'STARTED' && (
-          <Button tone="plain" className="mt-3 w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => setConfirmClose(true)}>
-            <StopCircle className="h-4 w-4" />{t('Close day')}</Button>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button tone="plain" className="w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => setConfirmClose(true)}>
+              <StopCircle className="h-4 w-4" />{t('Close day')}</Button>
+            <Button tone="plain" className="w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => { setChangingVehicle(true); setConfirmClose(true); }}>
+              <Truck className="h-4 w-4" />{t('Change vehicle')}</Button>
+          </div>
         )}
-        {/* Same day can't be started again; the admin re-opens it on request. */}
+        {/* A closed day starts again only with another vehicle (new trip); same vehicle → the admin re-opens it. */}
         {s.status === 'CLOSED' && (
-          <Button tone="plain" className="mt-3 w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => setReopenReason('')}>
-            <RefreshCw className="h-4 w-4" />{t('Request re-open (admin)')}</Button>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button tone="plain" className="w-full bg-white text-slate-800 hover:bg-slate-100" onClick={() => setPicking(true)}>
+              <Truck className="h-4 w-4" />{t('Start with another vehicle')}</Button>
+            <Button tone="plain" className="w-full bg-white/15 hover:bg-white/25 text-white" onClick={() => setReopenReason('')}>
+              <RefreshCw className="h-4 w-4" />{t('Request re-open (admin)')}</Button>
+          </div>
         )}
       </div>
+      {picking && <VehiclePicker closedWith={s.status === 'CLOSED' ? s.vehicle ?? null : null} busy={busy} onStart={startDay} onClose={() => setPicking(false)} toast={toast} />}
       <Modal
         open={reopenReason !== null}
         title={t('Re-open today')}
@@ -551,15 +580,21 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
 
       <Modal
         open={confirmClose}
-        title={t('Close today')}
-        onClose={() => setConfirmClose(false)}
+        title={t(changingVehicle ? 'Change vehicle' : 'Close today')}
+        onClose={() => { setConfirmClose(false); setChangingVehicle(false); }}
         footer={
           <>
-            <Button tone="secondary" onClick={() => setConfirmClose(false)}>{t('Back')}</Button>
-            <Button tone="danger" busy={busy} disabled={cashToSubmit > 0 || toReturn.length > 0} onClick={closeDay}>{t('Close & lock day')}</Button>
+            <Button tone="secondary" onClick={() => { setConfirmClose(false); setChangingVehicle(false); }}>{t('Back')}</Button>
+            <Button tone="danger" busy={busy} disabled={cashToSubmit > 0 || toReturn.length > 0} onClick={closeDay}>{t(changingVehicle ? 'Close trip & choose vehicle' : 'Close & lock day')}</Button>
           </>
         }
       >
+        {changingVehicle && (
+          <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-xs font-bold flex gap-2">
+            <Truck className="h-4 w-4 shrink-0" />
+            {t('To change the vehicle, first close this trip completely: hand over all stock and submit all cash. Then start again with the new vehicle.')}
+          </div>
+        )}
         {cashToSubmit > 0 && (
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold space-y-2">
             <div className="flex gap-2">
@@ -599,7 +634,7 @@ function HomeTab({ summary, error, orders, pendingIds, onOpen, onNew, onGo, queu
                 {targets?.trucks.map((v) => <option key={v.number} value={v.number}>{v.number}{v.driverName ? ` · ${v.driverName}` : ''}</option>)}
               </select>
             )}
-            {handTo === 'TRUCK' && targets && targets.trucks.length === 0 && <div className="font-semibold">{t('No trucks yet — ask the office to add one in Operations → Vehicles.')}</div>}
+            {handTo === 'TRUCK' && targets && targets.trucks.length === 0 && <div className="font-semibold">{t('No trucks yet — ask the office to add one in Masters → Vehicles / trucks.')}</div>}
             {handTo === 'BOY' && (
               <select value={handId} onChange={(e) => setHandId(e.target.value)} className={cx(inputClass, 'font-semibold text-slate-900')}>
                 <option value="">{targets ? t('Choose delivery boy…') : t('Loading…')}</option>
@@ -666,6 +701,142 @@ const Tile = ({ label, value, sub }: { label: string; value: React.ReactNode; su
     {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
   </div>
 );
+
+// ───────────────────────── Vehicle picker ─────────────────────────
+
+interface VehicleChoice { id: string; number: string; type: string; mine: boolean; inUseBy: string | null; request: { status: string; note: string | null } | null }
+
+/**
+ * Start Day: which vehicle he takes. His own ones start at once; any other needs the admin's
+ * approval first. A vehicle on another boy's running trip can't be taken.
+ */
+function VehiclePicker({ closedWith, busy, onStart, onClose, toast }: { closedWith: string | null; busy: boolean; onStart: (vehicleId: string) => void; onClose: () => void; toast: (m: string, t?: 'ok' | 'error') => void }) {
+  const { t } = useT();
+  const q = useApiData<VehicleChoice[]>('/api/delivery/day-log?vehicles=1', (m) => toast(m, 'error'));
+  const list = q.data ?? [];
+  const usable = (v: VehicleChoice) => !v.inUseBy && v.number !== closedWith;
+  const mine = list.filter((v) => v.mine);
+  const others = list.filter((v) => !v.mine);
+  // Only one own vehicle free → already chosen.
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const onlyMine = mine.filter(usable);
+  const picked = list.find((v) => v.id === (pickedId ?? (onlyMine.length === 1 ? onlyMine[0].id : null))) ?? null;
+  const allowed = !!picked && (picked.mine || picked.request?.status === 'APPROVED');
+  const waiting = picked?.request?.status === 'PENDING';
+  const [reason, setReason] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const ask = async () => {
+    if (!picked || !reason.trim()) return;
+    setSending(true);
+    try {
+      await api('/api/delivery/day-log', { body: { action: 'REQUEST_VEHICLE', vehicleId: picked.id, reason: reason.trim() } });
+      setReason('');
+      toast('Vehicle request sent to admin.');
+      q.reload();
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const tile = (v: VehicleChoice) => {
+    const blocked = !usable(v);
+    const note = v.inUseBy
+      ? t('In use — {name}', { name: v.inUseBy })
+      : v.number === closedWith
+        ? t('Today closed with this')
+        : v.mine
+          ? t('My vehicle')
+          : v.request?.status === 'APPROVED'
+            ? t('Approved by admin')
+            : v.request?.status === 'PENDING'
+              ? t('Waiting for admin')
+              : v.request?.status === 'REJECTED'
+                ? t('Rejected — ask again')
+                : t('Needs admin approval');
+    return (
+      <button
+        key={v.id}
+        type="button"
+        disabled={blocked}
+        aria-pressed={picked?.id === v.id}
+        onClick={() => setPickedId(v.id)}
+        className={cx(
+          'w-full rounded-xl border px-3 py-2.5 flex items-center gap-3 text-left disabled:opacity-45',
+          picked?.id === v.id ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600/30' : 'border-slate-200 bg-white'
+        )}
+      >
+        <Truck className={cx('h-5 w-5 shrink-0', picked?.id === v.id ? 'text-emerald-700' : 'text-slate-400')} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-black text-slate-900">{v.number}</span>
+          <span className="block text-[11px] font-semibold text-slate-500">{v.type} · {note}</span>
+        </span>
+        {picked?.id === v.id && <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />}
+      </button>
+    );
+  };
+
+  return (
+    <Modal
+      open
+      title={t('Which vehicle today?')}
+      onClose={onClose}
+      footer={
+        <>
+          <Button tone="secondary" onClick={onClose}>{t('Back')}</Button>
+          {waiting ? (
+            <Button tone="secondary" onClick={() => q.reload()}>
+              <RefreshCw className="h-4 w-4" />{t('Check again')}</Button>
+          ) : picked && !allowed ? (
+            <Button busy={sending} disabled={!reason.trim()} onClick={ask}>
+              <Send className="h-4 w-4" />{t('Ask admin')}</Button>
+          ) : (
+            <Button busy={busy} disabled={!allowed} onClick={() => picked && onStart(picked.id)}>
+              <PlayCircle className="h-4 w-4" />{t('Start day (location check)')}</Button>
+          )}
+        </>
+      }
+    >
+      <p className="text-xs text-slate-600">{t('Everything today — loading, orders, deliveries and returns — goes in this vehicle. To change it later, close the trip fully first.')}</p>
+      {!q.data ? (
+        <Empty>{t('Loading…')}</Empty>
+      ) : list.length === 0 ? (
+        <Empty>{t('No vehicles yet — ask the office to add one in Masters → Vehicles / trucks.')}</Empty>
+      ) : (
+        <div className="space-y-3">
+          {mine.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{t('My vehicles')}</div>
+              {mine.map(tile)}
+            </div>
+          )}
+          {others.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">{t('Other vehicles (admin approval)')}</div>
+              {others.map(tile)}
+            </div>
+          )}
+        </div>
+      )}
+      {picked && !allowed && !waiting && (
+        <div className="space-y-2">
+          {picked.request?.status === 'REJECTED' && picked.request.note && (
+            <div className="rounded-xl p-2.5 bg-rose-50 text-rose-800 text-xs font-bold">{t('Admin said')}: {picked.request.note}</div>
+          )}
+          <Field label={t('Why do you need this vehicle?')}>
+            <div className="flex gap-2">
+              <input value={reason} onChange={(e) => setReason(e.target.value)} className={inputClass} placeholder={t('e.g. my vehicle is in repair')} />
+              <MicButton value={reason} onChange={setReason} onError={(m) => toast(m, 'error')} />
+            </div>
+          </Field>
+        </div>
+      )}
+      {waiting && <div className="rounded-xl p-2.5 bg-amber-50 text-amber-900 text-xs font-bold">{t('Request sent. Start the day once the admin approves it.')}</div>}
+    </Modal>
+  );
+}
 
 // ───────────────────────── Orders ─────────────────────────
 
@@ -964,7 +1135,7 @@ function OrdersTab({ orders, pendingIds, dayStarted, onOpen, onRefresh, onNew, t
 interface PickCustomer { id: string; customerCode: string; name: string; shortName: string | null; phone: string; address?: string | null; area: string | null; defaultProductIds: string[]; deliveryAddresses: { id: string; address: string; isDefault: boolean }[] }
 
 /** Field order taken by the delivery boy; the office approves it, then it comes back to him. */
-function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]; onClose: () => void; onCreated: (keepOpen: boolean) => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
+function NewOrderSheet({ stock, tripVehicle, onClose, onCreated, toast }: { stock: StockRow[]; tripVehicle: string | null; onClose: () => void; onCreated: (keepOpen: boolean) => Promise<void>; toast: (m: string, t?: 'ok' | 'error') => void }) {
   const { t } = useT();
   const onError = (m: string) => toast(m, 'error');
   const products = useApiData<CartProduct[]>('/api/products', onError).data ?? [];
@@ -978,10 +1149,10 @@ function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const cart = useOrderCart(products, customer?.id ?? null, customer?.defaultProductIds ?? []);
-  // Vehicle for this order: his own one pre-filled, any active vehicle can be picked.
-  const vehiclesQ = useApiData<{ vehicles: { id: string; number: string; type: string; driverName: string | null }[]; mine: string | null }>('/api/cylinder/orders/vehicles', onError);
+  // Vehicle for this order: the one he started today's trip with (fixed). Older days without one: his own pre-filled, any active vehicle can be picked.
+  const vehiclesQ = useApiData<{ vehicles: { id: string; number: string; type: string; driverName: string | null }[]; mine: string | null }>(tripVehicle ? null : '/api/cylinder/orders/vehicles', onError);
   const [vehicle, setVehicle] = useState<string | null>(null);
-  const vehicleValue = vehicle ?? vehiclesQ.data?.mine ?? '';
+  const vehicleValue = tripVehicle ?? vehicle ?? vehiclesQ.data?.mine ?? '';
 
   // Customer list: everyone as soon as the sheet opens, then a server search as you type (debounced).
   useEffect(() => {
@@ -1120,6 +1291,13 @@ function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]
             }}
           />
           <Field label={t('Vehicle (gaadi)')}>
+            {tripVehicle ? (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <Truck className="h-5 w-5 shrink-0 text-slate-500" />
+                <span className="font-black text-slate-900">{tripVehicle}</span>
+                <span className="text-[11px] font-semibold text-slate-500">· {t('today’s vehicle')}</span>
+              </div>
+            ) : (
             <div className="flex items-center gap-2">
               <Truck className="h-5 w-5 shrink-0 text-slate-500" />
               <select value={vehicleValue} onChange={(e) => setVehicle(e.target.value)} className={cx(inputClass, 'font-semibold')}>
@@ -1131,6 +1309,7 @@ function NewOrderSheet({ stock, onClose, onCreated, toast }: { stock: StockRow[]
                 ))}
               </select>
             </div>
+            )}
           </Field>
           <button type="button" onClick={() => setMore(!more)} className="w-full flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700">
             <span>{t('More options')} <span className="font-semibold text-slate-500">· {deliveryDate === today() ? t('Today') : deliveryDate} · {t(priority === 'URGENT' ? 'Urgent' : 'Normal')}</span></span>

@@ -4,6 +4,7 @@ import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
+import { dayVehicle } from '@/lib/server/deliveryDays';
 import { editTransfer, requestTransfer, TransferType } from '@/lib/server/stock';
 
 export const GET = handle(async (request: Request) => {
@@ -36,7 +37,7 @@ export const POST = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'stock.transfer.request', { write: true });
   const body = await readJson(request);
   const effects = new Effects();
-  const transfer = await transaction((tx) =>
+  const transfer = await transaction(async (tx) =>
     requestTransfer(
       tx,
       auth,
@@ -46,7 +47,8 @@ export const POST = handle(async (request: Request) => {
         toId: str(body.toId, 'To', { required: true }),
         items: Array.isArray(body.items) ? (body.items as { productId: string; fullQty?: number; emptyQty?: number }[]) : [],
         notes: optStr(body.notes),
-        vehicleNumber: optStr(body.vehicleNumber),
+        // A delivery boy loads into / unloads from the vehicle of his running trip.
+        vehicleNumber: optStr(body.vehicleNumber) || (auth.role === 'DELIVERY_BOY' ? await dayVehicle(tx, auth.tenantId, auth.userId) : null),
       },
       effects
     )

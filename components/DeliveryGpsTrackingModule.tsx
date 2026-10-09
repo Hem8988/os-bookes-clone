@@ -10,7 +10,7 @@ import { Badge, Button, Card, Empty, PartyName, StatusBadge, cx, dateTime, input
 // every delivery of the selected day with its verification status.
 
 interface Location { id: string; deliveryBoyId: string; deliveryBoyName: string; latitude: number; longitude: number; accuracy: number | null; recordedAt: string }
-interface Day { id: string; deliveryBoyId: string; deliveryBoyName: string; status: string; startedAt: string; closedAt: string | null; openingCash: number; closingCash: number | null }
+interface Day { id: string; deliveryBoyId: string; deliveryBoyName: string; status: string; startedAt: string; closedAt: string | null; openingCash: number; closingCash: number | null; trip: number; vehicleNumber: string | null }
 interface DeliveryRow { id: string; deliveryNumber: string; customerName: string; customerShortName: string | null; deliveryBoyName: string; deliveredQtyTotal: number; emptyReceivedTotal: number; paymentMode: string; paymentAmount: number; invoiceAmount: number; hasVariance: boolean; status: string; submittedAt: string; latitude: number | null; longitude: number | null }
 
 export default function DeliveryGpsTrackingModule() {
@@ -62,6 +62,7 @@ export default function DeliveryGpsTrackingModule() {
                 <div key={d.id} className="flex justify-between items-center text-xs py-2 border-b border-slate-50">
                   <div>
                     <strong>{d.deliveryBoyName}</strong>
+                    {d.vehicleNumber && <span className="ml-1.5 font-mono font-semibold text-slate-600">{d.vehicleNumber}{d.trip > 1 ? ` · trip ${d.trip}` : ''}</span>}
                     <div className="text-[10px] text-slate-500">Started {dateTime(d.startedAt)}{d.closedAt ? ` · closed ${dateTime(d.closedAt)}` : ''}</div>
                   </div>
                   <div className="flex items-center gap-2">

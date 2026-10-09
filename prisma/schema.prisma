@@ -169,10 +169,10 @@ model AuditLog {
 // ───────────────────────────── Customer ─────────────────────────────
 
 model Customer {
-  id                   String                      @id @default(cuid())
-  tenantId             String                      @default("default")
+  id                   String                    @id @default(cuid())
+  tenantId             String                    @default("default")
   customerCode         String
-  type                 String                      @default("Customer") // Customer | Vendor
+  type                 String                    @default("Customer") // Customer | Vendor
   name                 String
   tradeName            String?
   shortName            String?
@@ -192,13 +192,13 @@ model Customer {
   defaultDeliveryBoyId String?
   defaultProductIds    String[]
   segment              String? // Hotel | Restaurant | Industrial | Retail | Hospital | Other
-  paymentTerms         String                      @default("COD") // COD | NET_7 | NET_15 | NET_30
-  creditLimit          Float                       @default(0)
+  paymentTerms         String                    @default("COD") // COD | NET_7 | NET_15 | NET_30
+  creditLimit          Float                     @default(0)
   creditDays           Int?
-  openingBalance       Float                       @default(0)
-  balance              Float                       @default(0) // running outstanding, owned by the ledger
-  accountGroup         String                      @default("Sundry Debtors")
-  status               String                      @default("ACTIVE") // ACTIVE | INACTIVE | BLOCKED
+  openingBalance       Float                     @default(0)
+  balance              Float                     @default(0) // running outstanding, owned by the ledger
+  accountGroup         String                    @default("Sundry Debtors")
+  status               String                    @default("ACTIVE") // ACTIVE | INACTIVE | BLOCKED
   gstApplicable        String?
   partyType            String?
   isSezParty           Boolean?
@@ -207,8 +207,8 @@ model Customer {
   internalNotes        String?
   tags                 String[]
   extra                Json?
-  createdAt            DateTime                    @default(now())
-  updatedAt            DateTime                    @updatedAt
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
   user                 User?
   deliveryAddresses    CustomerAddress[]
   partyRates           PartyRate[]
@@ -441,50 +441,50 @@ model OrderStatusLog {
 // ───────────────────────────── Delivery ─────────────────────────────
 
 model Delivery {
-  id                String         @id @default(cuid())
-  tenantId          String         @default("default")
-  deliveryNumber    String
-  clientRef         String? // idempotency key from the offline delivery app
-  orderId           String
-  order             Order          @relation(fields: [orderId], references: [id])
-  customerId        String
-  customerName      String
-  deliveryBoyId     String
-  deliveryBoyName   String
-  deliveryDate      String
-  deliveredQtyTotal Float          @default(0)
-  emptyReceivedTotal Float         @default(0)
-  hasVariance       Boolean        @default(false)
-  varianceNotes     String?
-  invoiceAmount     Float          @default(0)
-  paymentMode       String // CASH | ONLINE | CHEQUE | CREDIT
-  paymentAmount     Float          @default(0)
-  transactionId     String?
-  chequeNumber      String?
-  chequeBank        String?
-  chequeDate        String?
-  paymentProofUrl   String?
-  chequePhotoUrl    String?
-  deliveryProofUrl  String
-  latitude          Float?
-  longitude         Float?
-  remarks           String?
-  status            String         @default("PENDING_VERIFICATION") // PENDING_VERIFICATION | SENT_BACK | VERIFIED
-  revision          Int            @default(1)
-  sentBackReason    String?
-  verifiedBy        String?
-  verifiedAt        DateTime?
-  verificationNotes String?
+  id                 String         @id @default(cuid())
+  tenantId           String         @default("default")
+  deliveryNumber     String
+  clientRef          String? // idempotency key from the offline delivery app
+  orderId            String
+  order              Order          @relation(fields: [orderId], references: [id])
+  customerId         String
+  customerName       String
+  deliveryBoyId      String
+  deliveryBoyName    String
+  deliveryDate       String
+  deliveredQtyTotal  Float          @default(0)
+  emptyReceivedTotal Float          @default(0)
+  hasVariance        Boolean        @default(false)
+  varianceNotes      String?
+  invoiceAmount      Float          @default(0)
+  paymentMode        String // CASH | ONLINE | CHEQUE | CREDIT
+  paymentAmount      Float          @default(0)
+  transactionId      String?
+  chequeNumber       String?
+  chequeBank         String?
+  chequeDate         String?
+  paymentProofUrl    String?
+  chequePhotoUrl     String?
+  deliveryProofUrl   String
+  latitude           Float?
+  longitude          Float?
+  remarks            String?
+  status             String         @default("PENDING_VERIFICATION") // PENDING_VERIFICATION | SENT_BACK | VERIFIED
+  revision           Int            @default(1)
+  sentBackReason     String?
+  verifiedBy         String?
+  verifiedAt         DateTime?
+  verificationNotes  String?
   // Customer paperwork recorded by accounts when verifying (challan number required then; the rest optional).
-  challanNumber     String?
-  challanUrl        String?
-  grnNumber         String?
-  grnDate           String?
-  poNumber          String?
-  poDate            String?
-  submittedAt       DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  items             DeliveryItem[]
+  challanNumber      String?
+  challanUrl         String?
+  grnNumber          String?
+  grnDate            String?
+  poNumber           String?
+  poDate             String?
+  submittedAt        DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  items              DeliveryItem[]
 
   @@unique([tenantId, deliveryNumber])
   @@unique([tenantId, clientRef])
@@ -525,8 +525,14 @@ model DeliveryDay {
   closingStock    Json?
   closingCash     Float?
   summary         Json?
+  // Changing vehicle = close this trip fully, then start the next one (trip 2, 3…) the same day.
+  trip            Int       @default(1)
+  // The vehicle he works from on this trip (null on days started before vehicles were recorded).
+  vehicleId       String?
+  vehicleNumber   String?
 
-  @@unique([tenantId, deliveryBoyId, date])
+  @@unique([tenantId, deliveryBoyId, date, trip])
+  @@index([tenantId, vehicleId, status])
   @@map("delivery_days")
 }
 
@@ -873,7 +879,7 @@ model ApprovalRequest {
   tenantId        String        @default("default")
   // ORDER_APPROVAL | CREDIT_APPROVAL | DELIVERY_VERIFICATION | PAYMENT_VERIFICATION | CASH_SUBMISSION
   // STOCK_TRANSFER | STOCK_ADJUSTMENT | LEDGER_ADJUSTMENT | INVOICE_APPROVAL | DAY_REOPEN
-  // DEVICE_APPROVAL | FIELD_REQUEST
+  // DEVICE_APPROVAL | FIELD_REQUEST | VEHICLE_REQUEST
   type            String
   referenceType   String?
   referenceId     String?
@@ -941,16 +947,28 @@ model PushSubscription {
 }
 
 model WhatsAppConversation {
-  id             String   @id @default(cuid())
-  tenantId       String   @default("default")
+  id             String    @id @default(cuid())
+  tenantId       String    @default("default")
   phone          String
   customerId     String?
-  step           String   @default("IDLE") // IDLE | MENU | SELECT_PRODUCT | ENTER_QTY | SELECT_DATE | ENTER_DATE | CONFIRM
-  failedAttempts Int      @default(0)
+  step           String    @default("IDLE") // IDLE | MENU | SELECT_PRODUCT | ENTER_QTY | SELECT_DATE | ENTER_DATE | CONFIRM
+  failedAttempts Int       @default(0)
   draft          Json?
-  lastMessageAt  DateTime @default(now())
+  lastMessageAt  DateTime  @default(now())
+  // Team inbox (WhatsApp → Chats): one row per number.
+  name           String?
+  lastPreview    String?
+  lastActivityAt DateTime  @default(now())
+  // Free-form replies are allowed for 24 h after the customer's last message.
+  lastInboundAt  DateTime?
+  unread         Int       @default(0)
+  // A person is handling the chat: the ordering bot stays quiet.
+  botPaused      Boolean   @default(false)
+  assignedToId   String?
+  assignedToName String?
 
   @@unique([tenantId, phone])
+  @@index([tenantId, lastActivityAt])
   @@map("whatsapp_conversations")
 }
 
@@ -981,11 +999,17 @@ model MessageLog {
   body        String
   templateKey String?
   providerId  String?  @unique
-  status      String // SENT | FAILED | RECEIVED | SIMULATED
+  status      String // SENT | DELIVERED | READ | FAILED | RECEIVED | SIMULATED
   error       String?
+  // Chat attachments: our stored copy (/api/files/…) and its kind (image | document | video | audio).
+  mediaUrl    String?
+  mediaType   String?
+  // Staff member who typed a chat reply.
+  sentBy      String?
   createdAt   DateTime @default(now())
 
   @@index([tenantId, channel, createdAt])
+  @@index([tenantId, channel, recipient, createdAt])
   @@map("message_logs")
 }
 
@@ -1006,12 +1030,12 @@ model Unit {
 }
 
 model Category {
-  id               String   @id @default(cuid())
-  tenantId         String   @default("default")
+  id               String  @id @default(cuid())
+  tenantId         String  @default("default")
   name             String
   hsnDefault       String?
-  itemCount        Int      @default(0)
-  active           Boolean  @default(true)
+  itemCount        Int     @default(0)
+  active           Boolean @default(true)
   purchaseDiscount Float?
   saleDiscount     Float?
   image            String?
@@ -1080,16 +1104,16 @@ model Narration {
 }
 
 model Employee {
-  id                String   @id @default(cuid())
-  tenantId          String   @default("default")
+  id                String  @id @default(cuid())
+  tenantId          String  @default("default")
   userId            String?
   name              String
   role              String
   phone             String
   email             String
-  salary            Float    @default(0)
-  commissionPercent Float    @default(0)
-  active            Boolean  @default(true)
+  salary            Float   @default(0)
+  commissionPercent Float   @default(0)
+  active            Boolean @default(true)
   city              String?
   joiningDate       String?
   designation       String?
@@ -1194,15 +1218,15 @@ model Account {
 
 // Refill orders placed on the gas plant / supplier.
 model PurchaseOrder {
-  id           String @id @default(cuid())
-  tenantId     String @default("default")
+  id           String  @id @default(cuid())
+  tenantId     String  @default("default")
   poNumber     String
   vendorName   String
   vendorGstin  String?
   date         String
   expectedDate String
-  itemsCount   Int    @default(0)
-  totalAmount  Float  @default(0)
+  itemsCount   Int     @default(0)
+  totalAmount  Float   @default(0)
   status       String
   extra        Json?
 
@@ -1341,7 +1365,9 @@ model AccountVoucherLine {
   @@map("gl_voucher_lines")
 }
 
-/** GST purchase bill from the bottling plant or any supplier (Party Master → Vendor). */
+/**
+ * GST purchase bill from the bottling plant or any supplier (Party Master → Vendor).
+ */
 model PurchaseBill {
   id                String             @id @default(cuid())
   tenantId          String             @default("default")
@@ -1408,7 +1434,9 @@ model PurchaseBillItem {
   @@map("purchase_bill_items")
 }
 
-/** Day-to-day expense (salary, fuel, rent, repairs …) paid in cash / bank or on credit. */
+/**
+ * Day-to-day expense (salary, fuel, rent, repairs …) paid in cash / bank or on credit.
+ */
 model ExpenseEntry {
   id            String   @id @default(cuid())
   tenantId      String   @default("default")
@@ -1440,7 +1468,9 @@ model ExpenseEntry {
 
 // ───────────────────────── Returns (GST credit / debit notes) ─────────────────────────
 
-/** Sales return / rate reduction to a customer (GST credit note, GSTR-1 table 9B). */
+/**
+ * Sales return / rate reduction to a customer (GST credit note, GSTR-1 table 9B).
+ */
 model CreditNote {
   id              String           @id @default(cuid())
   tenantId        String           @default("default")
@@ -1498,7 +1528,9 @@ model CreditNoteItem {
   @@map("credit_note_items")
 }
 
-/** Purchase return to the plant / supplier (GST debit note). */
+/**
+ * Purchase return to the plant / supplier (GST debit note).
+ */
 model DebitNote {
   id                String          @id @default(cuid())
   tenantId          String          @default("default")
@@ -1555,25 +1587,27 @@ model DebitNoteItem {
 
 // ───────────────────────── Bank reconciliation ─────────────────────────
 
-/** One line of an uploaded bank statement, matched to a books voucher line. */
+/**
+ * One line of an uploaded bank statement, matched to a books voucher line.
+ */
 model BankStatementLine {
-  id            String   @id @default(cuid())
-  tenantId      String   @default("default")
+  id            String    @id @default(cuid())
+  tenantId      String    @default("default")
   accountId     String // gl bank ledger
   importBatch   String
   date          String
   description   String
   reference     String?
-  debit         Float    @default(0) // money out of the bank
-  credit        Float    @default(0) // money into the bank
+  debit         Float     @default(0) // money out of the bank
+  credit        Float     @default(0) // money into the bank
   balance       Float?
-  status        String   @default("UNMATCHED") // UNMATCHED | MATCHED | IGNORED
-  matchedLineId String?  @unique // AccountVoucherLine.id
+  status        String    @default("UNMATCHED") // UNMATCHED | MATCHED | IGNORED
+  matchedLineId String?   @unique // AccountVoucherLine.id
   matchedBy     String?
   matchedAt     DateTime?
   receiptNumber String? // customer receipt (RCPT-…) booked from this line, maybe still awaiting approval
   fingerprint   String // de-duplicates re-uploads
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@unique([tenantId, accountId, fingerprint])
   @@index([tenantId, accountId, date])
@@ -1603,38 +1637,40 @@ model PayrollRun {
 }
 
 model PayrollLine {
-  id             String     @id @default(cuid())
-  runId          String
-  run            PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  employeeId     String
-  employeeName   String
-  designation    String?
-  monthlySalary  Float      @default(0)
-  workingDays    Int        @default(0)
-  presentDays    Float      @default(0)
-  paidLeaves     Float      @default(0)
-  basicEarned    Float      @default(0)
-  overtimeHours  Float      @default(0)
-  overtimePay    Float      @default(0)
-  deliveries     Int        @default(0)
-  cylinders      Int        @default(0)
-  incentive      Float      @default(0)
-  bonus          Float      @default(0)
-  advanceDeduct  Float      @default(0)
-  otherDeduct    Float      @default(0)
-  gross          Float      @default(0)
-  net            Float      @default(0)
-  remarks        String?
+  id            String     @id @default(cuid())
+  runId         String
+  run           PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employeeName  String
+  designation   String?
+  monthlySalary Float      @default(0)
+  workingDays   Int        @default(0)
+  presentDays   Float      @default(0)
+  paidLeaves    Float      @default(0)
+  basicEarned   Float      @default(0)
+  overtimeHours Float      @default(0)
+  overtimePay   Float      @default(0)
+  deliveries    Int        @default(0)
+  cylinders     Int        @default(0)
+  incentive     Float      @default(0)
+  bonus         Float      @default(0)
+  advanceDeduct Float      @default(0)
+  otherDeduct   Float      @default(0)
+  gross         Float      @default(0)
+  net           Float      @default(0)
+  remarks       String?
 
   @@map("payroll_lines")
 }
 
 // ───────────────────────── Assets, complaints, vehicles ─────────────────────────
 
-/** A physical cylinder by serial number, with its statutory test dates. */
+/**
+ * A physical cylinder by serial number, with its statutory test dates.
+ */
 model CylinderAsset {
-  id           String    @id @default(cuid())
-  tenantId     String    @default("default")
+  id           String   @id @default(cuid())
+  tenantId     String   @default("default")
   serialNo     String
   productId    String?
   productName  String
@@ -1643,12 +1679,12 @@ model CylinderAsset {
   lastTestDate String?
   nextTestDue  String?
   tareWeight   Float?
-  status       String    @default("IN_STOCK") // IN_STOCK | WITH_CUSTOMER | WITH_DELIVERY_BOY | AT_PLANT | FOR_TESTING | CONDEMNED
+  status       String   @default("IN_STOCK") // IN_STOCK | WITH_CUSTOMER | WITH_DELIVERY_BOY | AT_PLANT | FOR_TESTING | CONDEMNED
   locationName String?
   customerId   String?
   notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([tenantId, serialNo])
   @@index([tenantId, nextTestDue])
@@ -1682,26 +1718,28 @@ model Complaint {
 }
 
 model Vehicle {
-  id             String       @id @default(cuid())
-  tenantId       String       @default("default")
-  number         String
-  type           String       @default("Tempo") // Tempo | Truck | Tata Ace | Bike | Other
-  capacity       Int?
-  driverUserId   String?
-  driverName     String?
-  fuelType       String       @default("Diesel")
-  odometer       Float        @default(0)
-  insuranceUpto  String?
-  pucUpto        String?
-  permitUpto     String?
-  fitnessUpto    String?
-  serviceDueKm   Float?
-  serviceDueDate String?
-  active         Boolean      @default(true)
-  notes          String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  logs           VehicleLog[]
+  id              String       @id @default(cuid())
+  tenantId        String       @default("default")
+  number          String
+  type            String       @default("Tempo") // Tempo | Truck | Tata Ace | Bike | Other
+  capacity        Int?
+  driverUserId    String?
+  driverName      String?
+  // Delivery boys allowed to start their day with this vehicle (anyone else needs the admin's approval).
+  assignedUserIds String[]     @default([])
+  fuelType        String       @default("Diesel")
+  odometer        Float        @default(0)
+  insuranceUpto   String?
+  pucUpto         String?
+  permitUpto      String?
+  fitnessUpto     String?
+  serviceDueKm    Float?
+  serviceDueDate  String?
+  active          Boolean      @default(true)
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  logs            VehicleLog[]
 
   @@unique([tenantId, number])
   @@map("vehicles")

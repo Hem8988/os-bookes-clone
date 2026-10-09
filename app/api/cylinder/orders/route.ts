@@ -4,6 +4,7 @@ import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, optStr, readJson } from '@/lib/server/http';
+import { dayVehicle } from '@/lib/server/deliveryDays';
 import { createOrder, OrderSource } from '@/lib/server/orders';
 import { prisma } from '@/lib/db';
 import { withShortNames } from '@/lib/server/shortNames';
@@ -57,7 +58,7 @@ export const GET = handle(async (request: Request) => {
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
     take: Math.min(Number(url.searchParams.get('limit')) || 200, 500),
   });
-  // Office list: the delivery boy's mobile and the vehicle he drives (Operations → Vehicles).
+  // Office list: the delivery boy's mobile and the vehicle he drives (Masters → Vehicles / trucks).
   const boyIds = [...new Set(orders.map((o) => o.assignedDeliveryBoyId).filter(Boolean) as string[])];
   const [boys, vehicles] = boyIds.length && auth.role !== 'CUSTOMER'
     ? await Promise.all([
@@ -92,7 +93,7 @@ export const POST = handle(async (request: Request) => {
   }
 
   const effects = new Effects();
-  const order = await transaction((tx) =>
+  const order = await transaction(async (tx) =>
     createOrder(
       tx,
       auth,
@@ -105,7 +106,8 @@ export const POST = handle(async (request: Request) => {
         priority: body.priority === 'URGENT' ? 'URGENT' : 'NORMAL',
         notes: optStr(body.notes),
         assignedDeliveryBoyId,
-        vehicleNumber: auth.role === 'CUSTOMER' ? null : optStr(body.vehicleNumber),
+        // A delivery boy's order goes in the vehicle of his running trip.
+        vehicleNumber: auth.role === 'CUSTOMER' ? null : auth.role === 'DELIVERY_BOY' ? (await dayVehicle(tx, auth.tenantId, auth.userId)) || optStr(body.vehicleNumber) : optStr(body.vehicleNumber),
       },
       effects
     )

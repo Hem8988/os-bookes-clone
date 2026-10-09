@@ -156,6 +156,8 @@ export interface VehicleInput {
   type?: string;
   capacity?: number | null;
   driverUserId?: string | null;
+  // Delivery boys who may start their day with this vehicle.
+  assignedUserIds?: string[];
   fuelType?: string;
   odometer?: number;
   insuranceUpto?: string | null;
@@ -173,12 +175,17 @@ export async function saveVehicle(tenantId: string, input: VehicleInput, actor: 
   const number = String(input.number || '').replace(/[\s-]+/g, '').toUpperCase();
   if (!number) throw badRequest('Enter the vehicle number.');
   const driver = input.driverUserId ? await prisma.user.findFirst({ where: { id: input.driverUserId, tenantId } }) : null;
+  // Left out of the request = keep the boys already assigned.
+  const assigned = Array.isArray(input.assignedUserIds)
+    ? (await prisma.user.findMany({ where: { tenantId, id: { in: input.assignedUserIds.map(String) }, role: 'DELIVERY_BOY' }, select: { id: true } })).map((u) => u.id)
+    : undefined;
   const data = {
     number,
     type: input.type?.trim() || 'Tempo',
     capacity: input.capacity ? Math.round(Number(input.capacity)) : null,
     driverUserId: driver?.id ?? null,
     driverName: driver?.name ?? null,
+    assignedUserIds: assigned,
     fuelType: input.fuelType?.trim() || 'Diesel',
     odometer: Math.max(0, Number(input.odometer) || 0),
     insuranceUpto: optDate(input.insuranceUpto),

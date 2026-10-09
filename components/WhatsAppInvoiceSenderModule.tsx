@@ -1,18 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MessageSquare, RefreshCw, Send } from 'lucide-react';
+import { ExternalLink, MessageSquare, RefreshCw, Send } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
+import { renderCard, renderTemplate, SAMPLE_VARS, type TemplateButton, type TemplateCard } from '../lib/whatsapp';
+import Msg91Panel from './Msg91Panel';
 import { Badge, Button, Card, Field, inputClass, Modal, cx, dateTime, useToast } from './ui';
 
 // WhatsApp centre (SRS §13): channel status, notification templates, a bot
 // simulator for testing the ordering flow, and the message log.
 
-interface Template { key: string; name: string; trigger: string; body: string; variables: string[]; metaTemplateName: string | null; language: string; active: boolean; customised: boolean }
+interface Template { key: string; name: string; trigger: string; body: string; defaultBody: string; card?: TemplateCard; button?: TemplateButton; variables: string[]; metaTemplateName: string | null; language: string; active: boolean; customised: boolean }
 interface LogRow { id: string; channel: string; direction: string; recipient: string; subject: string | null; body: string; templateKey: string | null; status: string; error: string | null; createdAt: string }
 
-type Tab = 'templates' | 'simulator' | 'log';
+type Tab = 'templates' | 'msg91' | 'simulator' | 'log';
 
 export default function WhatsAppCenter() {
   const [tab, setTab] = useState<Tab>('templates');
@@ -48,11 +50,11 @@ export default function WhatsAppCenter() {
       </div>
       {!channels.whatsapp && (
         <div className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs font-semibold">
-          WhatsApp Cloud API is not configured yet (WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN). Messages are logged as SIMULATED until then.
+          WhatsApp is not set up yet: connect MSG91 in the MSG91 tab, or the Meta Cloud API in .env (WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN). Messages are logged as SIMULATED until then.
         </div>
       )}
       <div className="flex gap-2">
-        {([['templates', 'Templates'], ['simulator', 'Bot simulator'], ['log', 'Message log']] as const).map(([key, label]) => (
+        {([['templates', 'Templates'], ['msg91', 'MSG91 (SMS / WhatsApp)'], ['simulator', 'Bot simulator'], ['log', 'Message log']] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold', tab === key ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
             {label}
           </button>
@@ -64,22 +66,32 @@ export default function WhatsAppCenter() {
           {templates.map((t) => (
             <Card key={t.key} title={<span className="flex items-center gap-2">{t.name} {!t.active && <Badge tone="slate">Off</Badge>} {t.metaTemplateName && <Badge tone="green">Meta: {t.metaTemplateName}</Badge>}</span>} actions={<Button size="sm" tone="ghost" onClick={() => setEditing(t)}>Edit</Button>}>
               <div className="text-[10px] font-bold text-slate-400 uppercase">{t.trigger}</div>
-              <pre className="mt-1 text-xs whitespace-pre-wrap font-sans text-slate-700">{t.body}</pre>
+              <div className="mt-2"><WhatsAppPreview t={t} /></div>
             </Card>
           ))}
         </div>
       )}
+      {tab === 'msg91' && <Msg91Panel toast={showToast} />}
       {tab === 'simulator' && <Simulator />}
       {tab === 'log' && <MessageLog />}
 
       <Modal open={!!editing} title={`Template: ${editing?.name}`} onClose={() => setEditing(null)} footer={<Button onClick={save}>Save</Button>} wide>
         {editing && (
           <>
-            <Field label="Message" hint={`Placeholders: ${editing.variables.map((v) => `{{${v}}}`).join(' ')}`}>
-              <textarea rows={6} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} className={inputClass} />
-            </Field>
+            <div className="grid md:grid-cols-2 gap-3">
+              <Field label="Message" hint={`Placeholders: ${editing.variables.map((v) => `{{${v}}}`).join(' ')}`}>
+                <textarea rows={14} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} className={inputClass} />
+                {editing.body !== editing.defaultBody && (
+                  <button type="button" onClick={() => setEditing({ ...editing, body: editing.defaultBody })} className="mt-1 text-xs font-bold text-emerald-700 hover:underline">Reset to default text</button>
+                )}
+              </Field>
+              <div>
+                <div className="text-xs font-bold text-slate-600 mb-1">Preview (example values)</div>
+                <WhatsAppPreview t={editing} />
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Meta template name" hint="Pre-approved template for messages outside the 24h window. Parameters are sent in the placeholder order above.">
+              <Field label="Meta template name" hint={`Pre-approved template for messages outside the 24h window. Body parameters go in the placeholder order above.${editing.card ? ' Header: IMAGE (we send the card).' : ''}${editing.button ? ` Button: URL "${editing.button.label}" = <APP_URL>/{{1}}.` : ''}`}>
                 <input value={editing.metaTemplateName || ''} onChange={(e) => setEditing({ ...editing, metaTemplateName: e.target.value })} className={inputClass} />
               </Field>
               <Field label="Language code"><input value={editing.language} onChange={(e) => setEditing({ ...editing, language: e.target.value })} className={inputClass} /></Field>
@@ -88,6 +100,35 @@ export default function WhatsAppCenter() {
           </>
         )}
       </Modal>
+    </div>
+  );
+}
+
+/** WhatsApp-style bubble: card image on top, the text, and the link button (example values). */
+function WhatsAppPreview({ t }: { t: Pick<Template, 'body' | 'card' | 'button'> }) {
+  const card = renderCard(t.card, SAMPLE_VARS);
+  return (
+    <div className="rounded-xl bg-[#efeae2] p-3">
+      <div className="max-w-sm rounded-lg bg-white shadow-sm overflow-hidden">
+        {card && (
+          <div className="m-1 rounded-md bg-gradient-to-br from-[#6fbf7e] to-[#a9dca0] p-4">
+            <div className="rounded-xl bg-white py-3 px-4 text-center shadow">
+              <div className="text-sm tracking-wide text-[#1e2a46]">{SAMPLE_VARS.companyName}</div>
+              <div className="mx-auto my-1.5 h-px w-12 bg-[#c9a85a]" />
+              <div className="text-[11px] text-slate-500">{card.label}</div>
+              <div className="text-xl font-black text-slate-900">{card.value}</div>
+              {card.badge && <span className="inline-block mt-1 rounded-full bg-[#1f9d55] px-2.5 py-0.5 text-[10px] font-bold text-white">{card.badge}</span>}
+              {card.note && <div className="mt-1.5 text-[10px] text-slate-500">{card.note}</div>}
+            </div>
+          </div>
+        )}
+        <div className="px-2.5 py-2 text-[13px] leading-snug text-slate-900 whitespace-pre-wrap">{renderTemplate(t.body, SAMPLE_VARS)}</div>
+        {t.button && (
+          <div className="border-t border-slate-100 py-2 text-center text-[13px] font-semibold text-sky-600 flex items-center justify-center gap-1.5">
+            <ExternalLink className="h-3.5 w-3.5" />{t.button.label}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

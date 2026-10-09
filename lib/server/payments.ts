@@ -96,7 +96,7 @@ export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInpu
  */
 export async function recordFieldCollection(tx: Tx, actor: Actor, input: Omit<LatePaymentInput, 'paymentDate' | 'invoiceId' | 'collectedById'>, effects: Effects) {
   const date = businessDate();
-  const day = await tx.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId: actor.tenantId, deliveryBoyId: actor.userId, date } } });
+  const day = await tx.deliveryDay.findFirst({ where: { tenantId: actor.tenantId, deliveryBoyId: actor.userId, date }, orderBy: { trip: 'desc' } });
   if (day?.status !== 'STARTED') throw conflict('Start your day before collecting payments.');
   if (input.mode === 'ONLINE' && !input.proofUrl) throw badRequest('Payment screenshot is required for online payment.');
   if (input.mode === 'CHEQUE' && !input.proofUrl) throw badRequest('Cheque photo is required.');

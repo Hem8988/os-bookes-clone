@@ -106,6 +106,14 @@ const HANDLERS: Record<ApprovalType, Handler> = {
     approve: async () => {},
     reject: async () => {},
   },
+  // Approval itself is the permission: he can start that day with the vehicle (checked in startDay).
+  VEHICLE_REQUEST: {
+    approve: async (tx, auth, item) => {
+      const p = payloadOf<{ vehicleId: string }>(item);
+      if (!(await tx.vehicle.count({ where: { id: p.vehicleId, tenantId: auth.tenantId, active: true } }))) throw conflict('This vehicle is no longer in use.');
+    },
+    reject: async () => {},
+  },
 };
 
 /** Approve or reject a queue item. Reject always requires a reason (SRS §8). */

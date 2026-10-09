@@ -11,7 +11,8 @@ export async function assertDayOpen(db: Db, tenantId: string, date: string) {
 
 /** The delivery boy must have started (and not yet closed) his day. */
 export async function assertDeliveryDayOpen(db: Db, tenantId: string, deliveryBoyId: string, date: string) {
-  const day = await db.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId, deliveryBoyId, date } } });
+  // His latest trip that day (a vehicle change starts trip 2, 3…).
+  const day = await db.deliveryDay.findFirst({ where: { tenantId, deliveryBoyId, date }, orderBy: { trip: 'desc' } });
   if (!day) throw new ApiError(409, 'Please start your day first.', 'DAY_NOT_STARTED');
   if (day.status === 'CLOSED') throw new ApiError(423, 'Your day is already closed. Ask the admin to re-open it for corrections.', 'DELIVERY_DAY_CLOSED');
   return day;

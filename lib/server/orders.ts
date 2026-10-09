@@ -2,6 +2,7 @@ import type { Tx } from '@/lib/db';
 import type { Order } from '@/lib/generated/prisma/client';
 import { createApproval, cancelPendingApprovals } from './approvals';
 import { audit, Actor } from './audit';
+import { dayVehicle } from './deliveryDays';
 import type { Effects } from './effects';
 import { badRequest, businessDate, conflict, dateStr, forbidden, notFound, round2 } from './http';
 import { notifyCustomer, notifyRoles, notifyUsers } from './notify';
@@ -54,9 +55,14 @@ export interface CreateOrderInput {
   vehicleNumber?: string | null;
 }
 
-/** The delivery boy's vehicle: the one assigned to him (Operations → Vehicles → Driver), else the one his last approved stock issue went in. */
-export async function deliveryBoyVehicle(db: Pick<Tx, 'vehicle' | 'stockTransfer'>, tenantId: string, deliveryBoyId: string, deliveryBoyName: string) {
-  const assigned = await db.vehicle.findFirst({ where: { tenantId, active: true, OR: [{ driverUserId: deliveryBoyId }, { driverName: { equals: deliveryBoyName, mode: 'insensitive' } }] }, orderBy: { updatedAt: 'desc' } });
+/**
+ * The delivery boy's vehicle: the one he started today's trip with, else the one assigned to him
+ * (Masters → Vehicles / trucks), else the one his last approved stock issue went in.
+ */
+export async function deliveryBoyVehicle(db: Pick<Tx, 'vehicle' | 'stockTransfer' | 'deliveryDay'>, tenantId: string, deliveryBoyId: string, deliveryBoyName: string) {
+  const onTrip = await dayVehicle(db, tenantId, deliveryBoyId);
+  if (onTrip) return onTrip;
+  const assigned = await db.vehicle.findFirst({ where: { tenantId, active: true, OR: [{ driverUserId: deliveryBoyId }, { assignedUserIds: { has: deliveryBoyId } }, { driverName: { equals: deliveryBoyName, mode: 'insensitive' } }] }, orderBy: { updatedAt: 'desc' } });
   if (assigned) return assigned.number;
   const issue = await db.stockTransfer.findFirst({ where: { tenantId, toId: deliveryBoyId, status: 'APPROVED', vehicleNumber: { not: null } }, orderBy: { createdAt: 'desc' } });
   return issue?.vehicleNumber || null;
@@ -244,7 +250,9 @@ export async function assignOrders(tx: Tx, actor: Actor, orders: Order[], delive
 export async function acceptOrder(tx: Tx, actor: Actor, order: Order) {
   if (order.assignedDeliveryBoyId !== actor.userId) throw forbidden('This order is not assigned to you.');
   if (order.status !== 'ASSIGNED') throw conflict('Only newly assigned orders can be accepted.');
-  await setOrderStatus(tx, order, 'ACCEPTED', actor.name, undefined, { acceptedAt: new Date() });
+  // The order goes in the vehicle of his running trip.
+  const vehicleNumber = (await dayVehicle(tx, actor.tenantId, actor.userId)) || order.vehicleNumber;
+  await setOrderStatus(tx, order, 'ACCEPTED', actor.name, undefined, { acceptedAt: new Date(), vehicleNumber });
 }
 
 /**
@@ -265,8 +273,9 @@ export async function declineOrder(tx: Tx, actor: Actor, order: Order, reason: s
 export async function dispatchOrder(tx: Tx, actor: Actor, order: Order, effects: Effects) {
   if (order.assignedDeliveryBoyId !== actor.userId) throw forbidden('This order is not assigned to you.');
   if (!['ASSIGNED', 'ACCEPTED'].includes(order.status)) throw conflict('Order is not ready to go out for delivery.');
-  if (order.status === 'ASSIGNED') await setOrderStatus(tx, order, 'ACCEPTED', actor.name, undefined, { acceptedAt: new Date() });
-  await setOrderStatus(tx, order, 'OUT_FOR_DELIVERY', actor.name, undefined, { dispatchedAt: new Date() });
+  const vehicleNumber = (await dayVehicle(tx, actor.tenantId, actor.userId)) || order.vehicleNumber;
+  if (order.status === 'ASSIGNED') await setOrderStatus(tx, order, 'ACCEPTED', actor.name, undefined, { acceptedAt: new Date(), vehicleNumber });
+  await setOrderStatus(tx, order, 'OUT_FOR_DELIVERY', actor.name, undefined, { dispatchedAt: new Date(), vehicleNumber });
   const customer = await tx.customer.findUniqueOrThrow({ where: { id: order.customerId } });
   effects.add('out for delivery message', () =>
     notifyCustomer(actor.tenantId, customer, 'OUT_FOR_DELIVERY', { orderNumber: order.orderNumber, deliveryBoyName: actor.name })

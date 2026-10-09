@@ -1,7 +1,8 @@
 import type { Db, Tx } from '@/lib/db';
 import { audit, Actor } from './audit';
 import { assertDayOpen } from './dayLocks';
-import { ApiError, businessDate, conflict, round2 } from './http';
+import { createApproval } from './approvals';
+import { ApiError, businessDate, conflict, notFound, round2 } from './http';
 import type { Effects } from './effects';
 import { getDefaultWarehouse, stockAt, truckGodown } from './inventory';
 import { requestTransfer } from './stock';
@@ -54,27 +55,118 @@ export async function returnStock(tx: Tx, actor: Actor, target: ReturnTarget, ef
   if (!toReturn.length) throw conflict('No stock left to return.');
   const items = toReturn.map((r) => ({ productId: r.productId, fullQty: r.fullQty, emptyQty: r.emptyQty }));
   const notes = `Day-end hand-over · ${businessDate()}`;
+  // Stock comes off the vehicle of his trip.
+  const vehicleNumber = await dayVehicle(tx, actor.tenantId, actor.userId);
   if (target.kind === 'BOY') {
     if (target.deliveryBoyId === actor.userId) throw conflict('Choose another delivery boy.');
-    return requestTransfer(tx, actor, { transferType: 'DRIVER_TO_DRIVER', fromId: actor.userId, toId: target.deliveryBoyId, items, notes }, effects);
+    return requestTransfer(tx, actor, { transferType: 'DRIVER_TO_DRIVER', fromId: actor.userId, toId: target.deliveryBoyId, items, notes, vehicleNumber }, effects);
   }
   // A truck is a godown underneath (TRK-<number>), so it is a normal godown return.
   const godown = target.kind === 'TRUCK' ? await truckGodown(tx, actor.tenantId, target.vehicleNumber) : await getDefaultWarehouse(tx, actor.tenantId);
   return requestTransfer(
     tx,
     actor,
-    { transferType: 'DRIVER_TO_WAREHOUSE', fromId: actor.userId, toId: godown.id, items, notes, vehicleNumber: target.kind === 'TRUCK' ? target.vehicleNumber : null },
+    { transferType: 'DRIVER_TO_WAREHOUSE', fromId: actor.userId, toId: godown.id, items, notes, vehicleNumber: target.kind === 'TRUCK' ? target.vehicleNumber : vehicleNumber },
     effects
   );
 }
 
-/** Login → biometric → location → Start Day: records opening stock and cash (SRS §9.1). */
-export async function startDay(tx: Tx, actor: Actor, input: { latitude?: number | null; longitude?: number | null }) {
+/** The boy's latest trip on that date (a day has trip 2, 3… when he changed vehicle). */
+export function currentDay(db: Db, tenantId: string, deliveryBoyId: string, date: string) {
+  return db.deliveryDay.findFirst({ where: { tenantId, deliveryBoyId, date }, orderBy: { trip: 'desc' } });
+}
+
+/** The vehicle of the boy's running trip today — everything he does on the trip goes in it. */
+export async function dayVehicle(db: Pick<Tx, 'deliveryDay'>, tenantId: string, deliveryBoyId: string) {
+  const day = await db.deliveryDay.findFirst({ where: { tenantId, deliveryBoyId, date: businessDate(), status: 'STARTED' }, orderBy: { trip: 'desc' }, select: { vehicleNumber: true } });
+  return day?.vehicleNumber || null;
+}
+
+type VehicleRow = { id: string; number: string; driverUserId: string | null; driverName: string | null; assignedUserIds: string[] };
+
+/** Given to him in Masters → Vehicles (assigned boys, or the old single driver). */
+const isAssigned = (v: VehicleRow, boyId: string, boyName: string) =>
+  v.assignedUserIds.includes(boyId) || v.driverUserId === boyId || (!!v.driverName && v.driverName.trim().toLowerCase() === boyName.trim().toLowerCase());
+
+const vehicleRequestRef = (deliveryBoyId: string, date: string, vehicleId: string) => `${deliveryBoyId}:${date}:${vehicleId}`;
+
+/** Start Day picker: every active vehicle — his own, the ones in use by another boy right now, and his approval requests for today. */
+export async function vehicleChoices(db: Db, tenantId: string, deliveryBoyId: string, deliveryBoyName: string) {
+  const date = businessDate();
+  const [vehicles, running, requests] = await Promise.all([
+    db.vehicle.findMany({ where: { tenantId, active: true }, select: { id: true, number: true, type: true, driverUserId: true, driverName: true, assignedUserIds: true }, orderBy: { number: 'asc' } }),
+    db.deliveryDay.findMany({ where: { tenantId, status: 'STARTED', vehicleId: { not: null }, NOT: { deliveryBoyId } }, select: { vehicleId: true, deliveryBoyName: true } }),
+    db.approvalRequest.findMany({ where: { tenantId, type: 'VEHICLE_REQUEST', requestedById: deliveryBoyId, referenceId: { startsWith: `${deliveryBoyId}:${date}:` } }, orderBy: { createdAt: 'desc' } }),
+  ]);
+  return vehicles.map((v) => {
+    const request = requests.find((r) => r.referenceId === vehicleRequestRef(deliveryBoyId, date, v.id));
+    return {
+      id: v.id,
+      number: v.number,
+      type: v.type,
+      mine: isAssigned(v, deliveryBoyId, deliveryBoyName),
+      inUseBy: running.find((d) => d.vehicleId === v.id)?.deliveryBoyName ?? null,
+      request: request ? { status: request.status, note: request.decisionNote } : null,
+    };
+  });
+}
+
+/** A vehicle not given to him: ask the admin (approval queue) to use it today. */
+export async function requestVehicle(tx: Tx, actor: Actor, vehicleId: string, reason: string, effects: Effects) {
+  const date = businessDate();
+  const vehicle = await tx.vehicle.findFirst({ where: { id: vehicleId, tenantId: actor.tenantId, active: true } });
+  if (!vehicle) throw notFound('Vehicle not found.');
+  if (isAssigned(vehicle, actor.userId, actor.name)) throw conflict('This vehicle is already yours — just start the day.');
+  const referenceId = vehicleRequestRef(actor.userId, date, vehicle.id);
+  const earlier = await tx.approvalRequest.findFirst({ where: { tenantId: actor.tenantId, type: 'VEHICLE_REQUEST', referenceId, status: { in: ['PENDING', 'APPROVED'] } } });
+  if (earlier?.status === 'PENDING') throw conflict('Your request for this vehicle is already waiting for the admin.');
+  if (earlier?.status === 'APPROVED') throw conflict('This vehicle is already approved for you today — start the day.');
+  return createApproval(
+    tx,
+    {
+      tenantId: actor.tenantId,
+      type: 'VEHICLE_REQUEST',
+      referenceType: 'VEHICLE',
+      referenceId,
+      title: `Vehicle ${vehicle.number} for ${actor.name} (${date})`,
+      summary: reason,
+      payload: { vehicleId: vehicle.id, vehicleNumber: vehicle.number, deliveryBoyId: actor.userId, deliveryBoyName: actor.name, date, reason },
+      requestedById: actor.userId,
+      requestedByName: actor.name,
+    },
+    effects
+  );
+}
+
+/** One vehicle is on one running trip at a time (any boy can use it once that trip is closed). */
+async function assertVehicleFree(tx: Tx, tenantId: string, vehicle: { id: string; number: string }, deliveryBoyId: string) {
+  // Serialises two boys starting with the same vehicle at the same moment.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`vehicle:${vehicle.id}`}))`;
+  const busy = await tx.deliveryDay.findFirst({ where: { tenantId, vehicleId: vehicle.id, status: 'STARTED', NOT: { deliveryBoyId } }, select: { deliveryBoyName: true } });
+  if (busy) throw new ApiError(409, `Vehicle ${vehicle.number} is in use by ${busy.deliveryBoyName} right now. Choose another vehicle.`, 'VEHICLE_IN_USE');
+}
+
+/**
+ * Login → biometric → location → vehicle → Start Day: records opening stock and cash (SRS §9.1).
+ * A closed day can be started again only with another vehicle: that is a new trip.
+ */
+export async function startDay(tx: Tx, actor: Actor, input: { latitude?: number | null; longitude?: number | null; vehicleId?: string | null }) {
   const date = businessDate();
   await assertDayOpen(tx, actor.tenantId, date);
-  const existing = await tx.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId: actor.tenantId, deliveryBoyId: actor.userId, date } } });
-  if (existing?.status === 'STARTED') return existing;
-  if (existing?.status === 'CLOSED') throw new ApiError(423, 'Today is already closed. Ask the admin to re-open it.', 'DELIVERY_DAY_CLOSED');
+  const last = await currentDay(tx, actor.tenantId, actor.userId, date);
+  if (last?.status === 'STARTED') return last;
+
+  if (!input.vehicleId) throw new ApiError(400, 'Choose the vehicle (gaadi) you are taking today.', 'VEHICLE_REQUIRED');
+  const vehicle = await tx.vehicle.findFirst({ where: { id: input.vehicleId, tenantId: actor.tenantId, active: true } });
+  if (!vehicle) throw notFound('Vehicle not found.');
+  if (last?.status === 'CLOSED' && last.vehicleId === vehicle.id) {
+    throw new ApiError(423, 'Today is already closed with this vehicle. Ask the admin to re-open it, or choose another vehicle.', 'DELIVERY_DAY_CLOSED');
+  }
+  if (!isAssigned(vehicle, actor.userId, actor.name)) {
+    const approved = await tx.approvalRequest.findFirst({ where: { tenantId: actor.tenantId, type: 'VEHICLE_REQUEST', referenceId: vehicleRequestRef(actor.userId, date, vehicle.id), status: 'APPROVED' } });
+    if (!approved) throw new ApiError(403, `Vehicle ${vehicle.number} is not given to you. Ask the admin for permission first.`, 'VEHICLE_NOT_ASSIGNED');
+  }
+  await assertVehicleFree(tx, actor.tenantId, vehicle, actor.userId);
 
   const security = await getSetting(actor.tenantId, 'security');
   if (security.loginLocationRequired && !security.locationOverride && (input.latitude == null || input.longitude == null)) {
@@ -87,28 +179,37 @@ export async function startDay(tx: Tx, actor: Actor, input: { latitude?: number 
       deliveryBoyId: actor.userId,
       deliveryBoyName: actor.name,
       date,
+      trip: (last?.trip ?? 0) + 1,
+      vehicleId: vehicle.id,
+      vehicleNumber: vehicle.number,
       startLatitude: input.latitude ?? null,
       startLongitude: input.longitude ?? null,
       openingStock: await snapshot(tx, actor.tenantId, actor.userId),
       openingCash: wallet.balance,
     },
   });
-  await audit(tx, actor, { action: 'DELIVERY_DAY_STARTED', entityType: 'DeliveryDay', entityId: day.id, reference: date });
+  await audit(tx, actor, { action: 'DELIVERY_DAY_STARTED', entityType: 'DeliveryDay', entityId: day.id, reference: `${date} · ${vehicle.number}${day.trip > 1 ? ` · trip ${day.trip}` : ''}` });
   return day;
 }
 
-/** Opening + received − delivered (+ empties) = closing, per product; cash likewise (SRS §9.6). */
-export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string, date: string) {
-  const day = await db.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId, deliveryBoyId, date } } });
-  const deliveries = await db.delivery.findMany({ where: { tenantId, deliveryBoyId, deliveryDate: date }, include: { items: true } });
+/**
+ * Opening + received − delivered (+ empties) = closing, per product; cash likewise (SRS §9.6).
+ * With several trips that day (vehicle changed), only the chosen trip's time counts (latest by default).
+ */
+export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string, date: string, trip?: number) {
+  const trips = await db.deliveryDay.findMany({ where: { tenantId, deliveryBoyId, date }, orderBy: { trip: 'asc' } });
+  const day = (trip ? trips.find((d) => d.trip === trip) : trips.at(-1)) ?? null;
+  // Single-trip days keep counting the whole date, as before.
+  const window = day && trips.length > 1 ? { gte: day.trip > trips[0].trip ? day.startedAt : undefined, lte: day.trip < trips[trips.length - 1].trip ? day.closedAt ?? undefined : undefined } : undefined;
+  const deliveries = await db.delivery.findMany({ where: { tenantId, deliveryBoyId, deliveryDate: date, submittedAt: window }, include: { items: true } });
   const start = day?.startedAt || new Date(`${date}T00:00:00+05:30`);
   const end = day?.closedAt || new Date();
   const movements = await db.inventoryTransaction.findMany({
     where: { tenantId, createdAt: { gte: start, lte: end }, OR: [{ fromType: 'DELIVERY_BOY', fromId: deliveryBoyId }, { toType: 'DELIVERY_BOY', toId: deliveryBoyId }] },
   });
-  const submissions = await db.cashSubmission.findMany({ where: { tenantId, deliveryBoyId, date } });
+  const submissions = await db.cashSubmission.findMany({ where: { tenantId, deliveryBoyId, date, createdAt: window } });
   // Old dues collected on payment-only visits (rejected ones are reversed out of the wallet).
-  const fieldPayments = await db.payment.findMany({ where: { tenantId, source: 'FIELD', collectedById: deliveryBoyId, paymentDate: date, status: { not: 'REJECTED' } }, select: { mode: true, amount: true } });
+  const fieldPayments = await db.payment.findMany({ where: { tenantId, source: 'FIELD', collectedById: deliveryBoyId, paymentDate: date, status: { not: 'REJECTED' }, createdAt: window }, select: { mode: true, amount: true } });
   const wallet = await getWallet(db, tenantId, 'DELIVERY_BOY', deliveryBoyId, day?.deliveryBoyName || '');
   const closingStock = await snapshot(db, tenantId, deliveryBoyId);
 
@@ -144,6 +245,8 @@ export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string
     date,
     status: day?.status || 'NOT_STARTED',
     day,
+    vehicle: day?.vehicleNumber ?? null,
+    trips: trips.map((d) => ({ trip: d.trip, vehicleNumber: d.vehicleNumber, status: d.status, startedAt: d.startedAt, closedAt: d.closedAt })),
     deliveries: {
       count: deliveries.length,
       cylindersDelivered: deliveries.reduce((s, d) => s + d.deliveredQtyTotal, 0),
@@ -169,7 +272,7 @@ export async function daySummary(db: Db, tenantId: string, deliveryBoyId: string
 
 export async function closeDay(tx: Tx, actor: Actor) {
   const date = businessDate();
-  const day = await tx.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId: actor.tenantId, deliveryBoyId: actor.userId, date } } });
+  const day = await currentDay(tx, actor.tenantId, actor.userId, date);
   if (!day) throw conflict('You have not started your day.');
   if (day.status === 'CLOSED') throw conflict('Day is already closed.');
   const outForDelivery = await tx.order.count({ where: { tenantId: actor.tenantId, assignedDeliveryBoyId: actor.userId, status: 'OUT_FOR_DELIVERY' } });
@@ -181,7 +284,7 @@ export async function closeDay(tx: Tx, actor: Actor) {
   const { toReturn } = await stockToReturn(tx, actor.tenantId, actor.userId);
   if (toReturn.length) throw new ApiError(409, 'Hand over your stock (godown, truck or another delivery boy) before closing the day.', 'STOCK_NOT_RETURNED');
 
-  const summary = await daySummary(tx, actor.tenantId, actor.userId, date);
+  const summary = await daySummary(tx, actor.tenantId, actor.userId, date, day.trip);
   const closed = await tx.deliveryDay.update({
     where: { id: day.id },
     data: { status: 'CLOSED', closedAt: new Date(), closingStock: await snapshot(tx, actor.tenantId, actor.userId), closingCash: summary.cash.closing, summary: JSON.parse(JSON.stringify(summary)) },
@@ -191,8 +294,10 @@ export async function closeDay(tx: Tx, actor: Actor) {
 }
 
 export async function reopenDeliveryDay(tx: Tx, actor: Actor, deliveryBoyId: string, date: string, reason: string) {
-  const day = await tx.deliveryDay.findUnique({ where: { tenantId_deliveryBoyId_date: { tenantId: actor.tenantId, deliveryBoyId, date } } });
+  // Only the last trip re-opens: an earlier one's stock and cash were already carried into the next.
+  const day = await currentDay(tx, actor.tenantId, deliveryBoyId, date);
   if (!day || day.status !== 'CLOSED') throw conflict('That delivery day is not closed.');
+  if (day.vehicleId) await assertVehicleFree(tx, actor.tenantId, { id: day.vehicleId, number: day.vehicleNumber || '' }, deliveryBoyId);
   await tx.deliveryDay.update({ where: { id: day.id }, data: { status: 'STARTED', closedAt: null } });
   await audit(tx, actor, { action: 'DELIVERY_DAY_REOPENED', entityType: 'DeliveryDay', entityId: day.id, reference: `${day.deliveryBoyName} ${date}`, reason, sensitive: true });
 }

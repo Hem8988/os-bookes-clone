@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/server/auth';
 import { badRequest, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 import { emailReady } from '@/lib/server/messaging/email';
 import { pushConfigured } from '@/lib/server/messaging/push';
+import { msg91Config, whatsappReady } from '@/lib/server/messaging/msg91';
 import { smsConfigured } from '@/lib/server/messaging/sms';
 import { whatsappConfigured } from '@/lib/server/messaging/whatsapp';
 
@@ -14,9 +15,9 @@ export const GET = handle(async (request: Request) => {
   const stored = await prisma.whatsAppTemplate.findMany({ where: { tenantId: auth.tenantId } });
   const templates = DEFAULT_TEMPLATES.map((d) => {
     const s = stored.find((t) => t.key === d.key);
-    return { ...d, body: s?.body ?? d.body, metaTemplateName: s?.metaTemplateName ?? null, language: s?.language ?? 'en', active: s?.active ?? true, customised: !!s };
+    return { ...d, defaultBody: d.body, body: s?.body ?? d.body, metaTemplateName: s?.metaTemplateName ?? null, language: s?.language ?? 'en', active: s?.active ?? true, customised: !!s };
   });
-  return ok({ templates, channels: { whatsapp: whatsappConfigured(), email: await emailReady(auth.tenantId), sms: smsConfigured(), push: pushConfigured() } });
+  return ok({ templates, channels: { whatsapp: whatsappConfigured() || whatsappReady(await msg91Config(auth.tenantId)), email: await emailReady(auth.tenantId), sms: await smsConfigured(auth.tenantId), push: pushConfigured() } });
 });
 
 export const PUT = handle(async (request: Request) => {

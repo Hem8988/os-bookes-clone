@@ -112,12 +112,44 @@ export interface EmailSettings {
   from: string;
 }
 
+/** One of our message templates as created on MSG91 (filled in by the app). */
+export interface Msg91TemplateLink {
+  /** SMS: MSG91 template id (flow), the DLT template id, and its approval state. */
+  smsTemplateId?: string;
+  smsDltId?: string;
+  smsStatus?: string;
+  /** WhatsApp: template name on MSG91 / Meta, its language and approval state. */
+  waTemplateName?: string;
+  waLanguage?: string;
+  waStatus?: string;
+  /** Our placeholders in the order of the WhatsApp template's {{1}}, {{2}}… */
+  waParams?: string[];
+}
+
+/** MSG91 for SMS and WhatsApp. The auth key is stored sealed (see lib/server/secretBox). */
+export interface Msg91Settings {
+  authKeySealed: string;
+  /** DLT-approved 6-letter SMS header, e.g. NEHRAG. */
+  senderId: string;
+  smsEnabled: boolean;
+  /** Messages that also go by SMS. */
+  smsKeys: string[];
+  /** WhatsApp through MSG91 (instead of the Meta Cloud API). */
+  whatsappEnabled: boolean;
+  /** Integrated WhatsApp number with country code, e.g. 919876543210. */
+  whatsappNumber: string;
+  /** Secret in the webhook URL given to MSG91 (incoming messages and delivery reports). */
+  webhookToken: string;
+  templates: Record<string, Msg91TemplateLink>;
+}
+
 export interface SettingsMap {
   company: CompanyProfile;
   security: SecurityPolicy;
   operations: OperationsPolicy;
   books: BooksPolicy;
   email: EmailSettings;
+  msg91: Msg91Settings;
   owner: OwnerReportPolicy;
   budgets: BudgetPolicy;
 }
@@ -193,6 +225,16 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     user: '',
     passwordSealed: '',
     from: '',
+  },
+  msg91: {
+    authKeySealed: '',
+    senderId: '',
+    smsEnabled: true,
+    smsKeys: ['OTP', 'PAYMENT_RECEIVED'],
+    whatsappEnabled: false,
+    whatsappNumber: '',
+    webhookToken: '',
+    templates: {},
   },
   books: {
     caName: '',

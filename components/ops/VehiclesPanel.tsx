@@ -8,7 +8,7 @@ import { Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToa
 import { BooksHeader, Column, LedgerOption, plain, ReportTable } from '../books/shared';
 
 interface Log { id: string; date: string; kind: string; odometer: number | null; litres: number | null; amount: number; notes: string | null; expenseEntryId: string | null }
-interface Vehicle { id: string; number: string; type: string; capacity: number | null; driverUserId: string | null; driverName: string | null; fuelType: string; odometer: number; insuranceUpto: string | null; pucUpto: string | null; permitUpto: string | null; fitnessUpto: string | null; serviceDueKm: number | null; serviceDueDate: string | null; active: boolean; notes: string | null; logs: Log[] }
+interface Vehicle { id: string; number: string; type: string; capacity: number | null; driverUserId: string | null; driverName: string | null; assignedUserIds: string[]; fuelType: string; odometer: number; insuranceUpto: string | null; pucUpto: string | null; permitUpto: string | null; fitnessUpto: string | null; serviceDueKm: number | null; serviceDueDate: string | null; active: boolean; notes: string | null; logs: Log[] }
 interface Cost { vehicle: string; type: string; driver: string; km: number; litres: number; kmPerLitre: number; fuelCost: number; maintenance: number; total: number; perKm: number }
 interface Data { vehicles: Vehicle[]; alerts: { vehicle: string; item: string; due: string; overdue: boolean }[]; costs: Cost[]; drivers: { id: string; name: string }[]; from: string; to: string }
 
@@ -54,6 +54,7 @@ export default function VehiclesPanel() {
               <Card key={v.id} title={<span className="flex items-center gap-2 font-mono">{v.number}{!v.active && <Badge tone="slate">inactive</Badge>}</span>} actions={<Button size="sm" tone="ghost" onClick={() => setEditing(v)}>Edit</Button>}>
                 <div className="text-xs space-y-1">
                   <div className="text-slate-500">{v.type}{v.capacity ? ` · ${v.capacity} cylinders` : ''} · {v.fuelType} · {v.driverName || 'no driver'}</div>
+                  {v.assignedUserIds.length > 0 && <div className="text-slate-500">Delivery boys: {v.assignedUserIds.map((id) => d.drivers.find((b) => b.id === id)?.name).filter(Boolean).join(', ')}</div>}
                   <div className="font-mono">{v.odometer.toLocaleString('en-IN')} km</div>
                   <div className="flex flex-wrap gap-1">
                     {[['Insurance', v.insuranceUpto], ['PUC', v.pucUpto], ['Permit', v.permitUpto], ['Fitness', v.fitnessUpto]].map(([label, date]) => <Badge key={label} tone={!date ? 'slate' : date < today() ? 'red' : 'green'}>{label}: {date || '—'}</Badge>)}
@@ -80,8 +81,9 @@ export default function VehiclesPanel() {
 }
 
 function VehicleForm({ v, drivers, onClose, onSaved, onError }: { v: Vehicle | null; drivers: { id: string; name: string }[]; onClose: () => void; onSaved: () => void; onError: (m: string) => void }) {
-  const [x, setX] = useState({ number: v?.number || '', type: v?.type || 'Tempo', capacity: String(v?.capacity || ''), driverUserId: v?.driverUserId || '', fuelType: v?.fuelType || 'Diesel', odometer: String(v?.odometer || ''), insuranceUpto: v?.insuranceUpto || '', pucUpto: v?.pucUpto || '', permitUpto: v?.permitUpto || '', fitnessUpto: v?.fitnessUpto || '', serviceDueKm: String(v?.serviceDueKm || ''), serviceDueDate: v?.serviceDueDate || '', active: v?.active !== false });
+  const [x, setX] = useState({ number: v?.number || '', type: v?.type || 'Tempo', capacity: String(v?.capacity || ''), driverUserId: v?.driverUserId || '', assignedUserIds: v?.assignedUserIds ?? [], fuelType: v?.fuelType || 'Diesel', odometer: String(v?.odometer || ''), insuranceUpto: v?.insuranceUpto || '', pucUpto: v?.pucUpto || '', permitUpto: v?.permitUpto || '', fitnessUpto: v?.fitnessUpto || '', serviceDueKm: String(v?.serviceDueKm || ''), serviceDueDate: v?.serviceDueDate || '', active: v?.active !== false });
   const [busy, setBusy] = useState(false);
+  const toggleBoy = (id: string) => setX({ ...x, assignedUserIds: x.assignedUserIds.includes(id) ? x.assignedUserIds.filter((b) => b !== id) : [...x.assignedUserIds, id] });
   const f = (k: keyof typeof x, label: string, type = 'text') => <Field label={label}><input type={type} value={x[k] as string} onChange={(e) => setX({ ...x, [k]: e.target.value })} className={inputClass} /></Field>;
   const save = async () => {
     setBusy(true);
@@ -110,6 +112,19 @@ function VehicleForm({ v, drivers, onClose, onSaved, onError }: { v: Vehicle | n
         {f('serviceDueKm', 'Next service at (km)', 'number')}
         {f('serviceDueDate', 'Next service date', 'date')}
       </div>
+      <Field label="Delivery boys who can take this vehicle" hint="They pick it at Start Day. Anyone else has to ask for approval first. One vehicle is on one running day at a time.">
+        <div className="flex flex-wrap gap-1.5">
+          {drivers.length === 0 && <span className="text-xs text-slate-400">No active delivery boys.</span>}
+          {drivers.map((b) => {
+            const on = x.assignedUserIds.includes(b.id);
+            return (
+              <button key={b.id} type="button" aria-pressed={on} onClick={() => toggleBoy(b.id)} className={cx('px-2.5 py-1 rounded-full border text-xs font-semibold', on ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50')}>
+                {b.name}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
       <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={x.active} onChange={(e) => setX({ ...x, active: e.target.checked })} /> In use</label>
     </Modal>
   );

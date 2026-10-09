@@ -62,6 +62,7 @@ import { MobileMenu, MobileTabBar } from './MobileNav';
 import { MegaMenu } from './MegaMenu';
 import { useMenuUsage } from '../lib/useMenuUsage';
 import WhatsAppCenter from './WhatsAppInvoiceSenderModule';
+import WhatsAppChats from './WhatsAppChats';
 import { useToast } from './ui';
 
 // Back-office shell for Super Admin, Manager and Accountant. Screens and the
@@ -261,7 +262,8 @@ export default function Workspace() {
       case 'reports':
         return <ReportsModule key={sub || 'sales'} initialReport={sub || 'sales'} />;
       case 'whatsapp':
-        return <WhatsAppCenter />;
+        // Managers / accountants only get the team inbox; the bot, templates and MSG91 setup are admin-only.
+        return sub === 'chats' || !can('whatsapp.manage') ? <WhatsAppChats /> : <WhatsAppCenter />;
       case 'admin':
         return <AdminModule key={sub || 'users'} initialTab={(sub as 'users' | 'devices' | 'audit') || 'users'} />;
       case 'settings':

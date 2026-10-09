@@ -244,7 +244,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
               <Field label="PO date">
                 <input type="date" value={docs.poDate} onChange={(e) => setDocs({ ...docs, poDate: e.target.value })} className={inputClass} />
               </Field>
-              <Field label="Vehicle no." hint="Leave empty to use the delivery boy's vehicle (Operations → Vehicles)." className="col-span-2">
+              <Field label="Vehicle no." hint="Leave empty to use the delivery boy's vehicle (Masters → Vehicles / trucks)." className="col-span-2">
                 <input value={docs.vehicleNumber} onChange={(e) => setDocs({ ...docs, vehicleNumber: e.target.value.toUpperCase() })} className={inputClass} placeholder="Auto — delivery boy's vehicle" />
               </Field>
             </div>

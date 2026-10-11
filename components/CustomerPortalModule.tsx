@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LogOut, Plus, Printer, RefreshCw } from 'lucide-react';
+import { FileText, LogOut, Plus, Printer, RefreshCw, Upload } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { useApiData } from '../lib/useApiData';
@@ -9,10 +9,11 @@ import { logout, useSession } from '../lib/auth';
 import { LanguageToggle } from './LanguageToggle';
 import CustomerComplaints from './ops/CustomerComplaints';
 import { PrintInvoiceModal, InvoiceView } from './PrintInvoiceModal';
-import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, today, useToast } from './ui';
+import { Paged, Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, today, useToast } from './ui';
 import { cue } from '../lib/feedback';
 import { ChoiceTiles, PosButton, PosTotal, SoundToggle } from './pos';
 import { CartProduct, OrderTiles, useOrderCart } from './OrderCart';
+import { CustomerPo, CustomerPoForm, PO_STATUS_LABEL } from './CustomerPoForm';
 
 // Customer self-service portal (V2): balance, cylinders, orders, invoices,
 // payments and statement — the same data the WhatsApp bot answers from.
@@ -28,7 +29,7 @@ interface Portal {
 export function CustomerPortalModule() {
   const { t } = useT();
   const { session } = useSession();
-  const [tab, setTab] = useState<'orders' | 'invoices' | 'payments' | 'statement' | 'complaints'>('orders');
+  const [tab, setTab] = useState<'orders' | 'pos' | 'invoices' | 'payments' | 'statement' | 'complaints'>('orders');
   const [ordering, setOrdering] = useState(false);
   const [printing, setPrinting] = useState<InvoiceView | null>(null);
   const [toast, showToast] = useToast();
@@ -69,9 +70,9 @@ export function CustomerPortalModule() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
-                {(['orders', 'invoices', 'payments', 'statement', 'complaints'] as const).map((tabKey) => (
+                {(['orders', 'pos', 'invoices', 'payments', 'statement', 'complaints'] as const).map((tabKey) => (
                   <button key={tabKey} onClick={() => setTab(tabKey)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold capitalize', tab === tabKey ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
-                    {t(tabKey)}
+                    {tabKey === 'pos' ? t('Purchase orders') : t(tabKey)}
                   </button>
                 ))}
               </div>
@@ -119,22 +120,23 @@ export function CustomerPortalModule() {
                 ))}
               </Card>
             )}
+            {tab === 'pos' && <CustomerPos customerId={data.customer.id} onToast={showToast} />}
             {tab === 'complaints' && <CustomerComplaints onToast={showToast} />}
             {tab === 'statement' && (
               <Card>
-                <table className="w-full text-xs">
+                <Paged rows={data.ledger}>{(pageRows, offset) => (<table className="w-full text-xs">
                   <thead className="text-slate-500 text-left">
                     <tr><th className="p-2">Date</th><th className="p-2">Voucher</th><th className="p-2">Details</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Credit</th><th className="p-2 text-right">Balance</th></tr>
                   </thead>
                   <tbody>
-                    {data.ledger.map((e) => (
+                    {pageRows.map((e) => (
                       <tr key={e.id} className="border-t border-slate-100">
                         <td className="p-2">{e.date}</td><td className="p-2 font-mono">{e.voucherNumber}</td><td className="p-2">{e.particulars}</td>
                         <td className="p-2 text-right">{e.debit ? inr(e.debit) : ''}</td><td className="p-2 text-right">{e.credit ? inr(e.credit) : ''}</td><td className="p-2 text-right font-bold">{inr(e.balance)}</td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table>)}</Paged>
               </Card>
             )}
           </>
@@ -175,13 +177,15 @@ function NewOrder({ customerId, defaultProductIds, onClose, onDone, onError }: {
   const { t } = useT();
   const products = useApiData<CartProduct[]>('/api/products', onError).data ?? [];
   const cart = useOrderCart(products, customerId, defaultProductIds);
+  const openPos = useApiData<CustomerPo[]>('/api/customer-pos?status=OPEN').data ?? [];
+  const [poId, setPoId] = useState('');
   const [date, setDate] = useState(today());
   const [otherDate, setOtherDate] = useState(false);
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/cylinder/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: cart.items, requestedDeliveryDate: date }) });
+      const res = await fetch('/api/cylinder/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: cart.items, requestedDeliveryDate: date, customerPoId: poId || null }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       cue('success');
@@ -206,6 +210,16 @@ function NewOrder({ customerId, defaultProductIds, onClose, onDone, onError }: {
       }
     >
       <OrderTiles cart={cart} />
+      {openPos.length > 0 && (
+        <Field label={t('Against your PO')}>
+          <select value={poId} onChange={(e) => setPoId(e.target.value)} className={inputClass}>
+            <option value="">{t('No PO')}</option>
+            {openPos.map((p) => (
+              <option key={p.id} value={p.id}>{p.poNumber} · {p.poDate}</option>
+            ))}
+          </select>
+        </Field>
+      )}
       <Field label={t('Delivery date')}>
         <ChoiceTiles
           value={otherDate ? 'other' : date === today() ? 'today' : 'tomorrow'}
@@ -220,6 +234,52 @@ function NewOrder({ customerId, defaultProductIds, onClose, onDone, onError }: {
       {otherDate && <input type="date" min={today()} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />}
       <p className="text-[11px] text-slate-500">{t('Your order goes to the office for approval; you will get WhatsApp updates at every step.')}</p>
     </Modal>
+  );
+}
+
+/** The customer's purchase orders: upload a new PO and see how much is still to be supplied. */
+function CustomerPos({ customerId, onToast }: { customerId: string; onToast: (m: string, tone?: 'ok' | 'error') => void }) {
+  const { t } = useT();
+  const list = useApiData<CustomerPo[]>('/api/customer-pos', (m) => onToast(m, 'error'));
+  const [editing, setEditing] = useState<CustomerPo | 'new' | null>(null);
+  const rows = list.data ?? [];
+  return (
+    <Card title={t('Purchase orders')} actions={<Button size="sm" onClick={() => setEditing('new')}><Upload className="h-3.5 w-3.5" />{t('Upload PO')}</Button>}>
+      {list.data === undefined ? (
+        <Empty>{t('Loading…')}</Empty>
+      ) : rows.length === 0 ? (
+        <Empty>{t('No purchase orders yet. Upload your PO and the office will supply against it.')}</Empty>
+      ) : (
+        rows.map((po) => (
+          <div key={po.id} className="flex justify-between items-start gap-3 text-xs py-2 border-b border-slate-50">
+            <div className="min-w-0">
+              <strong className="font-mono">{po.poNumber}</strong> · {po.poDate}
+              {po.items.length > 0 && <div className="text-slate-500">{po.items.map((i) => `${i.productName}: ${i.deliveredQty}/${i.qty}`).join(', ')}</div>}
+              {po.fileUrl && (
+                <a href={po.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-700 font-bold hover:underline"><FileText className="h-3 w-3" />{t('PO copy')}</a>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <StatusBadge status={po.status} label={PO_STATUS_LABEL[po.status] || po.status} />
+              {po.status === 'RECEIVED' && <Button size="sm" tone="ghost" onClick={() => setEditing(po)}>{t('Edit')}</Button>}
+            </div>
+          </div>
+        ))
+      )}
+      {editing && (
+        <CustomerPoForm
+          po={editing === 'new' ? null : editing}
+          customerId={customerId}
+          showRates={false}
+          onClose={() => setEditing(null)}
+          onSaved={(m) => {
+            onToast(m);
+            setEditing(null);
+            void list.reload();
+          }}
+        />
+      )}
+    </Card>
   );
 }
 

@@ -63,6 +63,7 @@ import { AddEditProductModal } from './AddEditProductModal';
 import { BankQrBarcodeModal } from './BankQrBarcodeModal';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { CustomerFollowUpModal } from './CustomerFollowUpModal';
+import { Paged } from './ui';
 
 interface MastersModuleProps {
   units: UnitMaster[];
@@ -1148,7 +1149,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
 
           {/* TABLE VIEW */}
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={(filteredCustomers.filter((c) => c.type === 'Customer'))}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1164,11 +1165,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {filteredCustomers
-                  .filter((c) => c.type === 'Customer')
-                  .map((c, idx) => (
+                {pageRows.map((c, idx) => (
                     <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                       <td className="px-3 py-2.5">
                         <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
                           {c.type}
@@ -1218,7 +1217,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                     </tr>
                   ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1286,7 +1285,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
 
           {/* TABLE VIEW */}
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={(filteredCustomers.filter((c) => c.type === 'Vendor'))}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1302,11 +1301,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {filteredCustomers
-                  .filter((c) => c.type === 'Vendor')
-                  .map((c, idx) => (
+                {pageRows.map((c, idx) => (
                     <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                       <td className="px-3 py-2.5">
                         <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
                           {c.type}
@@ -1349,7 +1346,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                     </tr>
                   ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1371,7 +1368,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={categories}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1382,9 +1379,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {categories.map((cat, idx) => (
+                {pageRows.map((cat, idx) => (
                   <tr key={cat.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                     <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">{cat.name}</td>
                     <td className="px-3 py-2.5 font-mono font-bold text-emerald-600">{cat.hsnDefault || '8471'}</td>
                     <td className="px-3 py-2.5 font-bold">{cat.itemCount} Items</td>
@@ -1397,7 +1394,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1419,7 +1416,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={staff}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1434,9 +1431,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {staff.map((st, idx) => (
+                {pageRows.map((st, idx) => (
                   <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                     <td className="px-3 py-2.5 font-extrabold text-slate-900 dark:text-slate-100">{st.name}</td>
                     <td className="px-3 py-2.5 font-bold text-emerald-600">{st.designation || st.role}</td>
                     <td className="px-3 py-2.5 font-mono text-[11px]">
@@ -1471,7 +1468,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1493,7 +1490,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={expenses}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1507,9 +1504,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {expenses.map((exp, idx) => (
+                {pageRows.map((exp, idx) => (
                   <tr key={exp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                     <td className="px-3 py-2.5 font-extrabold text-slate-900 dark:text-slate-100">{exp.categoryName}</td>
                     <td className="px-3 py-2.5 font-semibold">{exp.expenseHead || '-'}</td>
                     <td className="px-3 py-2.5 font-semibold">{exp.expenseType || '-'}</td>
@@ -1529,7 +1526,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1551,7 +1548,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={incomes}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1563,9 +1560,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {incomes.map((inc, idx) => (
+                {pageRows.map((inc, idx) => (
                   <tr key={inc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                     <td className="px-3 py-2.5 font-extrabold text-slate-900 dark:text-slate-100">{inc.sourceName}</td>
                     <td className="px-3 py-2.5 font-mono font-bold">{inc.hsnSac}</td>
                     <td className="px-3 py-2.5 font-bold text-emerald-600">{inc.gstRate}%</td>
@@ -1579,7 +1576,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1601,7 +1598,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={payments}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1612,9 +1609,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {payments.map((p, idx) => (
+                {pageRows.map((p, idx) => (
                   <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                     <td className="px-3 py-2.5 font-extrabold text-slate-900 dark:text-slate-100">{p.modeName}</td>
                     <td className="px-3 py-2.5 font-bold text-slate-700 dark:text-slate-300">{p.linkedAccount}</td>
                     <td className="px-3 py-2.5 text-center">
@@ -1631,7 +1628,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1653,7 +1650,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={(products.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase())))}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1668,11 +1665,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {products
-                  .filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((p, idx) => (
+                {pageRows.map((p, idx) => (
                     <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                      <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                       <td className="px-3 py-2.5">
                         <div className="font-bold text-slate-900 dark:text-slate-100">{p.name}</div>
                         <div className="text-[11px] text-slate-400 font-mono">SKU: {p.sku}</div>
@@ -1709,7 +1704,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                     </tr>
                   ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}
@@ -1728,7 +1723,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
           </div>
 
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+            <Paged rows={units}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
                 <tr>
                   <th className="px-3 py-2.5 w-10 text-center">#</th>
@@ -1740,9 +1735,9 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {units.map((u, idx) => (
+                {pageRows.map((u, idx) => (
                   <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-center font-bold text-slate-500">{offset + idx + 1}</td>
                     <td className="px-3 py-2.5 font-extrabold text-slate-900 dark:text-slate-100">{u.name}</td>
                     <td className="px-3 py-2.5 font-mono font-bold text-emerald-600">{u.code}</td>
                     <td className="px-3 py-2.5 font-bold">{u.symbol}</td>
@@ -1756,7 +1751,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </div>
       )}

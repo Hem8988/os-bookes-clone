@@ -2,6 +2,8 @@ import type { Db, Tx } from '@/lib/db';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { isValidGstin, isValidMobile, phoneKey } from '@/lib/phone';
 import { audit, Actor } from './audit';
+import { syncCustomerDeposits } from './cylinderDeposits';
+import type { Effects } from './effects';
 import { badRequest, businessDate, conflict, notFound, round2 } from './http';
 import { adjustCustomerHolding } from './inventory';
 import { postCustomerLedger } from './ledger';
@@ -20,7 +22,7 @@ const KNOWN = new Set([
   'id', 'customerCode', 'type', 'name', 'tradeName', 'shortName', 'contactPerson', 'phone', 'whatsappNumber', 'otherMobile', 'email', 'gstin',
   'address', 'city', 'state', 'stateCode', 'pincode', 'area', 'route', 'defaultDeliveryBoyId', 'defaultProductIds', 'segment', 'paymentTerms',
   'creditLimit', 'creditDays', 'openingBalance', 'openingBalanceType', 'balance', 'accountGroup', 'status', 'gstApplicable', 'partyType', 'isSezParty',
-  'rateMode', 'joiningDate', 'internalNotes', 'tags', 'deliveryAddresses', 'partyRates', 'extra', 'createdAt', 'updatedAt', 'active',
+  'rateMode', 'joiningDate', 'internalNotes', 'tags', 'deliveryAddresses', 'partyRates', 'extra', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'active',
 ]);
 
 function fields(input: Row) {
@@ -38,6 +40,7 @@ function fields(input: Row) {
   const address = s(input.address);
   if (!address) throw badRequest('Billing address is required.');
   const status = input.active === false && !input.status ? 'INACTIVE' : ['ACTIVE', 'INACTIVE', 'BLOCKED'].includes(s(input.status)) ? s(input.status) : 'ACTIVE';
+  if (num(input.creditLimit) > 10_000_000_000) throw badRequest('Credit limit looks wrong — keep it up to ₹1,000 crore (or 0 for no limit).');
 
   const extra: Row = {};
   for (const [k, v] of Object.entries(input)) if (!KNOWN.has(k)) extra[k] = v;
@@ -128,7 +131,7 @@ export async function deliveryBoyCustomers(db: Db, tenantId: string, userId: str
   return { OR: [{ defaultDeliveryBoyId: userId }, { orders: { some: { assignedDeliveryBoyId: userId } } }, ...(myRoutes.length ? [{ defaultDeliveryBoyId: null, route: { in: myRoutes } }] : [])] };
 }
 
-export async function createCustomer(tx: Tx, actor: Actor, input: Row) {
+export async function createCustomer(tx: Tx, actor: Actor, input: Row, effects?: Effects) {
   const data = fields(input);
   await assertUniquePhone(tx, actor.tenantId, data.type, data.phone);
   const { addresses, rates } = nested(input);
@@ -140,6 +143,7 @@ export async function createCustomer(tx: Tx, actor: Actor, input: Row) {
       ...data,
       ...(id ? { id } : {}),
       tenantId: actor.tenantId,
+      createdBy: actor.name,
       customerCode: await nextNumber(tx, actor.tenantId, data.type === 'Vendor' ? 'VEND' : 'CUST'),
       deliveryAddresses: { create: addresses },
       partyRates: { create: rates },
@@ -174,12 +178,13 @@ export async function createCustomer(tx: Tx, actor: Actor, input: Row) {
     if (!product) continue;
     await adjustCustomerHolding(tx, { tenantId: actor.tenantId, customerId: customer.id, customerName: customer.name, productId: product.id, productName: product.name, qtyDelta: c.qty, opening: true, reason: 'Opening cylinders at onboarding', performedBy: actor.name });
   }
+  if (data.type === 'Customer') await syncCustomerDeposits(tx, actor, customer, input, null, effects);
 
   await audit(tx, actor, { action: data.type === 'Vendor' ? 'VENDOR_CREATED' : 'CUSTOMER_CREATED', entityType: 'Customer', entityId: customer.id, reference: `${customer.customerCode} ${customer.name}`, newValue: { opening, creditLimit: data.creditLimit } });
   return customer;
 }
 
-export async function updateCustomer(tx: Tx, actor: Actor, id: string, input: Row) {
+export async function updateCustomer(tx: Tx, actor: Actor, id: string, input: Row, effects?: Effects) {
   const existing = await tx.customer.findFirst({ where: { id, tenantId: actor.tenantId } });
   if (!existing) throw notFound('Customer not found.');
   const data = fields({ ...input, type: existing.type });
@@ -189,8 +194,9 @@ export async function updateCustomer(tx: Tx, actor: Actor, id: string, input: Ro
   await tx.partyRate.deleteMany({ where: { customerId: id } });
   const customer = await tx.customer.update({
     where: { id },
-    data: { ...data, deliveryAddresses: { create: addresses }, partyRates: { create: rates } },
+    data: { ...data, updatedBy: actor.name, deliveryAddresses: { create: addresses }, partyRates: { create: rates } },
   });
+  if (existing.type === 'Customer') await syncCustomerDeposits(tx, actor, customer, input, existing.extra as Row | null, effects);
   const watched = ['status', 'creditLimit', 'paymentTerms', 'phone', 'whatsappNumber', 'defaultDeliveryBoyId'] as const;
   const changed = watched.filter((k) => JSON.stringify(existing[k]) !== JSON.stringify(customer[k]));
   if (changed.length) {

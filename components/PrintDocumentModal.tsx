@@ -143,8 +143,8 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
   const hsnSummary = Object.values(hsnMap);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-      <div className="w-full max-w-4xl bg-white text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border border-slate-200">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-center overflow-y-auto items-stretch p-0">
+      <div className="w-full bg-white text-slate-900 shadow-2xl overflow-hidden flex flex-col border border-slate-200 max-w-none h-full rounded-none">
         
         {/* Top Control Header (Non-printable) */}
         <div className="print:hidden flex items-center justify-between px-6 py-3.5 bg-slate-900 text-white border-b border-slate-800">

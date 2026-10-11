@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
-import { Button, Card, Empty, Modal, Stat, StatusBadge, dateTime, useToast } from './ui';
+import { Paged, Button, Card, Empty, Modal, Stat, StatusBadge, dateTime, useToast } from './ui';
 
 // Cash wallets (SRS §9.5): each delivery boy's cash in hand, the company
 // cash wallet and the hand-over (submission) history.
@@ -79,7 +79,7 @@ export default function CashWalletModule() {
         {submissions.length === 0 ? (
           <Empty>No submissions.</Empty>
         ) : (
-          <table className="w-full text-xs">
+          <Paged rows={submissions}>{(pageRows, offset) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">No.</th>
@@ -89,7 +89,7 @@ export default function CashWalletModule() {
               </tr>
             </thead>
             <tbody>
-              {submissions.map((s) => (
+              {pageRows.map((s) => (
                 <tr key={s.id} className="border-t border-slate-100">
                   <td className="p-2 font-mono font-bold">{s.submissionNumber}<div className="text-[10px] text-slate-400">{s.date}</div></td>
                   <td className="p-2">{s.deliveryBoyName} → {s.receiverName}</td>
@@ -98,12 +98,12 @@ export default function CashWalletModule() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}</Paged>
         )}
       </Card>
       <Modal open={!!history} title={`Wallet — ${history?.wallet.ownerName}`} onClose={() => setHistory(null)} wide>
         {history && (
-          <table className="w-full text-xs">
+          <Paged rows={history.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">When</th>
@@ -114,7 +114,7 @@ export default function CashWalletModule() {
               </tr>
             </thead>
             <tbody>
-              {history.rows.map((t) => (
+              {pageRows.map((t) => (
                 <tr key={t.id} className="border-t border-slate-100">
                   <td className="p-2">{dateTime(t.createdAt)}</td>
                   <td className="p-2 font-bold">{t.type}</td>
@@ -124,7 +124,7 @@ export default function CashWalletModule() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}</Paged>
         )}
       </Modal>
     </div>

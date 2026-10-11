@@ -24,8 +24,9 @@ import { Customer, Product } from '../lib/types';
 import { api, errorMessage, uploadFile } from '../lib/api';
 import { AddEditVendorModal } from './AddEditVendorModal';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
+import { DepositReceiptModal } from './DepositReceiptModal';
 import { MonthlyCustomerRateModal } from './MonthlyCustomerRateModal';
-import { today } from './ui';
+import { Paged, WhoStamp, today } from './ui';
 
 /** 2026-09 → "Sep 26" */
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' });
@@ -92,6 +93,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [receiptFor, setReceiptFor] = useState<string | null>(null);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
@@ -214,6 +216,9 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
     const save = editingCustomer && onUpdateCustomer ? onUpdateCustomer : onAddCustomer;
     const error = await save(savedCustomer);
     if (typeof error === 'string') return error;
+    // A deposit newly marked received → show its receipt to print / hand over.
+    const received = (c: Customer | null) => JSON.stringify((c?.depositLines || []).filter((l) => l.qty > 0 && (l.status === 'Paid' || l.status === 'Free')));
+    if (savedCustomer.type === 'Customer' && received(savedCustomer) !== '[]' && received(savedCustomer) !== received(editingCustomer)) setReceiptFor(savedCustomer.id);
     setIsModalOpen(false);
     setEditingCustomer(null);
     return null;
@@ -442,6 +447,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
       {/* Main Content Display: List View (Table) vs Grid View */}
       {viewMode === 'list' ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          <Paged rows={filteredCustomers}>{(pageRows, offset) => (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               
@@ -453,6 +459,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                   <th className="py-3 px-4">Contact Info</th>
                   <th className="py-3 px-4">City / Area</th>
                   <th className="py-3 px-4">GSTIN Number</th>
+                  <th className="py-3 px-4">Created / Updated by</th>
                   <th className="py-3 px-4 text-right">Account Balance</th>
                   <th className="py-3 px-4 text-center">Status</th>
                   <th className="py-3 px-4 text-center">Actions</th>
@@ -463,7 +470,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-800 dark:text-slate-200">
                 {filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-slate-400">
+                    <td colSpan={9} className="text-center py-12 text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Users className="h-8 w-8 text-slate-300 dark:text-slate-700" />
                         <p className="font-bold">No matching customer or vendor accounts found.</p>
@@ -471,7 +478,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  filteredCustomers.map((c, index) => {
+                  pageRows.map((c, index) => {
                     const isReceivable = c.balance > 0;
                     const isPayable = c.balance < 0;
 
@@ -482,109 +489,62 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                       >
                         {/* Index */}
                         <td className="py-3 px-4 font-mono font-bold text-slate-400">
-                          {index + 1}
+                          {offset + index + 1}
                         </td>
 
-                        {/* Party Details */}
-                        <td className="py-3 px-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-[10px] font-black text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/50 px-2 py-0.5 rounded-md border border-teal-200 dark:border-teal-800">
-                                {c.customerCode || c.id}
-                              </span>
-                              <button
-                                onClick={() => setViewingCustomer(c)}
-                                className="font-extrabold text-slate-900 dark:text-slate-100 text-sm hover:text-teal-600 dark:hover:text-teal-400 hover:underline text-left cursor-pointer transition-colors"
-                                title="Click to view full Account Ledger"
-                              >
-                                {c.name}
-                                {c.shortName && c.shortName !== c.name && <span className="ml-1 text-xs font-bold text-teal-600"> · {c.shortName}</span>}
-                              </button>
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                  c.type === 'Customer'
-                                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
-                                    : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
-                                }`}
-                              >
-                                {c.type}
-                              </span>
-                              {Array.isArray(c.partyRates) && c.partyRates.length > 0 && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800" title={`${c.partyRates.length} custom rates defined`}>
-                                  ★ {c.partyRates.length} Custom Rates
-                                </span>
-                              )}
-                            </div>
-                            
-                            {c.tradeName && (
-                              <div className="text-[11px] text-slate-500 font-semibold">
-                                Trade: {c.tradeName}
-                              </div>
+                        {/* Party Details: name, then code / trade, then one line of facts */}
+                        <td className="py-3 px-4 max-w-[380px]">
+                          <button
+                            onClick={() => setViewingCustomer(c)}
+                            className="block text-left font-extrabold text-slate-900 dark:text-slate-100 text-sm leading-tight hover:text-teal-600 dark:hover:text-teal-400 hover:underline cursor-pointer"
+                            title="Click to view full Account Ledger"
+                          >
+                            {c.name}
+                            {c.shortName && c.shortName !== c.name && <span className="ml-1.5 text-xs font-semibold text-slate-400">({c.shortName})</span>}
+                          </button>
+
+                          <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500">
+                            <span className="font-mono font-bold text-slate-400">{c.customerCode || c.id}</span>
+                            {filterType !== 'Customer' && filterType !== 'Vendor' && (
+                              <span className={`font-bold ${c.type === 'Customer' ? 'text-emerald-700' : 'text-amber-700'}`}>· {c.type}</span>
                             )}
-
-                            {Array.isArray(c.tags) && c.tags.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap mt-1">
-                                {c.tags.map((tag, i) => (
-                                  <span 
-                                    key={i} 
-                                    className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                              {c.totalDepositAmount ? (
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${c.depositStatus === 'Pending' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-teal-50 text-teal-700 border-teal-200'}`}>
-                                  Deposit ₹{c.totalDepositAmount.toLocaleString('en-IN')}{c.depositStatus ? ` (${c.depositStatus})` : ''}
-                                </span>
-                              ) : null}
-                              {c.defaultDeliveryBoyName && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200">
-                                  🚚 {c.defaultDeliveryBoyName}
-                                </span>
-                              )}
-                              {c.cylinderBalances?.some((b) => b.currentBalance) && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                  📦 Holding: {c.cylinderBalances.filter((b) => b.currentBalance).map((b) => `${b.productName.split(' ').slice(0, 2).join(' ')} × ${b.currentBalance}`).join(', ')}
-                                </span>
-                              )}
-                            </div>
-
-                            {c.type === 'Customer' && (() => {
-                              const rates = ratesThisMonth(c, products, thisMonth);
-                              if (!rates.length) return null;
-                              return (
-                                <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700">₹ {monthLabel(thisMonth)} rate:</span>
-                                  {rates.map((r) => (
-                                    <span
-                                      key={r.id}
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide border ${
-                                        r.from === 'month' ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 'bg-amber-50 text-amber-800 border-amber-300'
-                                      }`}
-                                      title={
-                                        r.from === 'month'
-                                          ? `Rate set for ${monthLabel(thisMonth)}`
-                                          : r.from === 'fixed'
-                                            ? 'Fixed party rate — no monthly rate set for this month'
-                                            : r.from === 'standard'
-                                              ? 'Standard product rate — no party rate set'
-                                              : `Carried from ${monthLabel(r.from)} — no rate set for ${monthLabel(thisMonth)} yet`
-                                      }
-                                    >
-                                      {r.name} ₹{r.rate.toLocaleString('en-IN')}
-                                      {r.from !== 'month' && (
-                                        <span className="ml-1 font-bold opacity-80">({r.from === 'fixed' ? 'fixed' : r.from === 'standard' ? 'std' : monthLabel(r.from)})</span>
-                                      )}
-                                    </span>
-                                  ))}
-                                </div>
-                              );
-                            })()}
+                            {c.tradeName && <span className="truncate">· {c.tradeName}</span>}
+                            {Array.isArray(c.tags) && c.tags.map((tag, i) => (
+                              <span key={i} className="px-1.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400">{tag}</span>
+                            ))}
                           </div>
+
+                          {(() => {
+                            const holding = (c.cylinderBalances || []).filter((b) => b.currentBalance);
+                            const rates = c.type === 'Customer' ? ratesThisMonth(c, products, thisMonth) : [];
+                            if (!holding.length && !c.totalDepositAmount && !c.defaultDeliveryBoyName && !rates.length) return null;
+                            const short = (name: string) => name.split(' ').slice(0, 2).join(' ');
+                            return (
+                              <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                                {holding.length > 0 && (
+                                  <span title="Our cylinders with the customer">📦 {holding.map((b) => `${short(b.productName)} × ${b.currentBalance}`).join(', ')}</span>
+                                )}
+                                {c.totalDepositAmount ? (
+                                  <button type="button" onClick={() => setReceiptFor(c.id)} title="Open the deposit receipt" className={`cursor-pointer hover:underline ${c.depositStatus === 'Pending' ? 'text-orange-600 font-bold' : ''}`}>
+                                    🧾 ₹{c.totalDepositAmount.toLocaleString('en-IN')} deposit{c.depositStatus === 'Pending' ? ' pending' : ''}
+                                  </button>
+                                ) : null}
+                                {c.defaultDeliveryBoyName && <span title="Default delivery boy">🚚 {c.defaultDeliveryBoyName}</span>}
+                                {rates.length > 0 && (
+                                  <span title={`Rates for ${monthLabel(thisMonth)} — std = standard product rate, fixed = party rate`}>
+                                    <span className="text-slate-400">₹ {monthLabel(thisMonth)}:</span>{' '}
+                                    {rates.map((r, i) => (
+                                      <span key={r.id}>
+                                        {i > 0 && <span className="text-slate-300"> · </span>}
+                                        {r.name} <b className={r.from === 'month' ? 'text-indigo-700' : 'text-slate-700 dark:text-slate-300'}>{r.rate.toLocaleString('en-IN')}</b>
+                                        {r.from !== 'month' && <span className="text-[10px] text-slate-400"> {r.from === 'fixed' ? 'fixed' : r.from === 'standard' ? 'std' : monthLabel(r.from)}</span>}
+                                      </span>
+                                    ))}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Contact Info */}
@@ -633,6 +593,8 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                             )}
                           </div>
                         </td>
+
+                        <td className="py-3 px-4"><WhoStamp createdBy={c.createdBy} createdAt={c.createdAt} updatedBy={c.updatedBy} updatedAt={c.updatedAt} /></td>
 
                         {/* Account Balance */}
                         <td className="py-3 px-4 text-right">
@@ -733,11 +695,13 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
               </tbody>
             </table>
           </div>
+          )}</Paged>
         </div>
       ) : (
         /* Grid View Mode */
+        <Paged rows={filteredCustomers}>{(pageRows) => (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCustomers.map((c) => {
+          {pageRows.map((c) => {
             const isReceivable = c.balance > 0;
             const isPayable = c.balance < 0;
 
@@ -843,6 +807,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
             );
           })}
         </div>
+        )}</Paged>
       )}
 
       {/* Slide-Over Drawer / Modal for Add & Edit Party */}
@@ -857,6 +822,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
         }}
         onSave={handleSaveCustomer}
       />
+      {receiptFor && <DepositReceiptModal customerId={receiptFor} onClose={() => setReceiptFor(null)} />}
 
       {/* Customer 360 & Full Account Ledger View Drawer */}
       <CustomerLedgerModal
@@ -882,8 +848,8 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
 
       {/* VENDOR PURCHASE BILL PHOTO UPLOAD MODAL */}
       {billUploadVendor && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-center items-stretch p-0">
+          <div className="w-full bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900 shadow-2xl overflow-y-auto max-w-none h-full rounded-none">
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b border-amber-100 dark:border-amber-900/60 bg-gradient-to-r from-amber-600 to-amber-700 rounded-t-2xl">
               <div className="flex items-center gap-3">

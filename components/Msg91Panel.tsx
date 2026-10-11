@@ -152,7 +152,7 @@ export default function Msg91Panel({ toast }: { toast: (m: string, tone?: 'ok' |
         </div>
       </Card>
 
-      {dltFor && <SmsModal row={dltFor} busy={busy === 'sms'} onClose={() => setDltFor(null)} onCreate={async (dltId) => (await run('sms', { action: 'createSms', key: dltFor.key, dltId })) && setDltFor(null)} toast={toast} />}
+      {dltFor && <SmsModal row={dltFor} savedSender={d.settings.senderId} busy={busy === 'sms'} onClose={() => setDltFor(null)} onCreate={async (dltId, senderId) => (await run('sms', { action: 'createSms', key: dltFor.key, dltId, senderId })) && setDltFor(null)} toast={toast} />}
       {linkFor && <LinkModal row={linkFor} busy={busy === 'link'} onClose={() => setLinkFor(null)} onSave={async (body) => (await run('link', { action: 'link', key: linkFor.key, ...body })) && setLinkFor(null)} />}
       {testFor && <TestModal row={testFor} busy={busy === 'test'} onClose={() => setTestFor(null)} onSend={async (phone, channel) => (await run('test', { action: 'test', key: testFor.key, phone, channel })) && setTestFor(null)} />}
     </div>
@@ -160,7 +160,7 @@ export default function Msg91Panel({ toast }: { toast: (m: string, tone?: 'ok' |
 }
 
 function SettingsForm({ s, onSaved, toast }: { s: Settings; onSaved: () => void; toast: (m: string, tone?: 'ok' | 'error') => void }) {
-  const [x, setX] = useState({ authKey: '', senderId: s.senderId, smsEnabled: s.smsEnabled, whatsappEnabled: s.whatsappEnabled, whatsappNumber: s.whatsappNumber });
+  const [x, setX] = useState({ authKey: '', smsEnabled: s.smsEnabled, whatsappEnabled: s.whatsappEnabled, whatsappNumber: s.whatsappNumber });
   const [busy, setBusy] = useState(false);
   const [numbers, setNumbers] = useState<string[] | null>(null);
   const save = async (extra: Record<string, unknown> = {}) => {
@@ -168,19 +168,23 @@ function SettingsForm({ s, onSaved, toast }: { s: Settings; onSaved: () => void;
     try {
       await api('/api/settings/msg91', { method: 'PUT', body: { ...x, smsKeys: s.smsKeys, ...extra } });
       toast('MSG91 settings saved.');
-      setX({ ...x, authKey: '' });
+      setX((v) => ({ ...v, authKey: '' }));
       onSaved();
+      return true;
     } catch (e) {
       toast(errorMessage(e), 'error');
+      return false;
     } finally {
       setBusy(false);
     }
   };
   const fetchNumbers = async () => {
+    // A key just typed is saved first, so Fetch works straight away.
+    if (x.authKey.trim() && !(await save())) return;
     try {
       const r = await api<{ numbers: string[] }>('/api/settings/msg91', { body: { action: 'numbers' } });
       setNumbers(r.numbers);
-      if (r.numbers.length === 1) setX({ ...x, whatsappNumber: r.numbers[0] });
+      if (r.numbers.length === 1) setX((v) => ({ ...v, whatsappNumber: r.numbers[0] }));
       if (!r.numbers.length) toast('No WhatsApp number found on this MSG91 account.', 'error');
     } catch (e) {
       toast(errorMessage(e), 'error');
@@ -206,9 +210,6 @@ function SettingsForm({ s, onSaved, toast }: { s: Settings; onSaved: () => void;
             )}
           </div>
         </Field>
-        <Field label="SMS sender ID" hint="Your 6-letter DLT header, e.g. NEHRAG.">
-          <input value={x.senderId} maxLength={6} onChange={(e) => setX({ ...x, senderId: e.target.value.toUpperCase() })} className={inputClass} />
-        </Field>
         <Field label="WhatsApp number on MSG91" hint="With country code, e.g. 919876543210.">
           <div className="flex gap-2">
             {numbers && numbers.length > 1 ? (
@@ -219,7 +220,7 @@ function SettingsForm({ s, onSaved, toast }: { s: Settings; onSaved: () => void;
             ) : (
               <input value={x.whatsappNumber} onChange={(e) => setX({ ...x, whatsappNumber: e.target.value })} className={inputClass} />
             )}
-            <Button tone="secondary" disabled={!s.hasKey} onClick={fetchNumbers}>Fetch</Button>
+            <Button tone="secondary" disabled={busy || (!s.hasKey && !x.authKey.trim())} onClick={fetchNumbers}>Fetch</Button>
           </div>
         </Field>
         <div className="space-y-2 pt-5">
@@ -250,16 +251,22 @@ function CopyBox({ label, value, onCopied }: { label: string; value: string; onC
   );
 }
 
-function SmsModal({ row, busy, onClose, onCreate, toast }: { row: Row; busy: boolean; onClose: () => void; onCreate: (dltId: string) => void; toast: (m: string) => void }) {
+function SmsModal({ row, savedSender, busy, onClose, onCreate, toast }: { row: Row; savedSender: string; busy: boolean; onClose: () => void; onCreate: (dltId: string, senderId: string) => void; toast: (m: string) => void }) {
   const [dltId, setDltId] = useState(row.link.smsDltId || '');
+  // Asked only here: making the template needs it, sending uses the template's own sender.
+  const [senderId, setSenderId] = useState(savedSender);
+  const ready = /^\d{10,25}$/.test(dltId.replace(/\D/g, '')) && /^[A-Z]{6}$/.test(senderId);
   return (
-    <Modal open wide title={`SMS template: ${row.name}`} onClose={onClose} footer={<Button busy={busy} disabled={!/^\d{10,25}$/.test(dltId.replace(/\D/g, ''))} onClick={() => onCreate(dltId)}>Create on MSG91</Button>}>
+    <Modal open wide title={`SMS template: ${row.name}`} onClose={onClose} footer={<Button busy={busy} disabled={!ready} onClick={() => onCreate(dltId, senderId)}>Create on MSG91</Button>}>
       <ol className="text-xs text-slate-600 list-decimal pl-4 space-y-1">
         <li>Register this exact text as a Service-Implicit template on your DLT portal (Jio / Vodafone / Airtel…).</li>
         <li>When DLT approves it, paste its DLT template ID below and create it on MSG91.</li>
       </ol>
       <CopyBox label="Text for the DLT portal" value={row.dltText} onCopied={() => toast('Copied.')} />
       <CopyBox label="Same text on MSG91 (variables by name)" value={row.smsText} />
+      <Field label="Sender ID (DLT header)" hint="The 6-letter header this template is registered under on DLT, e.g. NEHRAG.">
+        <input value={senderId} maxLength={6} onChange={(e) => setSenderId(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className={inputClass} />
+      </Field>
       <Field label="DLT template ID">
         <input value={dltId} onChange={(e) => setDltId(e.target.value)} className={inputClass} placeholder="e.g. 1107170000000000000" />
       </Field>

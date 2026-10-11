@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Small shared building blocks for the operations screens.
 
@@ -63,18 +63,20 @@ export const Field: React.FC<{ label: string; hint?: string; children: React.Rea
 
 export const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
+/** Big modals (`wide` / `full`: tables, ledgers, long forms) open full screen; small dialogs (confirm, note, short form) stay a compact box. */
 export const Modal: React.FC<{ open: boolean; title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean; full?: boolean }> = ({ open, title, onClose, children, footer, wide, full }) => {
   if (!open) return null;
+  const big = wide || full;
   return (
-    <div className={cx('fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-center', full ? 'items-stretch p-0' : 'items-end sm:items-center p-0 sm:p-4')} onClick={onClose}>
-      <div className={cx('bg-white w-full shadow-2xl flex flex-col', full ? 'h-full' : cx('rounded-t-2xl sm:rounded-2xl max-h-[92dvh]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'))} onClick={(e) => e.stopPropagation()}>
+    <div className={cx('fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-center', big ? 'items-stretch p-0' : 'items-end sm:items-center p-0 sm:p-4')} onClick={onClose}>
+      <div className={cx('bg-white w-full shadow-2xl flex flex-col', big ? 'h-full' : 'rounded-t-2xl sm:rounded-2xl max-h-[92dvh] sm:max-w-lg')} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100">
           <h3 className="min-w-0 truncate font-black text-slate-900 text-sm" title={title}>{title}</h3>
           <button onClick={onClose} aria-label="Close" className="shrink-0 p-1 rounded-lg hover:bg-slate-100 text-slate-500">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className={cx('p-5 overflow-y-auto space-y-4', full && 'flex-1')}>{children}</div>
+        <div className="flex-1 p-5 overflow-y-auto space-y-4">{children}</div>
         {footer && <div className="px-5 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] sm:pb-3 border-t border-slate-100 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
@@ -96,6 +98,11 @@ export const Badge: React.FC<{ tone?: keyof typeof BADGE_TONES; children: React.
 
 const STATUS_TONE: Record<string, keyof typeof BADGE_TONES> = {
   PENDING_APPROVAL: 'amber',
+  RECEIVED: 'amber',
+  OPEN: 'blue',
+  PARTIAL: 'violet',
+  FULFILLED: 'green',
+  EXPIRED: 'red',
   WHATSAPP_RECEIVED: 'amber',
   APPROVED: 'blue',
   ASSIGNED: 'blue',
@@ -171,3 +178,92 @@ export function useToast(): [React.ReactNode, (message: string, tone?: 'ok' | 'e
 export const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 
 export const dateTime = (value: string | Date | null | undefined) => (value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+
+const shortWhen = (value: string | Date) => new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit' });
+
+/** "Created by … / Updated by …" cell for list tables; the update line shows only after a real change. */
+export const WhoStamp: React.FC<{ createdBy?: string | null; createdAt?: string | Date | null; updatedBy?: string | null; updatedAt?: string | Date | null }> = ({ createdBy, createdAt, updatedBy, updatedAt }) => {
+  const edited = !!updatedBy && !!updatedAt && (!createdAt || new Date(updatedAt).getTime() - new Date(createdAt).getTime() > 60_000);
+  return (
+    <div className="space-y-0.5 text-[11px] leading-tight whitespace-nowrap">
+      <div title={createdAt ? `Created ${dateTime(createdAt)}` : undefined}>
+        <span className="text-slate-400">Created</span> <b className="text-slate-700">{createdBy || '—'}</b>
+        {createdAt && <div className="text-[10px] text-slate-400">{shortWhen(createdAt)}</div>}
+      </div>
+      {edited && (
+        <div title={`Updated ${dateTime(updatedAt)}`}>
+          <span className="text-slate-400">Updated</span> <b className="text-indigo-700">{updatedBy}</b>
+          <div className="text-[10px] text-slate-400">{shortWhen(updatedAt!)}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ───────────── Pagination ─────────────
+
+const PAGE_SIZES = [25, 50, 100, 0] as const; // 0 = all rows (e.g. before printing)
+
+/**
+ * Pages a list for a table: `<Paged rows={list}>{(rows, offset) => <table>…{rows.map(…)}</table>}</Paged>`.
+ * Goes back to page 1 when the list changes size (new search / filter); the pager hides for short lists.
+ */
+export function Paged<T>({ rows, size: initialSize = 25, children }: { rows: T[]; size?: number; children: (rows: T[], offset: number) => React.ReactNode }) {
+  const [size, setSize] = useState<number>(initialSize);
+  const [page, setPage] = useState(1);
+  const [seenTotal, setSeenTotal] = useState(rows.length);
+  const total = rows.length;
+  if (seenTotal !== total) {
+    setSeenTotal(total);
+    setPage(1);
+  }
+  const pages = size ? Math.max(1, Math.ceil(total / size)) : 1;
+  const current = Math.min(page, pages);
+  const offset = size ? (current - 1) * size : 0;
+  const slice = size ? rows.slice(offset, offset + size) : rows;
+  return (
+    <>
+      {children(slice, offset)}
+      {total > PAGE_SIZES[0] && <Pager total={total} page={current} pages={pages} size={size} offset={offset} shown={slice.length} onPage={setPage} onSize={(n) => { setSize(n); setPage(1); }} />}
+    </>
+  );
+}
+
+/** "26–50 of 340 · rows [25] · ‹ 1 2 3 … 14 ›" */
+export function Pager({ total, page, pages, size, offset, shown, onPage, onSize }: { total: number; page: number; pages: number; size: number; offset: number; shown: number; onPage: (p: number) => void; onSize: (n: number) => void }) {
+  // Page numbers around the current one, with the first and last always there.
+  const nums: (number | '…')[] = [];
+  for (let p = 1; p <= pages; p++) {
+    if (p === 1 || p === pages || Math.abs(p - page) <= 1) nums.push(p);
+    else if (nums[nums.length - 1] !== '…') nums.push('…');
+  }
+  const btn = 'min-w-8 h-8 px-2 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
+  return (
+    <div className="print:hidden flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 border-t border-slate-100 text-xs text-slate-600">
+      <div className="flex items-center gap-3">
+        <span>
+          <b className="text-slate-900">{total ? offset + 1 : 0}–{offset + shown}</b> of <b className="text-slate-900">{total.toLocaleString('en-IN')}</b>
+        </span>
+        <label className="flex items-center gap-1.5">
+          Rows
+          <select value={size} onChange={(e) => onSize(Number(e.target.value))} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700">
+            {PAGE_SIZES.map((n) => <option key={n} value={n}>{n || 'All'}</option>)}
+          </select>
+        </label>
+      </div>
+      {pages > 1 && (
+        <div className="flex items-center gap-1">
+          <button type="button" className={btn} disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page"><ChevronLeft className="h-4 w-4 mx-auto" /></button>
+          {nums.map((n, i) =>
+            n === '…' ? (
+              <span key={`gap${i}`} className="px-1 text-slate-400">…</span>
+            ) : (
+              <button key={n} type="button" onClick={() => onPage(n)} className={cx(btn, n === page && 'bg-slate-900! text-white! border-slate-900!')} aria-current={n === page ? 'page' : undefined}>{n}</button>
+            )
+          )}
+          <button type="button" className={btn} disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4 mx-auto" /></button>
+        </div>
+      )}
+    </div>
+  );
+}

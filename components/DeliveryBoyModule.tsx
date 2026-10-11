@@ -41,7 +41,7 @@ import { getLocation } from '../lib/security';
 import { QueuedEntry, queueAll, queuePut, syncQueue } from '../lib/offlineQueue';
 import { LanguageToggle } from './LanguageToggle';
 import { NotificationBell } from './NotificationBell';
-import { Badge, Button, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
+import { Paged, Badge, Button, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 import { DateInput } from './DateInput';
 import { MicButton } from './MicButton';
 import { cue } from '../lib/feedback';
@@ -2066,9 +2066,9 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
         {requests.length === 0 ? (
           <div className="text-[11px] text-slate-400">{t('None.')}</div>
         ) : (
-          <table className="w-full text-[11px]">
+          <Paged rows={requests}>{(pageRows, offset) => (<table className="w-full text-[11px]">
             <tbody>
-              {requests.map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r.id} className="border-t border-slate-100 first:border-t-0 align-top">
                   <td className="py-1.5">
                     <div className="font-bold text-slate-900">{r.title}</div>
@@ -2081,7 +2081,7 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}</Paged>
         )}
       </div>
 

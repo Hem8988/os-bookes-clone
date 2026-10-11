@@ -3,6 +3,7 @@ import type { Prisma } from '@/lib/generated/prisma/client';
 import { can } from '@/lib/permissions';
 import { requireAuth } from '@/lib/server/auth';
 import { createCustomer, customerToClient, deliveryBoyCustomers } from '@/lib/server/customers';
+import { Effects } from '@/lib/server/effects';
 import { forbidden, handle, ok, readJson } from '@/lib/server/http';
 
 /** Customer search for pickers (orders, payments, field orders). */
@@ -47,6 +48,8 @@ export const POST = handle(async (request: Request) => {
   const body = await readJson(request);
   // Accountants add suppliers while entering bills / expenses; customers stay admin-only.
   if (!can(auth.role, 'customers.manage') && !(body.type === 'Vendor' && can(auth.role, 'books.manage'))) throw forbidden();
-  const customer = await transaction((tx) => createCustomer(tx, auth, body));
+  const effects = new Effects();
+  const customer = await transaction((tx) => createCustomer(tx, auth, body, effects));
+  effects.schedule();
   return ok(customer, `Customer ${customer.customerCode} created.`);
 });

@@ -60,8 +60,8 @@ export const AddEditPaymentModal: React.FC<AddEditPaymentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 flex justify-center bg-slate-950/80 backdrop-blur-md overflow-y-auto items-stretch p-0">
+      <div className="relative w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200 max-w-none h-full rounded-none">
 
         <div className="flex items-center justify-between px-5 py-3.5 bg-teal-600 dark:bg-teal-800">
           <h2 className="text-base font-bold text-white">

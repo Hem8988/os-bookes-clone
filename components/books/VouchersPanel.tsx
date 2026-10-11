@@ -5,7 +5,7 @@ import { BookText, ChevronDown, ChevronRight, Plus, Trash2, XCircle } from 'luci
 import { MANUAL_VOUCHER_TYPES, VOUCHER_TYPES, VoucherType } from '../../lib/books';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
-import { Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
+import { Paged, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, LedgerOption, money, PeriodBar, plain, useBooksReport, usePeriod, VoucherBadge } from './shared';
 
 interface DayLine { accountId: string; account: string; group: string; debit: number; credit: number }
@@ -83,7 +83,7 @@ export default function VouchersPanel() {
           <Empty>No vouchers in this period.</Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <Paged rows={rows}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left border-b border-slate-200">
                 <tr>
                   <th className="p-2 w-6" />
@@ -97,7 +97,7 @@ export default function VouchersPanel() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((v) => {
+                {pageRows.map((v) => {
                   const isOpen = open.has(v.id);
                   return (
                     <React.Fragment key={v.id}>
@@ -143,7 +143,7 @@ export default function VouchersPanel() {
                   );
                 })}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         )}
       </Card>

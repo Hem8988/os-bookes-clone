@@ -5,7 +5,7 @@ import type { Tx } from '@/lib/db';
 import { audit, Actor } from '../audit';
 import { Effects } from '../effects';
 import { badRequest, conflict, notFound } from '../http';
-import { recordPayment, verifyPayment } from '../payments';
+import { recordPayment } from '../payments';
 import { createManualVoucher } from './entries';
 import { syncBooks } from './sync';
 
@@ -314,16 +314,8 @@ async function bankReceipt(actor: Actor, customerId: string, row: Pick<Statement
       'LATE_ENTRY',
       quiet
     );
-    if (actor.role !== 'SUPER_ADMIN') return { paymentNumber: payment.paymentNumber, verified: false };
-    await verifyPayment(tx, actor, payment.id, quiet);
-    const note = 'Verified against the bank statement';
-    await tx.approvalRequest.updateMany({
-      where: { tenantId: actor.tenantId, referenceType: 'PAYMENT', referenceId: payment.id, status: 'PENDING' },
-      data: { status: 'APPROVED', decidedById: actor.userId, decidedByName: actor.name, decidedAt: new Date(), decisionNote: note },
-    });
-    const approval = await tx.approvalRequest.findFirst({ where: { tenantId: actor.tenantId, referenceType: 'PAYMENT', referenceId: payment.id } });
-    if (approval) await tx.approvalLog.create({ data: { requestId: approval.id, action: 'APPROVED', actorName: actor.name, actorRole: actor.role, note } });
-    return { paymentNumber: payment.paymentNumber, verified: true };
+    // recordPayment verifies a Super Admin's entry itself (no queue item); anyone else's waits for approval.
+    return { paymentNumber: payment.paymentNumber, verified: payment.status === 'VERIFIED' };
   });
 }
 

@@ -56,7 +56,8 @@ export const PUT = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'settings.manage', { write: true });
   const body = await readJson(request);
   const before = await getSetting(auth.tenantId, 'msg91');
-  const senderId = text(body.senderId).toUpperCase();
+  // Sender ID is asked only when making an SMS template (sending uses the template's own); keep it when not sent.
+  const senderId = body.senderId === undefined ? before.senderId : text(body.senderId).toUpperCase();
   if (senderId && !/^[A-Z]{6}$/.test(senderId)) throw badRequest('Sender ID is the 6-letter DLT header, e.g. NEHRAG.');
   const whatsappNumber = digits(text(body.whatsappNumber));
   if (whatsappNumber && !/^\d{11,15}$/.test(whatsappNumber)) throw badRequest('WhatsApp number with country code, e.g. 919876543210.');
@@ -104,7 +105,7 @@ export const POST = handle(async (request: Request) => {
     return ok({ deleted: true }, 'WhatsApp template deleted on MSG91.');
   }
   if (action === 'createSms') {
-    const r = await createSmsTemplate(auth.tenantId, key, digits(str(body.dltId, 'DLT template ID', { required: true })), auth.name);
+    const r = await createSmsTemplate(auth.tenantId, key, digits(str(body.dltId, 'DLT template ID', { required: true })), text(body.senderId).toUpperCase(), auth.name);
     await audit(prisma, auth, { action: 'MSG91_TEMPLATE_CREATED', entityType: 'SmsTemplate', reference: `${key} → ${r.templateId}` });
     return ok(r, 'SMS template added on MSG91.');
   }

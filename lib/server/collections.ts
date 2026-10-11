@@ -61,8 +61,8 @@ const COLLECTIONS: Record<string, FlatCollection | CustomCollection> = {
           orderBy: { name: 'asc' },
         })
       ).map((c) => customerToClient(c as unknown as Row)),
-    create: (tx, auth, item) => createCustomer(tx, auth, item),
-    update: (tx, auth, id, item) => updateCustomer(tx, auth, id, item),
+    create: (tx, auth, item, effects) => createCustomer(tx, auth, item, effects),
+    update: (tx, auth, id, item, effects) => updateCustomer(tx, auth, id, item, effects),
     remove: (tx, auth, id) => deactivateCustomer(tx, auth, id),
   },
   invoices: {

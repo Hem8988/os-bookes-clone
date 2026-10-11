@@ -5,7 +5,7 @@ import { BadgeIndianRupee, Calculator, CheckCircle2, Printer, Save, Send, Undo2,
 import { api, errorMessage } from '../../lib/api';
 import { useCompany } from '../../lib/useCompany';
 import { useApiData } from '../../lib/useApiData';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
+import { Paged, Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Kpi, LedgerOption, money, plain, Tabs } from './shared';
 
 interface Line { id: string; employeeId: string; employeeName: string; designation: string | null; monthlySalary: number; workingDays: number; presentDays: number; paidLeaves: number; basicEarned: number; overtimeHours: number; overtimePay: number; deliveries: number; cylinders: number; incentive: number; bonus: number; advanceDeduct: number; otherDeduct: number; gross: number; net: number; remarks: string | null }
@@ -296,10 +296,10 @@ function Advances({ employees, onDone, onError }: { employees: Emp[]; onDone: (m
   };
   return (
     <Card title={<span className="flex items-center gap-2"><Users className="h-4 w-4" /> Employees</span>}>
-      <table className="w-full text-xs">
+      <Paged rows={employees}>{(pageRows, offset) => (<table className="w-full text-xs">
         <thead className="text-slate-500 border-b border-slate-200"><tr><th className="p-2 text-left">Employee</th><th className="p-2 text-right">Salary</th><th className="p-2 text-right">Advance due</th><th className="p-2 text-right">Incentive / cylinder</th><th className="p-2" /></tr></thead>
         <tbody className="divide-y divide-slate-100">
-          {employees.map((e) => (
+          {pageRows.map((e) => (
             <tr key={e.id}>
               <td className="p-2"><div className="font-bold">{e.name}</div><div className="text-[10px] text-slate-400">{e.designation || e.role}{e.userId ? ' · delivery login linked' : ''}</div></td>
               <td className="p-2 text-right font-mono">{plain(e.salary)}{/^(day|daily)$/i.test(e.salaryType || '') ? '/day' : '/month'}</td>
@@ -314,7 +314,7 @@ function Advances({ employees, onDone, onError }: { employees: Emp[]; onDone: (m
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>)}</Paged>
       <p className="mt-2 text-[11px] text-slate-500">Incentive counts cylinders in verified deliveries by the employee’s delivery login (link it in Masters → Employees → user). Advances are recovered from the next salary.</p>
       {form && (
         <Modal open title="Salary advance" onClose={() => setForm(null)} footer={<Button busy={busy} disabled={!(Number(form.amount) > 0) || !form.from} onClick={async () => { if (await post({ action: 'advance', employeeId: form.employeeId, amount: Number(form.amount), fromAccountId: form.from, date: form.date, note: form.note }, 'Advance recorded.')) setForm(null); }}>Give advance</Button>}>

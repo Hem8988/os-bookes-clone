@@ -70,6 +70,8 @@ interface PrintExtra {
   poDate?: string;
   challanNumber?: string;
   poNumber?: string;
+  vendorCode?: string;
+  itemCodes?: Record<string, string>;
 }
 
 type PrintData = InvoiceView & { print?: PrintExtra | null; customerPan?: string; canEditRefs?: boolean };
@@ -227,8 +229,8 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const head = 'border-r border-b border-black px-1 py-0.5 font-bold text-left align-top leading-tight';
 
   const modal = (
-    <div className="invoice-print-root fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto print:static print:block print:bg-white print:p-0 print:overflow-visible print:backdrop-blur-none">
-      <div className="w-full max-w-[860px] bg-white text-black rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] print:max-h-none print:rounded-none print:shadow-none print:overflow-visible print:max-w-none">
+    <div className="invoice-print-root fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex justify-center overflow-y-auto print:static print:block print:bg-white print:p-0 print:overflow-visible print:backdrop-blur-none items-stretch p-0">
+      <div className="w-full bg-white text-black shadow-2xl overflow-hidden flex flex-col print:max-h-none print:rounded-none print:shadow-none print:overflow-visible print:max-w-none max-w-none h-full rounded-none">
         <div className="print:hidden flex items-center justify-between px-5 py-3 bg-slate-900 text-white">
           <div className="flex items-center gap-2">
             <Printer className="h-5 w-5 text-emerald-400" />
@@ -351,6 +353,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
                 <div>Vehicle No : {p?.vehicleNumber || ''}</div>
                 <div>CHALLAN NO:{p?.challanNumber || p?.deliveryNumber || ''}</div>
                 <div>P.O. NO:{p?.poNumber || ''}{p?.poDate ? ` · Dt ${dmy(p.poDate)}` : ''}</div>
+                {p?.vendorCode && <div className="font-normal text-[11px]">Vendor Code : {p.vendorCode}</div>}
                 {p?.orderNumber && <div className="font-normal text-[11px]">Order No : {p.orderNumber}</div>}
                 {inv.dueDate && <div className="font-normal text-[11px]">Due Date : {dmy(inv.dueDate)}</div>}
               </div>
@@ -403,7 +406,10 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
                 {lines.map((l, idx) => (
                   <tr key={l.item.id || idx}>
                     <td className={`${cell} text-center`}>{idx + 1}</td>
-                    <td className={cell}>{l.item.productName}</td>
+                    <td className={cell}>
+                      {l.item.productName}
+                      {p?.itemCodes?.[l.item.productName] && <div className="text-[9.5px]">Item Code : {p.itemCodes[l.item.productName]}</div>}
+                    </td>
                     <td className={`${cell} text-right`}>{l.item.hsnCode || ''}</td>
                     <td className={`${cell} text-right`}>{l.item.quantity}</td>
                     <td className={`${cell} text-center`}>{l.item.unit || ''}</td>

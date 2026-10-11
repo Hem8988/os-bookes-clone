@@ -34,6 +34,9 @@ export interface InvoicePrintExtra {
   challanNumber?: string;
   poNumber?: string;
   poDate?: string;
+  /** From the customer's PO: our vendor code with them, and their item code per product name. */
+  vendorCode?: string;
+  itemCodes?: Record<string, string>;
 }
 
 /** Print references the office can fill in by hand. */

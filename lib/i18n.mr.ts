@@ -366,6 +366,7 @@ export const MR: Record<string, string> = {
   Recent: 'अलीकडील',
   'More options': 'अधिक पर्याय',
   'Filled from last order {no} ({date})': 'मागील ऑर्डर {no} ({date}) वरून भरले',
+  'Repeat last order {no} ({date})': 'मागील ऑर्डर {no} ({date}) पुन्हा भरा',
   Clear: 'काढा',
   'Tap a cylinder to add it': 'जोडण्यासाठी सिलेंडरवर टॅप करा',
   'Full bill {amount}': 'पूर्ण बिल {amount}',

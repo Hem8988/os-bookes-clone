@@ -11,6 +11,7 @@ import type { GstDetails } from '../lib/server/gstLookup';
 import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
 import { AddableSelect } from './AddableSelect';
 import { Combobox } from './Combobox';
+import { DepositReceiptModal } from './DepositReceiptModal';
 
 interface AddEditVendorModalProps {
   isOpen: boolean;
@@ -120,6 +121,9 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
   type DepositStatus = 'Pending' | 'Paid' | 'Refunded' | 'Adjusted' | 'Free';
   const [depositLines, setDepositLines] = useState<Record<string, { fee: number | ''; qty: number | ''; status?: DepositStatus; voucherNo?: string }>>({});
   const [depositStatus, setDepositStatus] = useState<DepositStatus>('Pending');
+  const [depositMode, setDepositMode] = useState('');
+  const [depositDate, setDepositDate] = useState('');
+  const [receiptOpen, setReceiptOpen] = useState(false);
   const [svVoucherNo, setSvVoucherNo] = useState('');
 
   // Opening Balance State
@@ -268,6 +272,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         setDepositLines(saved?.length ? Object.fromEntries(saved.map((l) => [l.productId, { fee: l.fee, qty: l.qty, status: l.status || oldStatus, voucherNo: l.voucherNo ?? (l.productId === first ? customerToEdit.svVoucherNo : undefined) }])) : first && total > 0 ? { [first]: { fee, qty, status: oldStatus, voucherNo: customerToEdit.svVoucherNo } } : {});
       }
       setDepositStatus(customerToEdit.depositStatus || (customerToEdit.totalDepositAmount ? 'Paid' : 'Pending'));
+      setDepositMode(customerToEdit.depositMode || '');
+      setDepositDate(customerToEdit.depositDate || today);
       setSvVoucherNo(customerToEdit.svVoucherNo || `SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       
       const initOpBal = customerToEdit.openingBalance !== undefined ? customerToEdit.openingBalance : Math.abs(customerToEdit.balance || 0);
@@ -324,6 +330,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       setDepositQty(1);
       setDepositLines({});
       setDepositStatus('Pending');
+      setDepositMode('');
+      setDepositDate(today);
       setSvVoucherNo(`SV-2026-${Math.floor(1000 + Math.random() * 9000)}`);
       setOpeningBalance(0);
       setOpeningBalanceType(defaultType === 'Vendor' ? 'Cr' : 'Dr');
@@ -395,7 +403,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     });
   const depositTotal = depositRows.reduce((sum, r) => sum + r.total, 0);
   const setDepositLine = (productId: string, patch: { fee?: number | ''; qty?: number | ''; status?: DepositStatus; voucherNo?: string }) =>
-    setDepositLines((all) => ({ ...all, [productId]: { fee: all[productId]?.fee ?? '', qty: all[productId]?.qty ?? '', ...patch } }));
+    // Keep the line's other fields (status, voucher no.) — changing one must not reset the rest.
+    setDepositLines((all) => ({ ...all, [productId]: { ...(all[productId] ?? { fee: '', qty: '' }), ...patch } }));
 
   /** Same checks the server makes, so mistakes show here with the form still filled in. */
   const validate = () => {
@@ -409,6 +418,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     if (emailAddress.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress.trim())) errors.push({ field: 'email', message: 'Email is not valid.' });
     const noVoucher = depositRows.filter((r) => r.voucherMissing);
     if (noVoucher.length) errors.push({ field: 'voucher', message: `Enter the SV / TV voucher number for: ${noVoucher.map((r) => r.product.name).join(', ')} (needed when the deposit is Free or Paid).` });
+    if (!depositMode && depositRows.some((r) => r.qty > 0 && r.status === 'Paid' && r.total > 0)) errors.push({ field: 'depositMode', message: 'Choose how the cylinder deposit was received (Cash / Bank / UPI / Cheque, or "Old deposit" if it was taken before DeskShark).' });
     return errors;
   };
   /** Show the problems at the top of the form and mark the boxes. */
@@ -488,6 +498,8 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
       // Overall status for the customer list: pending if any cylinder type's deposit is pending.
       depositStatus: depositRows.length ? (depositRows.some((r) => r.qty > 0 && r.status === 'Pending') ? 'Pending' : (depositRows.find((r) => r.qty > 0 && r.status !== 'Free') || depositRows.find((r) => r.qty > 0))?.status || depositStatus) : depositStatus,
       svVoucherNo: (depositRows.find((r) => r.voucherNo.trim())?.voucherNo || svVoucherNo).trim() || undefined,
+      depositMode: depositMode || undefined,
+      depositDate: depositDate || undefined,
       assignedCylinderTypes,
       // Drives the WhatsApp quick-order menu (SRS §5.2 Default Product(s)).
       defaultProductIds: assignedCylinderTypes.filter((id) => products.some((p) => p.id === id)),
@@ -1140,6 +1152,47 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
               </div>
             )}
 
+            {depositRows.length > 0 && (
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1">
+                  <span>Deposit received by {depositRows.some((r) => r.qty > 0 && r.status === 'Paid' && r.total > 0) && <span className="text-rose-600">*</span>}</span>
+                  <select value={depositMode} onChange={(e) => setDepositMode(e.target.value)} className={`w-56 px-2 py-1.5 rounded border border-slate-300 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500${bad('depositMode')}`}>
+                    <option value="">— Select —</option>
+                    <option value="CASH">Cash</option>
+                    <option value="BANK">Bank transfer / NEFT</option>
+                    <option value="UPI">UPI</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="OPENING">Old deposit (taken before DeskShark)</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span>Deposit date</span>
+                  <input type="date" value={depositDate} onChange={(e) => setDepositDate(e.target.value)} className="px-2 py-1.5 rounded border border-slate-300 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                </label>
+                {(() => {
+                  // The receipt prints what is saved: only offer it once a received deposit is on record.
+                  const received = (lines: { productId: string; qty: number | ''; status?: string; voucherNo?: string }[]) =>
+                    JSON.stringify(lines.filter((l) => Number(l.qty) > 0 && (l.status === 'Paid' || l.status === 'Free')).map((l) => [l.productId, Number(l.qty), l.status, l.voucherNo || '']));
+                  const saved = received(customerToEdit?.depositLines || []);
+                  const now = received(depositRows.map((r) => ({ productId: r.product.id, qty: r.qty, status: r.status, voucherNo: r.voucherNo.trim() })));
+                  if (!customerToEdit?.id || saved === '[]') {
+                    return now !== '[]' ? <span className="ml-auto text-[11px] font-bold text-teal-700">🧾 Receipt opens after you save</span> : null;
+                  }
+                  return (
+                    <div className="ml-auto flex items-center gap-2">
+                      {saved !== now && <span className="text-[11px] font-bold text-orange-700">Unsaved deposit changes — save to update the receipt</span>}
+                      <button type="button" onClick={() => setReceiptOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-black text-xs shadow-sm cursor-pointer">
+                        🧾 Print deposit receipt
+                      </button>
+                    </div>
+                  );
+                })()}
+                <p className="basis-full text-[11px] font-normal text-slate-500">
+                  On save, each cylinder marked <b>Paid</b> or <b>Free</b> gets an SV voucher (Customer Cylinders → SV / TV vouchers), a printable receipt, a WhatsApp confirmation to the customer and a receipt entry in Books under “Cylinder Security Deposits” — kept apart from the customer&apos;s outstanding. “Adjusted in bill” credits the deposit against their dues.
+                </p>
+              </div>
+            )}
+
           </div>
 
           {/* ACCOUNT OPENING BALANCE SETUP CARD */}
@@ -1307,6 +1360,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
         </form>
 
       </div>
+      {receiptOpen && <DepositReceiptModal customerId={customerToEdit?.id || null} onClose={() => setReceiptOpen(false)} />}
     </div>
   );
 };

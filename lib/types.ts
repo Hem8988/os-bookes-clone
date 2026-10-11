@@ -189,6 +189,11 @@ export interface CustomerAddress {
 export interface Customer {
   id: string;
   customerCode?: string;
+  /** Staff who added / last saved the party (server-set). */
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   name: string;
   shortName?: string;
   tradeName?: string;
@@ -245,6 +250,10 @@ export interface Customer {
   /** Security deposit per cylinder type: rate (from the product master by default) × cylinders. */
   depositLines?: { productId: string; fee: number; qty: number; status?: 'Pending' | 'Paid' | 'Refunded' | 'Adjusted' | 'Free'; voucherNo?: string }[];
   depositStatus?: 'Pending' | 'Paid' | 'Refunded' | 'Adjusted' | 'Free';
+  /** How the deposit came in: CASH | BANK | UPI | CHEQUE | OPENING (taken before DeskShark). */
+  depositMode?: string;
+  /** Date the deposit was received (YYYY-MM-DD). */
+  depositDate?: string;
   svVoucherNo?: string;
   openingBalance?: number;
   openingBalanceType?: 'Dr' | 'Cr';

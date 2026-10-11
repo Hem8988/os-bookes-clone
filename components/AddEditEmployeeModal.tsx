@@ -103,8 +103,8 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-3 overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden my-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex justify-center bg-slate-950/75 backdrop-blur-sm overflow-y-auto items-stretch p-0">
+      <div className="relative w-full bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150 max-w-none h-full rounded-none">
 
         {/* Header Bar */}
         <div className="bg-[#00a8b5] px-5 py-3 flex items-center justify-between text-white shadow-sm">

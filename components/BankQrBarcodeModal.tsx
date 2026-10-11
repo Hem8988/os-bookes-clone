@@ -183,8 +183,8 @@ Thank you!`;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 flex justify-center bg-slate-950/80 backdrop-blur-md overflow-y-auto items-stretch p-0">
+      <div className="relative w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-y-auto animate-in fade-in zoom-in duration-200 max-w-none h-full rounded-none">
         
         {/* Top Header Banner */}
         <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 p-6 text-white relative">

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Customer, LedgerEntry } from '../lib/types';
 import { X, Filter, Printer, Download, Paperclip, Plus, Check } from 'lucide-react';
+import { Paged } from './ui';
 
 interface CustomerLedgerModuleProps {
   customerLedger: LedgerEntry[];
@@ -191,7 +192,7 @@ export const CustomerLedgerModule: React.FC<CustomerLedgerModuleProps> = ({
 
       {/* Main Table Area */}
       <div className="flex-1 overflow-x-auto bg-white dark:bg-slate-950">
-        <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 border-collapse min-w-[900px]">
+        <Paged rows={filteredLedger} size={50}>{(pageRows, offset) => (<table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 border-collapse min-w-[900px]">
           <thead className="bg-[#343a40] text-white font-bold">
             <tr>
               <th className="p-2 border border-slate-600 w-8 text-center"></th>
@@ -292,12 +293,12 @@ export const CustomerLedgerModule: React.FC<CustomerLedgerModuleProps> = ({
             </tr>
 
             {/* Actual Ledger Rows */}
-            {filteredLedger.map((led, idx) => (
+            {pageRows.map((led, idx) => (
               <tr key={led.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700">
                 <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">
                   <input type="checkbox" className="w-3.5 h-3.5 cursor-pointer" />
                 </td>
-                <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold">{idx + 1}</td>
+                <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-center font-bold">{offset + idx + 1}</td>
                 <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-center font-mono">{led.date}</td>
                 <td className="p-2 border-r border-slate-200 dark:border-slate-700 font-medium">{led.particulars}</td>
                 <td className="p-2 border-r border-slate-200 dark:border-slate-700 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">{led.voucherNumber}</td>
@@ -323,7 +324,7 @@ export const CustomerLedgerModule: React.FC<CustomerLedgerModuleProps> = ({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>)}</Paged>
       </div>
 
       {/* Footer Totals */}

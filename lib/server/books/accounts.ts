@@ -26,6 +26,7 @@ export const SYSTEM_ACCOUNTS = {
   BANK: { code: 'SYS-BANK', name: 'Bank Account', group: 'Bank Accounts' },
   CAPITAL: { code: 'SYS-CAPITAL', name: 'Capital Account', group: 'Capital Account' },
   SUSPENSE: { code: 'SYS-SUSPENSE', name: 'Suspense A/c', group: 'Suspense A/c' },
+  CYL_DEPOSIT: { code: 'SYS-CYLDEP', name: 'Cylinder Security Deposits', group: 'Cylinder Deposits (Liability)' },
 } as const;
 
 export type SystemKey = keyof typeof SYSTEM_ACCOUNTS;
@@ -49,9 +50,9 @@ async function upsertAccount(db: Db, tenantId: string, key: string, data: { code
   });
 }
 
-export async function systemAccount(db: Db, tenantId: string, key: SystemKey) {
+export async function systemAccount(db: Db, tenantId: string, key: SystemKey, openingBalance?: number) {
   const def = SYSTEM_ACCOUNTS[key];
-  return upsertAccount(db, tenantId, key, { code: def.code, name: def.name, groupName: def.group });
+  return upsertAccount(db, tenantId, key, { code: def.code, name: def.name, groupName: def.group, openingBalance });
 }
 
 /** Customer → Sundry Debtors, vendor / plant → Sundry Creditors. */

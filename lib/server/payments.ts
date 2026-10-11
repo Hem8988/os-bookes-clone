@@ -71,6 +71,12 @@ export async function recordPayment(tx: Tx, actor: Actor, input: LatePaymentInpu
       enteredBy: actor.name,
     },
   });
+  // The Super Admin's own entry needs no second check.
+  if (actor.role === 'SUPER_ADMIN') {
+    await audit(tx, actor, { action: 'PAYMENT_ENTERED', entityType: 'Payment', entityId: payment.id, reference: payment.paymentNumber, newValue: { amount, mode: input.mode, customer: customer.name } });
+    await verifyPayment(tx, actor, payment.id, effects);
+    return tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+  }
   await createApproval(
     tx,
     {

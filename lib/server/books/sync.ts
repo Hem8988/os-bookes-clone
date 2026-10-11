@@ -138,8 +138,8 @@ async function postLedgerEntry(tenantId: string, e: LedgerEntry) {
     }
     return writeSourceVoucher(prisma, { ...base, voucherType: 'PAYMENT', narration: note, lines: [{ accountId: party.id, debit: amount }, { accountId: money.id, credit: amount }] });
   }
-  // Manual adjustments (approved) and anything unrecognised.
-  const other = await systemAccount(prisma, tenantId, e.referenceType === 'CHEQUE_BOUNCE' ? 'BOUNCE_CHARGES' : e.referenceType === 'TDS' ? 'TDS_RECEIVABLE' : e.entryType === 'ADJUSTMENT' ? 'ADJUSTMENT' : 'SUSPENSE');
+  // Manual adjustments (approved), cylinder deposit set off against dues, and anything unrecognised.
+  const other = await systemAccount(prisma, tenantId, e.referenceType === 'CYL_DEPOSIT' ? 'CYL_DEPOSIT' : e.referenceType === 'CHEQUE_BOUNCE' ? 'BOUNCE_CHARGES' : e.referenceType === 'TDS' ? 'TDS_RECEIVABLE' : e.entryType === 'ADJUSTMENT' ? 'ADJUSTMENT' : 'SUSPENSE');
   return writeSourceVoucher(prisma, {
     ...base,
     voucherType: 'JOURNAL',
@@ -322,6 +322,51 @@ async function syncDebitNotes(tenantId: string) {
   }
 }
 
+/** Cash / bank ledger a cylinder deposit came in by (or went out by on refund). */
+async function depositMoneyAccount(tenantId: string, mode: string | null) {
+  if (!mode || mode === 'CASH') return systemAccount(prisma, tenantId, 'CASH');
+  const first = await prisma.bank.findFirst({ where: { tenantId }, orderBy: { accountName: 'asc' } });
+  return first ? bankAccount(prisma, first) : systemAccount(prisma, tenantId, 'BANK');
+}
+
+/**
+ * Cylinder security deposits (SV / TV vouchers) — a refundable liability, never income:
+ *   received → Receipt  (Dr cash / bank, Cr Cylinder Security Deposits)
+ *   refunded → Payment  (Dr Cylinder Security Deposits, Cr cash / bank)
+ *   adjusted against dues → customer ledger line (see postLedgerEntry)
+ * Deposits taken before DeskShark (mode OPENING) go into the deposit ledger's opening balance.
+ */
+async function syncCylinderDeposits(tenantId: string) {
+  const all = await prisma.cylinderVoucher.findMany({ where: { tenantId } });
+  const live = all.filter((v) => v.status !== 'CANCELLED' && v.depositAmount > 0);
+  const opening = r2(live.filter((v) => v.paymentMode === 'OPENING').reduce((sum, v) => sum + v.depositAmount, 0));
+  const deposit = await systemAccount(prisma, tenantId, 'CYL_DEPOSIT', -opening); // liability: credit opening
+  const vouchers = await prisma.accountVoucher.findMany({ where: { tenantId, sourceType: { in: ['CYL_DEPOSIT', 'CYL_DEPOSIT_REFUND'] } }, select: { sourceType: true, sourceId: true, sourceStamp: true, cancelled: true } });
+  const byKey = new Map(vouchers.map((v) => [`${v.sourceType}:${v.sourceId}`, v]));
+  const names = new Map((await prisma.customer.findMany({ where: { tenantId, id: { in: [...new Set(all.map((v) => v.customerId))] } }, select: { id: true, name: true } })).map((c) => [c.id, c.name]));
+
+  for (const v of all) {
+    const stamp = v.updatedAt.toISOString();
+    const partyName = names.get(v.customerId) || null;
+    const ref = `${v.voucherNumber}${v.svNumber ? ` / ${v.svNumber}` : ''} · ${v.cylinderQty} × ${v.productName || 'cylinder'}`;
+    const counted = v.status !== 'CANCELLED' && v.depositAmount > 0 && v.paymentMode !== 'OPENING';
+    const receipt = byKey.get(`CYL_DEPOSIT:${v.id}`);
+    if (!counted) {
+      if (receipt && !receipt.cancelled) await cancelSourceVoucher(prisma, tenantId, 'CYL_DEPOSIT', v.id);
+    } else if (!receipt || receipt.sourceStamp !== stamp || receipt.cancelled) {
+      const money = await depositMoneyAccount(tenantId, v.paymentMode);
+      await writeSourceVoucher(prisma, { tenantId, voucherType: 'RECEIPT', date: v.issueDate, partyName, narration: `Cylinder security deposit ${ref}`, sourceType: 'CYL_DEPOSIT', sourceId: v.id, sourceStamp: stamp, createdBy: v.createdBy || 'system', lines: [{ accountId: money.id, debit: v.depositAmount }, { accountId: deposit.id, credit: v.depositAmount }] });
+    }
+    const refund = byKey.get(`CYL_DEPOSIT_REFUND:${v.id}`);
+    if (v.status !== 'REFUNDED' || v.depositAmount <= 0) {
+      if (refund && !refund.cancelled) await cancelSourceVoucher(prisma, tenantId, 'CYL_DEPOSIT_REFUND', v.id);
+    } else if (!refund || refund.sourceStamp !== stamp || refund.cancelled) {
+      const money = await depositMoneyAccount(tenantId, v.paymentMode === 'OPENING' ? 'CASH' : v.paymentMode);
+      await writeSourceVoucher(prisma, { tenantId, voucherType: 'PAYMENT', date: v.closedOn || v.issueDate, partyName, narration: `Cylinder security deposit refunded ${ref}`, sourceType: 'CYL_DEPOSIT_REFUND', sourceId: v.id, sourceStamp: stamp, createdBy: v.createdBy || 'system', lines: [{ accountId: deposit.id, debit: v.depositAmount }, { accountId: money.id, credit: v.depositAmount }] });
+    }
+  }
+}
+
 let running: Promise<void> | null = null;
 
 /** Bring the books up to date with every business document. Safe to call often. */
@@ -335,6 +380,7 @@ export function syncBooks(tenantId: string): Promise<void> {
       await syncPurchaseBills(tenantId);
       await syncExpenses(tenantId);
       await syncDebitNotes(tenantId);
+      await syncCylinderDeposits(tenantId);
     })().finally(() => {
       running = null;
     });

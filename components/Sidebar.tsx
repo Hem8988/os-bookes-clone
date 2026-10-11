@@ -71,6 +71,7 @@ export const MENU: MenuSection[] = [
     icon: Users,
     items: [
       { tab: 'customers', label: 'Customers', permission: 'customers.view' },
+      { tab: 'customer-pos', label: 'Customer POs', permission: 'orders.view' },
       { tab: 'vendors', label: 'Plants / suppliers', permission: 'customers.view' },
       { tab: 'routes', label: 'Routes & areas', permission: 'masters.view' },
     ],

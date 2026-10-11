@@ -108,6 +108,14 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
     button: { label: 'View Invoice', url: 'link' },
   }),
   template({
+    key: 'DEPOSIT_RECEIVED',
+    name: 'Cylinder Deposit Received',
+    trigger: 'Security deposit saved on the customer form or a voucher issued',
+    sms: 'Dear {{customerName}}, cylinder security deposit of Rs {{amount}} received for {{cylinders}} cylinder(s). Voucher {{voucherNumber}}. Refundable on return. - {{companyName}}',
+    body: `Hey {{customerName}},\n\nWe have received your cylinder security deposit.\n\nVoucher No: {{voucherNumber}}\nCylinders: {{details}}\nDeposit: ₹{{amount}}\nDate: {{date}}\n\nThe deposit is refundable when the cylinders are returned. Please keep this voucher safe.${SIGN_OFF}`,
+    card: { label: 'Security Deposit', value: 'amount', money: true, badge: 'Received', note: 'Voucher : {{voucherNumber}}' },
+  }),
+  template({
     key: 'OUTSTANDING_REMINDER',
     name: 'Outstanding Reminder',
     trigger: 'Weekly scheduled job',
@@ -178,6 +186,8 @@ export const SAMPLE_VARS: Record<string, string> = {
   portalLink: 'https://example.com/customer',
   paymentTerms: 'NET 15',
   cylinders: '4',
+  voucherNumber: 'SV-00012',
+  details: '4 × 19 kg Commercial',
   days: '21',
   month: 'September 2026',
   opening: '12,000',

@@ -55,8 +55,9 @@ export const GET = handle(async (request: Request) => {
       deliveries: { include: { items: true }, orderBy: { submittedAt: 'desc' } },
       customer: auth.role === 'DELIVERY_BOY' ? { select: { contactPerson: true, phone: true, whatsappNumber: true, balance: true, area: true } } : false,
     },
-    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
-    take: Math.min(Number(url.searchParams.get('limit')) || 200, 500),
+    // Newest first; urgent orders are marked by their badge, not moved to the top.
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Number(url.searchParams.get('limit')) || 1000, 2000),
   });
   // Office list: the delivery boy's mobile and the vehicle he drives (Masters → Vehicles / trucks).
   const boyIds = [...new Set(orders.map((o) => o.assignedDeliveryBoyId).filter(Boolean) as string[])];
@@ -106,6 +107,7 @@ export const POST = handle(async (request: Request) => {
         priority: body.priority === 'URGENT' ? 'URGENT' : 'NORMAL',
         notes: optStr(body.notes),
         assignedDeliveryBoyId,
+        customerPoId: optStr(body.customerPoId),
         // A delivery boy's order goes in the vehicle of his running trip.
         vehicleNumber: auth.role === 'CUSTOMER' ? null : auth.role === 'DELIVERY_BOY' ? (await dayVehicle(tx, auth.tenantId, auth.userId)) || optStr(body.vehicleNumber) : optStr(body.vehicleNumber),
       },

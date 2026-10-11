@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Plus, X, Search, ArrowUpDown } from 'lucide-react';
+import { Paged } from './ui';
 
 export interface StatItem {
   label: string;
@@ -221,6 +222,7 @@ export function GenericSummaryList<T>({
 
       {/* List / Table */}
       {tableHeaders && renderTableRow ? (
+        <Paged rows={filtered}>{(pageRows, offset) => (
         <div className="overflow-x-auto p-4">
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
@@ -238,23 +240,24 @@ export function GenericSummaryList<T>({
                   </td>
                 </tr>
               ) : (
-                filtered.map((item, idx) => (
+                pageRows.map((item, idx) => (
                   <React.Fragment key={getId(item)}>
-                    {renderTableRow(item, idx)}
+                    {renderTableRow(item, offset + idx)}
                   </React.Fragment>
                 ))
               )}
             </tbody>
           </table>
         </div>
+        )}</Paged>
       ) : (
         <div className="p-4 space-y-3">
           {filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-slate-400">{emptyMessage}</div>
           ) : (
-            filtered.map((item, idx) => (
-              <React.Fragment key={getId(item)}>{renderCard && renderCard(item, idx)}</React.Fragment>
-            ))
+            <Paged rows={filtered}>{(pageRows, offset) => pageRows.map((item, idx) => (
+              <React.Fragment key={getId(item)}>{renderCard && renderCard(item, offset + idx)}</React.Fragment>
+            ))}</Paged>
           )}
         </div>
       )}

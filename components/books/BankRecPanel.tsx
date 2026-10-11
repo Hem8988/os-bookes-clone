@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { CheckCircle2, FileUp, Landmark, Link2, Plus, RefreshCw, Unlink, EyeOff, Trash2 } from 'lucide-react';
 import { api, apiWithMessage, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
+import { Paged, Badge, Button, Card, Empty, Field, inputClass, Modal, cx, today, useToast } from '../ui';
 import { BooksHeader, Kpi, LedgerOption, money, plain } from './shared';
 
 interface StatementLine { id: string; date: string; description: string; reference: string | null; debit: number; credit: number; balance: number | null; status: 'UNMATCHED' | 'MATCHED' | 'IGNORED'; matchedTo: string; matchedBy: string | null; receiptNumber: string | null }
@@ -358,7 +358,7 @@ export default function BankRecPanel() {
                   </div>
                 )}
                 <div className="rounded-xl border border-slate-200">
-                  <table className="w-full text-xs">
+                  <Paged rows={visible}>{(pageRows, offset) => (<table className="w-full text-xs">
                     <thead className="sticky -top-5 z-10 bg-slate-50 text-[10px] uppercase text-slate-500">
                       <tr>
                         <th className="p-2 w-6">
@@ -373,7 +373,7 @@ export default function BankRecPanel() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {visible.map((l) => {
+                      {pageRows.map((l) => {
                         const v = links[l.index] || '';
                         const detected = l.party ? `pay:${l.party.customerId}` : '';
                         const mode = v === 'pick-cust' || (v.startsWith('pay:') && v !== detected) ? 'cust' : v === 'pick-led' || v.startsWith('led:') ? 'led' : 'main';
@@ -436,7 +436,7 @@ export default function BankRecPanel() {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table>)}</Paged>
                 </div>
               </div>
             );

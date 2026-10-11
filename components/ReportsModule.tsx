@@ -6,7 +6,7 @@ import { Download, RefreshCw } from 'lucide-react';
 import { inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
-import { Button, Card, Empty, Stat, cx, inputClass, today, useToast } from './ui';
+import { Paged, Button, Card, Empty, Stat, cx, inputClass, today, useToast } from './ui';
 
 // Reports (SRS Phase 8), each scoped server-side to the user's role.
 
@@ -77,17 +77,17 @@ export default function ReportsModule({ initialReport = 'sales' }: { initialRepo
 
 const Table = ({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) => (
   <div className="overflow-x-auto">
-    <table className="w-full text-xs">
+    <Paged rows={rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
       <thead className="text-slate-500 text-left">
         <tr>{head.map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
       </thead>
       <tbody>
         {rows.length === 0 && <tr><td colSpan={head.length} className="p-6 text-center text-slate-400">No data.</td></tr>}
-        {rows.map((r, i) => (
+        {pageRows.map((r, i) => (
           <tr key={i} className="border-t border-slate-100">{r.map((c, j) => <td key={j} className="p-2">{c}</td>)}</tr>
         ))}
       </tbody>
-    </table>
+    </table>)}</Paged>
   </div>
 );
 

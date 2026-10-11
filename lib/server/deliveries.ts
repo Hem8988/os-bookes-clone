@@ -2,6 +2,7 @@ import { prisma, type Tx } from '@/lib/db';
 import type { Delivery, DeliveryItem } from '@/lib/generated/prisma/client';
 import { createApproval } from './approvals';
 import { audit, Actor } from './audit';
+import { applyDeliveryToPo } from './customerPos';
 import { assertDayOpen, assertDeliveryDayOpen } from './dayLocks';
 import type { Effects } from './effects';
 import { ApiError, badRequest, businessDate, conflict, forbidden, notFound, round2 } from './http';
@@ -304,6 +305,12 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
   const vehicleNumber = doc(docs.vehicleNumber)?.toUpperCase() || delivery.order.vehicleNumber || (await deliveryBoyVehicle(tx, actor.tenantId, delivery.deliveryBoyId, delivery.deliveryBoyName));
 
   const order = delivery.order;
+  // Supplied against a customer PO: count it down and take its number/date unless typed.
+  const po = order.customerPoId ? await applyDeliveryToPo(tx, order.customerPoId, delivery.items) : null;
+  if (po) {
+    paper.poNumber ??= po.poNumber;
+    paper.poDate ??= po.poDate;
+  }
   const customer = await tx.customer.findUniqueOrThrow({ where: { id: delivery.customerId } });
   await tx.delivery.update({ where: { id: delivery.id }, data: { status: 'VERIFIED', verifiedBy: actor.name, verifiedAt: new Date(), verificationNotes: note, ...paper } });
   await setOrderStatus(tx, order, 'VERIFIED', actor.name, note || undefined);
@@ -345,6 +352,8 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
         grnDate: paper.grnDate ?? undefined,
         poNumber: paper.poNumber ?? undefined,
         poDate: paper.poDate ?? undefined,
+        vendorCode: po?.vendorCode ?? undefined,
+        itemCodes: po && Object.keys(po.itemCodes).length ? po.itemCodes : undefined,
         vehicleNumber: vehicleNumber ?? undefined,
       },
     });

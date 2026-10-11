@@ -398,6 +398,7 @@ const HI: Record<string, string> = {
   Recent: 'हाल के',
   'More options': 'और विकल्प',
   'Filled from last order {no} ({date})': 'पिछले ऑर्डर {no} ({date}) से भरा गया',
+  'Repeat last order {no} ({date})': 'पिछला ऑर्डर {no} ({date}) दोबारा भरें',
   Clear: 'हटाएँ',
   'Tap a cylinder to add it': 'जोड़ने के लिए सिलेंडर पर टैप करें',
   'Full bill {amount}': 'पूरा बिल {amount}',

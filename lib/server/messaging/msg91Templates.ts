@@ -99,15 +99,20 @@ export async function deleteWhatsAppTemplate(tenantId: string, key: string, by: 
 }
 
 /** Create our SMS template on MSG91 against the DLT template the user registered. */
-export async function createSmsTemplate(tenantId: string, key: string, dltId: string, by: string) {
+export async function createSmsTemplate(tenantId: string, key: string, dltId: string, senderId: string, by: string) {
   const c = await msg91Config(tenantId);
   if (!c.authKey) throw badRequest('Save the MSG91 auth key first.');
-  if (!c.senderId) throw badRequest('Save the SMS sender ID (DLT header) first.');
+  // Only making a template needs the sender ID; sending uses the template's own.
+  const sender = senderId || c.senderId;
+  if (!/^[A-Z]{6}$/.test(sender)) throw badRequest('Enter the 6-letter sender ID (DLT header) the template is registered under.');
   if (!/^\d{10,25}$/.test(dltId)) throw badRequest('Enter the DLT template ID (digits only) from your DLT portal.');
   const { text } = await smsText(tenantId, key);
-  const r = await smsAddTemplate(c, { name: templateName(key, c.templates[key]?.smsTemplateId), text, dltId });
+  const r = await smsAddTemplate({ ...c, senderId: sender }, { name: templateName(key, c.templates[key]?.smsTemplateId), text, dltId });
   if (!r.ok || !r.templateId) throw conflict(`MSG91: ${r.error || 'no template id returned'}`);
   await saveTemplateLink(tenantId, key, { smsTemplateId: r.templateId, smsDltId: dltId, smsStatus: 'Pending' }, by);
+  // Remembered for the next template's dialog.
+  const s = await getSetting(tenantId, 'msg91');
+  if (s.senderId !== sender) await saveSetting(tenantId, 'msg91', { ...s, senderId: sender }, by);
   return { templateId: r.templateId };
 }
 

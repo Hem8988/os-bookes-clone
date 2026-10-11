@@ -73,8 +73,8 @@ const ProductForm: React.FC<AddEditProductModalProps> = ({ productToEdit, catego
   const num = (key: keyof Product) => (e: React.ChangeEvent<HTMLInputElement>) => set(key, (e.target.value === '' ? 0 : Number(e.target.value)) as never);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-center items-stretch p-0">
+      <form onSubmit={submit} className="w-full bg-white shadow-2xl flex flex-col max-w-none h-full rounded-none">
         <div className="flex items-center justify-between px-5 py-3 bg-teal-700 text-white rounded-t-2xl">
           <h3 className="font-black text-sm">{productToEdit ? `Edit ${productToEdit.name}` : 'New product'}</h3>
           <button type="button" onClick={onClose} className="p-1 rounded hover:bg-teal-600"><X className="h-5 w-5" /></button>

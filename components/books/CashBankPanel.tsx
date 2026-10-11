@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Landmark, Printer } from 'lucide-react';
 import { VOUCHER_TYPES, VoucherType } from '../../lib/books';
-import { Button, Card, Empty, useToast } from '../ui';
+import { Paged, Button, Card, Empty, useToast } from '../ui';
 import { BooksHeader, drCr, Kpi, money, PeriodBar, plain, Tabs, useBooksReport, usePeriod, VoucherBadge } from './shared';
 
 interface Book {
@@ -45,7 +45,7 @@ export default function CashBankPanel() {
           {d.books.map((b) => (
             <Card key={b.account.id} title={b.account.name} actions={<span className="text-xs font-mono font-black">{drCr(b.closing)}</span>}>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <Paged rows={b.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
                   <thead className="text-slate-500 border-b border-slate-200">
                     <tr>
                       <th className="p-2 text-left">Date</th>
@@ -65,7 +65,7 @@ export default function CashBankPanel() {
                       <td />
                       <td className="p-2 text-right font-mono">{drCr(b.opening)}</td>
                     </tr>
-                    {b.rows.map((r, i) => (
+                    {pageRows.map((r, i) => (
                       <tr key={`${r.voucherId}-${i}`}>
                         <td className="p-2 whitespace-nowrap">{r.date}</td>
                         <td className="p-2"><div className="font-bold">{r.particulars}</div>{r.narration && <div className="text-[10px] text-slate-400">{r.narration}</div>}</td>
@@ -84,7 +84,7 @@ export default function CashBankPanel() {
                       <td className="p-2 text-right font-mono">{drCr(b.closing)}</td>
                     </tr>
                   </tfoot>
-                </table>
+                </table>)}</Paged>
               </div>
             </Card>
           ))}

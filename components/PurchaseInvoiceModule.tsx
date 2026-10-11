@@ -962,8 +962,8 @@ export const PurchaseInvoiceModule: React.FC<PurchaseInvoiceModuleProps> = ({
 
       {/* IOCL BOTTLING PLANT TAX INVOICE AUTO-IMPORT MODAL */}
       {isIoclModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-3xl rounded-3xl p-6 text-white space-y-5 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-center items-stretch p-0">
+          <div className="bg-slate-900 border border-slate-700 w-full p-6 text-white space-y-5 shadow-2xl animate-in zoom-in-95 duration-200 max-w-none h-full rounded-none">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-black text-lg">

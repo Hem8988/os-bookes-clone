@@ -6,7 +6,7 @@ import { api, errorMessage } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { renderCard, renderTemplate, SAMPLE_VARS, type TemplateButton, type TemplateCard } from '../lib/whatsapp';
 import Msg91Panel from './Msg91Panel';
-import { Badge, Button, Card, Field, inputClass, Modal, cx, dateTime, useToast } from './ui';
+import { Paged, Badge, Button, Card, Field, inputClass, Modal, cx, dateTime, useToast } from './ui';
 
 // WhatsApp centre (SRS §13): channel status, notification templates, a bot
 // simulator for testing the ordering flow, and the message log.
@@ -182,7 +182,7 @@ function MessageLog() {
   const load = logQ.reload;
   return (
     <Card title="Latest 200 messages" actions={<Button size="sm" tone="ghost" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" /></Button>}>
-      <table className="w-full text-xs">
+      <Paged rows={rows}>{(pageRows, offset) => (<table className="w-full text-xs">
         <thead className="text-slate-500 text-left">
           <tr>
             <th className="p-2">When</th>
@@ -193,7 +193,7 @@ function MessageLog() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {pageRows.map((r) => (
             <tr key={r.id} className="border-t border-slate-100 align-top">
               <td className="p-2 whitespace-nowrap">{dateTime(r.createdAt)}</td>
               <td className="p-2">{r.channel} {r.direction === 'IN' ? '⬅' : '➡'}</td>
@@ -203,7 +203,7 @@ function MessageLog() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>)}</Paged>
     </Card>
   );
 }

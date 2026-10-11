@@ -5,7 +5,7 @@ import { KeyRound, RefreshCw, ShieldAlert, Smartphone, UserPlus } from 'lucide-r
 import { api, errorMessage } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { ROLE_LABELS, ROLES, Role } from '../lib/permissions';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
+import { Paged, Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
 
 // Users & roles, device binding and the audit trail (Super Admin).
 
@@ -44,7 +44,7 @@ function UsersPanel() {
   return (
     <Card title="Users & roles" actions={<Button size="sm" onClick={() => setCreating(true)}><UserPlus className="h-3.5 w-3.5" /> Add user</Button>}>
       {toast}
-      <table className="w-full text-xs">
+      <Paged rows={users}>{(pageRows, offset) => (<table className="w-full text-xs">
         <thead className="text-slate-500 text-left">
           <tr>
             <th className="p-2">Name</th>
@@ -56,7 +56,7 @@ function UsersPanel() {
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => (
+          {pageRows.map((u) => (
             <tr key={u.id} className="border-t border-slate-100">
               <td className="p-2"><strong>{u.name}</strong><div className="text-[10px] text-slate-400">{u.email}{u.mobile ? ` · ${u.mobile}` : ''}</div></td>
               <td className="p-2">{ROLE_LABELS[u.role] || u.role}</td>
@@ -67,7 +67,7 @@ function UsersPanel() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>)}</Paged>
       {creating && <CreateUserModal onClose={() => setCreating(false)} onDone={(m) => { showToast(m); setCreating(false); void load(); }} onError={(m) => showToast(m, 'error')} />}
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} onDone={(m) => { showToast(m); setEditing(null); void load(); }} onError={(m) => showToast(m, 'error')} />}
     </Card>
@@ -190,7 +190,7 @@ function DevicesPanel() {
       {devices.length === 0 ? (
         <Empty>No devices yet. A delivery boy&apos;s first login creates a pending device here.</Empty>
       ) : (
-        <table className="w-full text-xs">
+        <Paged rows={devices}>{(pageRows, offset) => (<table className="w-full text-xs">
           <thead className="text-slate-500 text-left">
             <tr>
               <th className="p-2">User</th>
@@ -202,7 +202,7 @@ function DevicesPanel() {
             </tr>
           </thead>
           <tbody>
-            {devices.map((d) => (
+            {pageRows.map((d) => (
               <tr key={d.id} className="border-t border-slate-100">
                 <td className="p-2 font-bold">{d.user.name}<div className="text-[10px] text-slate-400">{d.user.mobile}</div></td>
                 <td className="p-2">{d.label}<div className="text-[10px] text-slate-400 font-mono">{d.deviceId.slice(0, 13)}…</div></td>
@@ -217,7 +217,7 @@ function DevicesPanel() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>)}</Paged>
       )}
     </Card>
   );
@@ -254,7 +254,7 @@ function AuditPanel() {
       }
     >
       {toast}
-      <table className="w-full text-xs">
+      <Paged rows={rows}>{(pageRows, offset) => (<table className="w-full text-xs">
         <thead className="text-slate-500 text-left">
           <tr>
             <th className="p-2">When</th>
@@ -265,7 +265,7 @@ function AuditPanel() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {pageRows.map((r) => (
             <tr key={r.id} onClick={() => setOpen(r)} className={cx('border-t border-slate-100 cursor-pointer hover:bg-slate-50', r.isSensitive && 'bg-rose-50/50')}>
               <td className="p-2 whitespace-nowrap">{dateTime(r.createdAt)}</td>
               <td className="p-2">{r.actorName}<div className="text-[10px] text-slate-400">{r.actorRole}</div></td>
@@ -275,7 +275,7 @@ function AuditPanel() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>)}</Paged>
       <Modal open={!!open} title={open?.action.replace(/_/g, ' ') || ''} onClose={() => setOpen(null)} wide>
         {open && (
           <div className="grid sm:grid-cols-2 gap-3 text-xs">

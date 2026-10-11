@@ -9,7 +9,7 @@ import { SupplierSelect } from './books/SupplierSelect';
 import { Combobox } from './Combobox';
 import { TruckPicker } from './TruckPicker';
 import { SearchPick, StockTile } from './pos';
-import { Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
+import { Paged, Button, Card, Empty, Field, inputClass, Modal, Stat, StatusBadge, cx, dateTime, today, useToast } from './ui';
 
 // Three-tier cylinder inventory (SRS §10): godowns → delivery boys → customers.
 
@@ -125,7 +125,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
             </Card>
           </div>
           <Card title="Held by customers">
-            <table className="w-full text-xs">
+            <Paged rows={data.customerHoldings}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">Product</th>
@@ -135,7 +135,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                 </tr>
               </thead>
               <tbody>
-                {data.customerHoldings.map((h) => (
+                {pageRows.map((h) => (
                   <tr key={h.productId} className="border-t border-slate-100">
                     <td className="p-2 font-bold">{h.productName}</td>
                     <td className="p-2 text-right">{h.delivered}</td>
@@ -144,7 +144,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </Card>
         </div>
       ) : tab === 'transfers' ? (
@@ -152,7 +152,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
           {transfers.length === 0 ? (
             <Empty>No transfers yet.</Empty>
           ) : (
-            <table className="w-full text-xs">
+            <Paged rows={transfers}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">No.</th>
@@ -163,7 +163,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                 </tr>
               </thead>
               <tbody>
-                {transfers.map((t) => (
+                {pageRows.map((t) => (
                   <tr key={t.id} className="border-t border-slate-100">
                     <td className="p-2 font-mono font-bold">{t.transferNumber}<div className="text-[10px] text-slate-400">{dateTime(t.createdAt)}</div></td>
                     <td className="p-2">{t.fromName} → {t.toName}{t.vehicleNumber && <div className="text-[10px] text-slate-500">🚚 {t.vehicleNumber}</div>}</td>
@@ -173,7 +173,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           )}
         </Card>
       ) : tab === 'inward' ? (
@@ -181,7 +181,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
       ) : tab === 'movements' ? (
         <Card title="Stock movements (latest 300)">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <Paged rows={movements}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">When</th>
@@ -195,7 +195,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                 </tr>
               </thead>
               <tbody>
-                {movements.map((m) => (
+                {pageRows.map((m) => (
                   <tr key={m.id} className="border-t border-slate-100">
                     <td className="p-2 whitespace-nowrap">{dateTime(m.createdAt)}</td>
                     <td className="p-2 font-bold">{m.transactionType.replace(/_/g, ' ')}</td>
@@ -208,7 +208,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         </Card>
       ) : (
@@ -290,7 +290,7 @@ function InwardRegister({ onError }: { onError: (m: string) => void }) {
         <Empty>No plant / supplier loads in this period.</Empty>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[860px]">
+          <Paged rows={shown}>{(pageRows, offset) => (<table className="w-full text-xs min-w-[860px]">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">When</th>
@@ -307,7 +307,7 @@ function InwardRegister({ onError }: { onError: (m: string) => void }) {
               </tr>
             </thead>
             <tbody>
-              {shown.map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r.id} className={cx('border-t border-slate-100', r.transactionType === 'REVERSAL' && 'text-rose-600')}>
                   <td className="p-2 whitespace-nowrap">{dateTime(r.createdAt)}</td>
                   <td className="p-2 font-bold">{r.kind}</td>
@@ -323,7 +323,7 @@ function InwardRegister({ onError }: { onError: (m: string) => void }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}</Paged>
         </div>
       )}
     </Card>

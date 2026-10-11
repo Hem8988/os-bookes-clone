@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, RefreshCw } from 'lucide-react';
 import { inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
-import { Badge, Button, Card, Empty, PartyName, StatusBadge, cx, dateTime, inputClass, today, useToast } from './ui';
+import { Paged, Badge, Button, Card, Empty, PartyName, StatusBadge, cx, dateTime, inputClass, today, useToast } from './ui';
 
 // Delivery operations board: who is on duty, their last known location and
 // every delivery of the selected day with its verification status.
@@ -93,7 +93,7 @@ export default function DeliveryGpsTrackingModule() {
         {deliveries.length === 0 ? (
           <Empty>No deliveries on this date.</Empty>
         ) : (
-          <table className="w-full text-xs">
+          <Paged rows={deliveries}>{(pageRows, offset) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">Delivery</th>
@@ -105,7 +105,7 @@ export default function DeliveryGpsTrackingModule() {
               </tr>
             </thead>
             <tbody>
-              {deliveries.map((d) => (
+              {pageRows.map((d) => (
                 <tr key={d.id} className="border-t border-slate-100">
                   <td className="p-2 font-mono font-bold">{d.deliveryNumber}<div className="text-[10px] text-slate-400">{dateTime(d.submittedAt)}</div></td>
                   <td className="p-2"><PartyName short={d.customerShortName} legal={d.customerName} /></td>
@@ -116,7 +116,7 @@ export default function DeliveryGpsTrackingModule() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}</Paged>
         )}
       </Card>
     </div>

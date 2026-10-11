@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, MapPin, Pencil, Printer, RefreshCw, XCircle } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { InvoiceView, PrintInvoiceModal } from './PrintInvoiceModal';
 import { APPROVAL_TYPES, ApprovalType } from '../lib/permissions';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, useToast } from './ui';
+import { Badge, Button, Card, Empty, Field, Paged, inputClass, Modal, StatusBadge, cx, dateTime, partyLabel, useToast } from './ui';
 
 interface ApprovalItem {
   id: string;
@@ -143,7 +144,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
         <div className="lg:col-span-2 space-y-2">
           {loading && <Empty>Loading…</Empty>}
           {!loading && visible.length === 0 && <Empty>Nothing here. 🎉</Empty>}
-          {visible.map((item) => {
+          <Paged rows={visible}>{(pageRows) => pageRows.map((item) => {
             const overdue = item.status === 'PENDING' && item.dueAt && new Date(item.dueAt) < new Date();
             return (
               <button
@@ -160,7 +161,7 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
                 <div className="text-[10px] text-slate-400 mt-1">by {item.requestedByName}</div>
               </button>
             );
-          })}
+          })}</Paged>
         </div>
 
         <div className="lg:col-span-3">
@@ -209,7 +210,8 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
 
       <Modal
         open={!!decision}
-        title={decision?.action === 'APPROVE' ? 'Approve' : selected?.type === 'DELIVERY_VERIFICATION' ? 'Send back for correction' : 'Reject'}
+        wide
+        title={`${decision?.action === 'APPROVE' ? 'Approve' : selected?.type === 'DELIVERY_VERIFICATION' ? 'Send back for correction' : 'Reject'}${selected ? ` — ${selected.title}` : ''}`}
         onClose={() => setDecision(null)}
         footer={
           <>
@@ -220,6 +222,15 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
           </>
         }
       >
+        <div className="grid gap-5 lg:grid-cols-5 items-start">
+        {/* What is being approved — amount, details and the proof — to check once more before confirming. */}
+        {selected && (
+          <div className="lg:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-2">
+            <div className="text-[10px] font-black uppercase tracking-wide text-slate-500">Check before you confirm</div>
+            <Detail key={`decide-${selected.id}`} item={selected} />
+          </div>
+        )}
+        <div className={cx('space-y-4', selected ? 'lg:col-span-2' : 'lg:col-span-5')}>
         {selected?.type === 'CREDIT_APPROVAL' && decision?.action === 'APPROVE' && (
           <div className="p-3 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold flex gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" /> This customer is over the credit limit. Approving records a credit override in your name.
@@ -252,8 +263,10 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
           </div>
         )}
         <Field label={decision?.action === 'REJECT' ? 'Reason (required)' : 'Note (optional)'}>
-          <textarea value={decision?.note || ''} onChange={(e) => decision && setDecision({ ...decision, note: e.target.value })} rows={3} className={inputClass} />
+          <textarea value={decision?.note || ''} onChange={(e) => decision && setDecision({ ...decision, note: e.target.value })} rows={4} className={inputClass} autoFocus={decision?.action === 'REJECT'} />
         </Field>
+        </div>
+        </div>
       </Modal>
 
       <Modal
@@ -293,24 +306,42 @@ export default function ApprovalQueueModule({ types, title = 'Approval Queue' }:
   );
 }
 
-const Photo = ({ url, label }: { url?: string | null; label: string }) =>
-  url ? (
-    <a href={url} target="_blank" rel="noreferrer" className="block">
-      {/\.pdf($|\?)/i.test(url) ? (
+/**
+ * Proof photo, shown whole (a UPI screenshot is tall — nothing is cropped). A click
+ * zooms it on this page; the link under it still opens the original in a new tab.
+ */
+function Photo({ url, label }: { url?: string | null; label: string }) {
+  const [zoom, setZoom] = useState(false);
+  if (!url) return null;
+  const pdf = /\.pdf($|\?)/i.test(url);
+  return (
+    <div>
+      {pdf ? (
         // A PDF (e.g. scanned challan) has no thumbnail: show a tile that opens it.
-        <span className="h-28 w-full rounded-lg border border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-500">
-          <FileText className="h-8 w-8" />
-          <span className="text-[10px] font-bold">PDF</span>
-        </span>
+        <a href={url} target="_blank" rel="noreferrer" className="h-72 w-full rounded-lg border border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-500">
+          <FileText className="h-10 w-10" />
+          <span className="text-xs font-bold">PDF — open</span>
+        </a>
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={label} className="h-28 w-full object-cover rounded-lg border border-slate-200" />
+        <button type="button" onClick={() => setZoom(true)} title="Click to zoom" className="block w-full cursor-zoom-in">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="h-72 w-full object-contain rounded-lg border border-slate-200 bg-white" />
+        </button>
       )}
-      <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
+      <a href={url} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-1 mt-1">
         {label} <ExternalLink className="h-3 w-3" />
-      </span>
-    </a>
-  ) : null;
+      </a>
+      {zoom && createPortal(
+        <div className="fixed inset-0 z-[80] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setZoom(false)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="max-h-full max-w-full object-contain rounded-lg shadow-2xl bg-white" />
+          <span className="absolute top-4 right-5 text-white text-sm font-bold">{label} · click anywhere to close</span>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
 
 const Line = ({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) => (
   <div className="flex justify-between gap-3 text-xs py-1 border-b border-slate-50">
@@ -407,7 +438,7 @@ function Detail({ item }: { item: ApprovalItem }) {
             <Line label="PO" value={[ref.poNumber, ref.poDate].filter(Boolean).join(' · ') || '—'} />
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Photo url={ref.deliveryProofUrl} label="Delivery proof" />
           <Photo url={ref.paymentProofUrl} label="Payment screenshot" />
           <Photo url={ref.chequePhotoUrl} label="Cheque photo" />
@@ -445,7 +476,7 @@ function Detail({ item }: { item: ApprovalItem }) {
         {ref.chequeNumber && <Line label="Cheque" value={`${ref.chequeNumber} · ${ref.chequeBank} · ${ref.chequeDate}`} />}
         <Line label="Entered by" value={ref.enteredBy} />
         {ref.notes && <Line label="Notes" value={ref.notes} />}
-        <div className="grid grid-cols-3"><Photo url={ref.proofUrl} label="Proof" /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Photo url={ref.proofUrl} label="Proof" /></div>
       </div>
     );
   }
@@ -456,7 +487,7 @@ function Detail({ item }: { item: ApprovalItem }) {
         <Line label="Handed to" value={ref.receiverName} />
         <Line label="Amount" value={inr(ref.amount)} />
         <Line label="Date" value={ref.date} />
-        <div className="grid grid-cols-3"><Photo url={ref.proofUrl} label="Proof" /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Photo url={ref.proofUrl} label="Proof" /></div>
       </div>
     );
   }

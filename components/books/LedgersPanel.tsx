@@ -5,7 +5,7 @@ import { ArrowLeft, Library, Pencil, Plus, Printer, Search } from 'lucide-react'
 import { GROUPS } from '../../lib/books';
 import { api, errorMessage } from '../../lib/api';
 import { useApiData } from '../../lib/useApiData';
-import { Button, Card, Empty, Field, inputClass, Modal, cx, useToast } from '../ui';
+import { Paged, Button, Card, Empty, Field, inputClass, Modal, cx, useToast } from '../ui';
 import { BooksHeader, drCr, PeriodBar, plain, useBooksReport, usePeriod, VoucherBadge } from './shared';
 import { VOUCHER_TYPES, VoucherType } from '../../lib/books';
 
@@ -170,7 +170,7 @@ function LedgerStatement({ account, onBack }: { account: Account; onBack: () => 
           <Empty>Loading…</Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <Paged rows={s.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="bg-slate-900 text-white">
                 <tr>
                   <th className="p-2 text-left">Date</th>
@@ -190,7 +190,7 @@ function LedgerStatement({ account, onBack }: { account: Account; onBack: () => 
                   <td className="p-2 text-right font-mono">{s.opening < 0 ? plain(-s.opening) : ''}</td>
                   <td className="p-2 text-right font-mono">{drCr(s.opening)}</td>
                 </tr>
-                {s.rows.map((r, i) => (
+                {pageRows.map((r, i) => (
                   <tr key={`${r.voucherId}-${i}`} className="hover:bg-slate-50">
                     <td className="p-2 whitespace-nowrap">{r.date}</td>
                     <td className="p-2">
@@ -212,7 +212,7 @@ function LedgerStatement({ account, onBack }: { account: Account; onBack: () => 
                   <td className="p-2 text-right font-mono">{drCr(s.closing)}</td>
                 </tr>
               </tfoot>
-            </table>
+            </table>)}</Paged>
           </div>
         )}
       </Card>

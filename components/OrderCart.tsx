@@ -36,16 +36,10 @@ export function useOrderCart(products: CartProduct[], customerId: string | null,
     setLast(null);
     setPrefilled(false);
     if (!customerId) return;
+    // The last order is only offered (one tap to repeat) — never filled in by itself.
     api<LastOrder | null>(`/api/cylinder/orders/last?customerId=${encodeURIComponent(customerId)}`)
       .then((o) => {
-        if (!alive || !o) return;
-        setLast(o);
-        const allowed = new Set(choiceKey.split(','));
-        const fill = Object.fromEntries(o.items.filter((i) => allowed.has(i.productId)).map((i) => [i.productId, i.qty]));
-        if (Object.keys(fill).length) {
-          setQty(fill);
-          setPrefilled(true);
-        }
+        if (alive && o) setLast(o);
       })
       .catch(() => {});
     return () => {
@@ -74,7 +68,15 @@ export function useOrderCart(products: CartProduct[], customerId: string | null,
     setQty({});
     setPrefilled(false);
   };
-  return { qty, set, clear, reset, items, count, estimate, choices, assignedOff, last, prefilled };
+  // Lines of the last order this customer can still order (cylinder still assigned).
+  const lastItems = last ? last.items.filter((i) => choices.some((p) => p.id === i.productId)) : [];
+  const repeatLast = () => {
+    if (!lastItems.length) return;
+    cue('tap');
+    setQty(Object.fromEntries(lastItems.map((i) => [i.productId, i.qty])));
+    setPrefilled(true);
+  };
+  return { qty, set, clear, reset, items, count, estimate, choices, assignedOff, last, lastItems, repeatLast, prefilled };
 }
 
 type Cart = ReturnType<typeof useOrderCart>;
@@ -86,6 +88,15 @@ export function OrderTiles({ cart, showPrice = true, cols = 2, note }: { cart: C
   const shown = many ? cart.choices.filter((p) => cart.qty[p.id]) : cart.choices;
   return (
     <div className="space-y-2">
+      {!cart.prefilled && cart.last && cart.lastItems.length > 0 && cart.count === 0 && (
+        <button type="button" onClick={cart.repeatLast} className="w-full flex items-center gap-2 rounded-xl bg-slate-50 hover:bg-sky-50 border border-dashed border-slate-300 hover:border-sky-300 px-3 py-2 text-left text-[11px] font-bold text-slate-700 cursor-pointer">
+          <History className="h-4 w-4 shrink-0 text-sky-700" />
+          <span className="flex-1">
+            {t('Repeat last order {no} ({date})', { no: cart.last.orderNumber, date: cart.last.date })}
+            <span className="font-semibold text-slate-500"> · {cart.lastItems.map((i) => `${i.qty} × ${cart.choices.find((p) => p.id === i.productId)?.name || ''}`).join(', ')}</span>
+          </span>
+        </button>
+      )}
       {cart.prefilled && cart.last && (
         <div className="flex items-center gap-2 rounded-xl bg-sky-50 border border-sky-200 px-3 py-2 text-[11px] font-bold text-sky-900">
           <History className="h-4 w-4 shrink-0" />

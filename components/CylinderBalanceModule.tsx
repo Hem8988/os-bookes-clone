@@ -1,25 +1,27 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileBadge, Search } from 'lucide-react';
+import { FileBadge, Printer, Search } from 'lucide-react';
 import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
-import { Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
+import { DepositReceiptModal } from './DepositReceiptModal';
+import { Paged, Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
 
 // Customer cylinder holdings (Opening + Delivered − Empty ± Adjustment) and
 // caution-deposit vouchers (SV / TV).
 
 interface HoldingRow { id: string; productName: string; currentBalance: number; deliveredQtyTotal: number; emptyReceivedTotal: number; customer: { name: string; shortName: string | null; customerCode: string; phone: string; area: string | null }; customerId: string }
 interface HistoryRow { id: string; date: string; type: string; productName: string; change: number; balance: number; reference: string | null; reason: string | null; by: string }
-interface Voucher { id: string; voucherNumber: string; voucherType: string; customerId: string; customer: { name: string; shortName: string | null; customerCode: string }; productName: string | null; cylinderQty: number; regulatorQty: number; depositAmount: number; issueDate: string; status: string; notes: string | null }
+interface Voucher { id: string; voucherNumber: string; voucherType: string; customerId: string; customer: { name: string; shortName: string | null; customerCode: string }; productName: string | null; cylinderQty: number; regulatorQty: number; depositAmount: number; issueDate: string; status: string; notes: string | null; svNumber: string | null; paymentMode: string | null; source: string; closedOn: string | null; productId: string | null }
 
 export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { initialSubTab?: string }) {
   const { can } = useSession();
   const [tab, setTab] = useState(initialSubTab === 'voucher' ? 'voucher' : 'customer');
   const [search, setSearch] = useState('');
   const [history, setHistory] = useState<{ customerName: string; rows: HistoryRow[] } | null>(null);
-  const [voucherForm, setVoucherForm] = useState<Partial<Voucher> & { productId?: string } | null>(null);
+  const [voucherForm, setVoucherForm] = useState<Partial<Voucher> | null>(null);
+  const [receipt, setReceipt] = useState<{ customerId: string; ids?: string[] } | null>(null);
   const [toast, showToast] = useToast();
   const rowsQ = useApiData<HoldingRow[]>('/api/reports?type=cylinder-balance', (m) => showToast(m, 'error'));
   const vouchersQ = useApiData<Voucher[]>('/api/cylinder/vouchers', (m) => showToast(m, 'error'));
@@ -71,7 +73,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
           {filtered.length === 0 ? (
             <Empty>No cylinders with customers.</Empty>
           ) : (
-            <table className="w-full text-xs">
+            <Paged rows={filtered}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">Customer</th>
@@ -83,7 +85,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => (
+                {pageRows.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
                     <td className="p-2"><PartyName short={r.customer.shortName} legal={r.customer.name} /><div className="text-[10px] text-slate-400">{r.customer.customerCode} · {r.customer.area || r.customer.phone}</div></td>
                     <td className="p-2">{r.productName}</td>
@@ -94,15 +96,15 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           )}
         </Card>
       ) : (
-        <Card title="Deposit vouchers" actions={can('customers.manage') && <Button size="sm" onClick={() => setVoucherForm({ voucherType: 'SV', cylinderQty: 1, regulatorQty: 1, depositAmount: 0, issueDate: today(), status: 'ACTIVE' })}><FileBadge className="h-3.5 w-3.5" /> Issue voucher</Button>}>
+        <Card title="Deposit vouchers" actions={can('customers.manage') && <Button size="sm" onClick={() => setVoucherForm({ voucherType: 'SV', cylinderQty: 1, regulatorQty: 1, depositAmount: 0, issueDate: today(), status: 'ACTIVE', paymentMode: 'CASH' })}><FileBadge className="h-3.5 w-3.5" /> Issue voucher</Button>}>
           {vouchers.length === 0 ? (
             <Empty>No vouchers issued.</Empty>
           ) : (
-            <table className="w-full text-xs">
+            <Paged rows={vouchers}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">Voucher</th>
@@ -110,31 +112,37 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
                   <th className="p-2">Product</th>
                   <th className="p-2 text-right">Cyl / Reg</th>
                   <th className="p-2 text-right">Deposit</th>
+                  <th className="p-2">Received by</th>
                   <th className="p-2">Status</th>
                   <th className="p-2" />
                 </tr>
               </thead>
               <tbody>
-                {vouchers.map((v) => (
+                {pageRows.map((v) => (
                   <tr key={v.id} className="border-t border-slate-100">
-                    <td className="p-2 font-mono font-bold">{v.voucherNumber}<div className="text-[10px] text-slate-400">{v.issueDate}</div></td>
+                    <td className="p-2 font-mono font-bold">{v.voucherNumber}{v.svNumber && <div className="text-[10px] text-indigo-700">{v.svNumber}</div>}<div className="text-[10px] text-slate-400">{v.issueDate}{v.source === 'CUSTOMER_MASTER' ? ' · customer form' : ''}</div></td>
                     <td className="p-2"><PartyName short={v.customer.shortName} legal={v.customer.name} /></td>
                     <td className="p-2">{v.productName || '—'}</td>
                     <td className="p-2 text-right">{v.cylinderQty} / {v.regulatorQty}</td>
-                    <td className="p-2 text-right font-mono">{inr(v.depositAmount)}</td>
+                    <td className="p-2 text-right font-mono">{v.depositAmount ? inr(v.depositAmount) : 'Free'}</td>
+                    <td className="p-2">{v.paymentMode ? MODE_LABEL[v.paymentMode] || v.paymentMode : '—'}</td>
                     <td className="p-2"><StatusBadge status={v.status} /></td>
-                    <td className="p-2 text-right">{can('customers.manage') && <Button size="sm" tone="ghost" onClick={() => setVoucherForm(v)}>Edit</Button>}</td>
+                    <td className="p-2 text-right whitespace-nowrap">
+                      <Button size="sm" tone="ghost" onClick={() => setReceipt({ customerId: v.customerId, ids: [v.id] })}><Printer className="h-3.5 w-3.5" /> Receipt</Button>
+                      <Button size="sm" tone="ghost" onClick={() => setReceipt({ customerId: v.customerId })}>All of customer</Button>
+                      {can('customers.manage') && <Button size="sm" tone="ghost" onClick={() => setVoucherForm(v)}>Edit</Button>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           )}
         </Card>
       )}
 
       <Modal open={!!history} title={`Cylinder ledger — ${history?.customerName}`} onClose={() => setHistory(null)} wide>
         {history && (
-          <table className="w-full text-xs">
+          <Paged rows={history.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">When</th>
@@ -146,7 +154,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
               </tr>
             </thead>
             <tbody>
-              {history.rows.map((h) => (
+              {pageRows.map((h) => (
                 <tr key={h.id} className="border-t border-slate-100">
                   <td className="p-2">{dateTime(h.date)}</td>
                   <td className="p-2 font-bold">{h.type.replace(/_/g, ' ')}</td>
@@ -157,16 +165,19 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}</Paged>
         )}
       </Modal>
 
+      {receipt && <DepositReceiptModal customerId={receipt.customerId} voucherIds={receipt.ids} onClose={() => setReceipt(null)} />}
       {voucherForm && <VoucherModal initial={voucherForm} onClose={() => setVoucherForm(null)} onSaved={() => { setVoucherForm(null); showToast('Voucher saved.'); void load(); }} onError={(m) => showToast(m, 'error')} />}
     </div>
   );
 }
 
-function VoucherModal({ initial, onClose, onSaved, onError }: { initial: Partial<Voucher> & { productId?: string }; onClose: () => void; onSaved: () => void; onError: (m: string) => void }) {
+const MODE_LABEL: Record<string, string> = { CASH: 'Cash', BANK: 'Bank', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit' };
+
+function VoucherModal({ initial, onClose, onSaved, onError }: { initial: Partial<Voucher>; onClose: () => void; onSaved: () => void; onError: (m: string) => void }) {
   const [form, setForm] = useState(initial);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
@@ -197,6 +208,15 @@ function VoucherModal({ initial, onClose, onSaved, onError }: { initial: Partial
         </Field>
         <Field label="Issue date"><input type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className={inputClass} /></Field>
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="SV / TV no. (on the paper voucher)"><input value={form.svNumber || ''} onChange={(e) => setForm({ ...form, svNumber: e.target.value.toUpperCase() })} className={cx(inputClass, 'font-mono uppercase')} /></Field>
+        <Field label="Deposit received by">
+          <select value={form.paymentMode || ''} onChange={(e) => setForm({ ...form, paymentMode: e.target.value || null })} className={inputClass}>
+            <option value="">—</option>
+            {Object.entries({ CASH: 'Cash', BANK: 'Bank transfer / NEFT', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit (before DeskShark)' }).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </Field>
+      </div>
       <Field label="Customer">
         <select value={form.customerId || ''} onChange={(e) => setForm({ ...form, customerId: e.target.value })} className={inputClass} disabled={!!form.id}>
           <option value="">Select…</option>
@@ -216,7 +236,7 @@ function VoucherModal({ initial, onClose, onSaved, onError }: { initial: Partial
       </div>
       <Field label="Status">
         <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className={inputClass}>
-          {['ACTIVE', 'TRANSFERRED', 'REFUNDED', 'CANCELLED'].map((s) => <option key={s}>{s}</option>)}
+          {[['ACTIVE', 'Active (deposit held)'], ['REFUNDED', 'Refunded to customer'], ['ADJUSTED', 'Adjusted against dues'], ['TRANSFERRED', 'Transferred (TV)'], ['CANCELLED', 'Cancelled']].map(([s, label]) => <option key={s} value={s}>{label}</option>)}
         </select>
       </Field>
       <Field label="Notes"><input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={inputClass} /></Field>

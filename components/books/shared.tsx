@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { fyStart, monthRange } from '../../lib/books';
 import { useApiData } from '../../lib/useApiData';
-import { cx, today } from '../ui';
+import { cx, Paged, today } from '../ui';
 
 // Building blocks shared by the Books of accounts screens.
 
@@ -113,7 +113,9 @@ export interface Column<R> {
 export function ReportTable<R>({ rows, columns, empty = 'No entries for this period.', rowKey, onRowClick, dense }: { rows: R[]; columns: Column<R>[]; empty?: string; rowKey: (r: R, i: number) => string; onRowClick?: (r: R) => void; dense?: boolean }) {
   const hasTotals = columns.some((c) => c.total);
   const pad = dense ? 'px-2 py-1.5' : 'px-3 py-2';
+  // Pages the rows; the totals row still adds up every row.
   return (
+    <Paged rows={rows} size={50}>{(pageRows, offset) => (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table className="w-full text-xs">
         <thead className="bg-slate-900 text-white">
@@ -133,7 +135,7 @@ export function ReportTable<R>({ rows, columns, empty = 'No entries for this per
               </td>
             </tr>
           )}
-          {rows.map((r, i) => (
+          {pageRows.map((r, pi) => { const i = offset + pi; return (
             <tr key={rowKey(r, i)} onClick={onRowClick ? () => onRowClick(r) : undefined} className={cx('hover:bg-emerald-50/40', onRowClick && 'cursor-pointer')}>
               {columns.map((c, ci) => (
                 <td key={ci} className={cx(pad, c.align === 'right' ? 'text-right font-mono tabular-nums' : c.align === 'center' ? 'text-center' : '', c.className)}>
@@ -141,7 +143,7 @@ export function ReportTable<R>({ rows, columns, empty = 'No entries for this per
                 </td>
               ))}
             </tr>
-          ))}
+          ); })}
         </tbody>
         {hasTotals && rows.length > 0 && (
           <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
@@ -156,6 +158,7 @@ export function ReportTable<R>({ rows, columns, empty = 'No entries for this per
         )}
       </table>
     </div>
+    )}</Paged>
   );
 }
 

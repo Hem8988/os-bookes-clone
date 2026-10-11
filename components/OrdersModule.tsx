@@ -7,7 +7,9 @@ import { ChoiceTiles, PosButton, PosTotal, RecentChips, useRecent } from './pos'
 import { OrderTiles, useOrderCart } from './OrderCart';
 import { api, errorMessage, inr } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
-import { Badge, Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, dateTime, partyLabel, today, useToast } from './ui';
+import { useSession } from '../lib/auth';
+import type { CustomerPo } from './CustomerPoForm';
+import { Badge, Button, Card, Empty, Field, inputClass, Modal, Paged, PartyName, StatusBadge, WhoStamp, cx, dateTime, partyLabel, today, useToast } from './ui';
 
 interface OrderItem { id: string; productId: string; productName: string; orderedQty: number; unitPrice: number; totalAmount: number }
 interface Order {
@@ -30,7 +32,10 @@ interface Order {
   deliveryAddressId?: string | null;
   notes?: string | null;
   createdBy?: string;
+  updatedBy?: string | null;
+  updatedAt?: string;
   isCreditOverLimit: boolean;
+  creditOverrideBy?: string | null;
   totalAmount: number;
   createdAt: string;
   items: OrderItem[];
@@ -65,6 +70,26 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
   const [viewing, setViewing] = useState<Order | null>(null);
   const [editing, setEditing] = useState<Order | null>(null);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [creditFor, setCreditFor] = useState<Order | null>(null);
+  const { can } = useSession();
+  // Credit limit flag: a link to change the customer's limit for those who may.
+  const creditBadge = (o: Order) => {
+    // Out for delivery / done: the flag is only a record of the order time — grey, not a link.
+    if (!EDITABLE.includes(o.status)) {
+      return (
+        <span title={`Over the credit limit when ordered${o.creditOverrideBy ? ` · allowed by ${o.creditOverrideBy}` : ''}`} className="inline-flex whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+          {o.creditOverrideBy ? 'Credit override ✓' : 'Over limit (past)'}
+        </span>
+      );
+    }
+    return can('customers.manage') ? (
+      <button type="button" onClick={() => setCreditFor(o)} title="Change this customer's credit limit" className="cursor-pointer whitespace-nowrap hover:opacity-80">
+        <Badge tone="amber">Credit limit ✎</Badge>
+      </button>
+    ) : (
+      <Badge tone="amber">Credit limit</Badge>
+    );
+  };
   const [creating, setCreating] = useState(false);
   const [toast, showToast] = useToast();
 
@@ -149,7 +174,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
         ) : orders.length === 0 ? (
           <Empty>No orders in this view.</Empty>
         ) : (
-          orders.map((o) => (
+          <Paged rows={orders}>{(pageRows) => pageRows.map((o) => (
             <div key={o.id} className={cx('rounded-2xl bg-white border p-3 space-y-2', selected.has(o.id) ? 'border-emerald-500' : 'border-slate-200')}>
               <div className="flex items-start gap-2">
                 {assignable(o) && <input type="checkbox" className="mt-1 h-4 w-4" checked={selected.has(o.id)} onChange={() => toggle(o.id)} />}
@@ -166,7 +191,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
               <div className="flex flex-wrap items-center gap-1">
                 <StatusBadge status={o.status} />
                 {o.priority === 'URGENT' && <Badge tone="red">Urgent</Badge>}
-                {o.isCreditOverLimit && <Badge tone="amber">Credit limit</Badge>}
+                {o.isCreditOverLimit && creditBadge(o)}
                 <span className="text-[11px] text-slate-500">· {o.requestedDeliveryDate} · {o.assignedDeliveryBoyName || 'No boy'}</span>
               </div>
               <div className="flex gap-2 pt-1 border-t border-slate-100">
@@ -185,7 +210,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
                 )}
               </div>
             </div>
-          ))
+          ))}</Paged>
         )}
       </div>
 
@@ -200,7 +225,8 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
         ) : orders.length === 0 ? (
           <Empty>No orders in this view.</Empty>
         ) : (
-          <div className="overflow-x-auto -m-4">
+          <Paged rows={orders}>{(pageRows) => (
+          <div className="overflow-x-auto -mx-4 -mt-4">
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500 text-left">
                 <tr>
@@ -211,12 +237,13 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
                   <th className="p-3">Deliver on</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Delivery boy</th>
+                  <th className="p-3">Created / Updated by</th>
                   <th className="p-3 text-right">Amount</th>
                   <th className="p-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {orders.map((o) => (
+                {pageRows.map((o) => (
                   <tr key={o.id} className="hover:bg-slate-50">
                     <td className="p-3">{assignable(o) && <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} />}</td>
                     <td className="p-3">
@@ -234,7 +261,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
                     </td>
                     <td className="p-3 space-y-1">
                       <StatusBadge status={o.status} />
-                      {o.isCreditOverLimit && <div><Badge tone="amber">Credit limit</Badge></div>}
+                      {o.isCreditOverLimit && <div>{creditBadge(o)}</div>}
                     </td>
                     <td className="p-3">
                       {o.assignedDeliveryBoyName ? (
@@ -247,30 +274,32 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
+                    <td className="p-3"><WhoStamp createdBy={o.createdBy} createdAt={o.createdAt} updatedBy={o.updatedBy} updatedAt={o.updatedAt} /></td>
                     <td className="p-3 text-right font-mono font-bold">{inr(o.totalAmount)}</td>
                     <td className="p-3">
                       <div className="flex gap-1 justify-end">
-                        {assignable(o) && (
-                          <Button size="sm" tone="secondary" onClick={() => setAssignFor([o.id])} title="Assign / reassign">
+                        {/* Buttons stay in place; when an action is not allowed it is greyed out with the reason on hover. */}
+                        <span title={assignable(o) ? 'Assign / reassign' : lockReason(o, 'assign')}>
+                          <Button size="sm" tone="secondary" disabled={!assignable(o)} onClick={() => setAssignFor([o.id])} className="disabled:opacity-30 disabled:cursor-not-allowed">
                             <Truck className="h-3.5 w-3.5" />
                           </Button>
-                        )}
+                        </span>
                         <Button size="sm" tone="ghost" onClick={() => setViewing(o)} title="View">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
-                        {EDITABLE.includes(o.status) && (
-                          <Button size="sm" tone="ghost" onClick={() => setEditing(o)} title="Edit">
+                        <span title={EDITABLE.includes(o.status) ? 'Edit' : lockReason(o, 'edit')}>
+                          <Button size="sm" tone="ghost" disabled={!EDITABLE.includes(o.status)} onClick={() => setEditing(o)} className="disabled:opacity-30 disabled:cursor-not-allowed">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                        )}
+                        </span>
                         <Button size="sm" tone="ghost" onClick={() => setHistoryFor(o.id)} title="Timeline">
                           <History className="h-3.5 w-3.5" />
                         </Button>
-                        {['PENDING_APPROVAL', 'WHATSAPP_RECEIVED', 'APPROVED', 'ASSIGNED', 'ACCEPTED'].includes(o.status) && (
-                          <Button size="sm" tone="ghost" onClick={() => setCancelFor(o)} title="Cancel">
+                        <span title={CANCELLABLE.includes(o.status) ? 'Cancel' : lockReason(o, 'cancel')}>
+                          <Button size="sm" tone="ghost" disabled={!CANCELLABLE.includes(o.status)} onClick={() => setCancelFor(o)} className="disabled:opacity-30 disabled:cursor-not-allowed">
                             <Trash2 className="h-3.5 w-3.5 text-rose-600" />
                           </Button>
-                        )}
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -278,6 +307,7 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
               </tbody>
             </table>
           </div>
+          )}</Paged>
         )}
       </Card>
 
@@ -304,6 +334,17 @@ export default function OrdersModule({ onOpenCustomer }: { onOpenCustomer?: (cus
         onError={(msg) => showToast(msg, 'error')}
       />
       <OrderHistory orderId={historyFor} onClose={() => setHistoryFor(null)} />
+      {creditFor && (
+        <CreditLimitModal
+          order={creditFor}
+          onClose={() => setCreditFor(null)}
+          onSaved={(message) => {
+            setCreditFor(null);
+            showToast(message);
+            void load();
+          }}
+        />
+      )}
       {viewing && <OrderView order={viewing} onClose={() => setViewing(null)} onEdit={EDITABLE.includes(viewing.status) ? () => { setEditing(viewing); setViewing(null); } : undefined} onTimeline={() => { setHistoryFor(viewing.id); setViewing(null); }} />}
       {editing && (
         <EditOrderModal
@@ -468,6 +509,7 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
     setVehicle(boyVehicle(vehicles, boys.find((b) => b.id === id)));
   };
   const [notes, setNotes] = useState('');
+  const [poId, setPoId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -479,6 +521,9 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
 
   const customer = customers.find((c) => c.id === customerId);
   const cart = useOrderCart(products, customer?.id ?? null, customer?.defaultProductIds ?? []);
+  // The customer's open POs; an order can be supplied against one.
+  const openPos = useApiData<CustomerPo[]>(customer ? `/api/customer-pos?customerId=${customer.id}&status=OPEN` : null).data ?? [];
+  const po = openPos.find((p) => p.id === poId && p.customerId === customerId);
   const matches = useMemo(() => {
     const q = query.toLowerCase();
     return q ? customers.filter((c) => c.name.toLowerCase().includes(q) || (c.shortName || '').toLowerCase().includes(q) || c.phone.includes(q) || c.customerCode.toLowerCase().includes(q)).slice(0, 8) : [];
@@ -487,6 +532,7 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
   const pickCustomer = (c: Customer) => {
     cue('tap');
     setCustomerId(c.id);
+    setPoId('');
     setQuery('');
     setError('');
     const address = c.deliveryAddresses.find((a) => a.isDefault) || c.deliveryAddresses[0];
@@ -513,6 +559,7 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
           assignedDeliveryBoyId: boyId || null,
           vehicleNumber: vehicle.trim() || null,
           notes,
+          customerPoId: po?.id || null,
           source: 'ADMIN',
         }),
       });
@@ -521,6 +568,7 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
       cue('success');
       setCustomerId('');
       setNotes('');
+      setPoId('');
       setPriority('NORMAL');
       setBoyId('');
       setMore(false);
@@ -600,6 +648,16 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
             </div>
           )}
           {cart.assignedOff && <p className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs font-semibold text-amber-800">The cylinder assigned to this customer is inactive. Switch it on in Masters → Products, or tick an active cylinder in the customer’s “Authorized / Assigned Products”.</p>}
+          {openPos.length > 0 && (
+            <Field label="Against customer PO" hint={po ? (po.items.length ? `Pending: ${po.items.filter((i) => (i.pendingQty ?? 0) > 0).map((i) => `${i.productName} × ${i.pendingQty}`).join(', ') || 'nothing'} — PO rates apply` : 'PO number goes on the invoice') : `${openPos.length} open PO${openPos.length === 1 ? '' : 's'} for this customer`}>
+              <select value={po?.id || ''} onChange={(e) => setPoId(e.target.value)} className={inputClass}>
+                <option value="">No PO</option>
+                {openPos.map((p) => (
+                  <option key={p.id} value={p.id}>{p.poNumber} · {p.poDate}{p.validTill ? ` (till ${p.validTill})` : ''}</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <OrderTiles cart={cart} cols={3} />
           <button type="button" onClick={() => setMore(!more)} className="w-full flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-700">
             <span>
@@ -643,7 +701,7 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
               </Field>
             </div>
           )}
-          <div className="text-right text-[11px] text-slate-500">Estimate at standard rates — customer rates apply on save.</div>
+          <div className="text-right text-[11px] text-slate-500">Estimate at standard rates — {po ? 'PO / customer' : 'customer'} rates apply on save.</div>
         </>
       )}
       {error && <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold">{error}</div>}
@@ -653,6 +711,18 @@ function NewOrderModal({ open, boys, vehicles, onClose, onCreated }: { open: boo
 
 /** Orders that can still be changed (nothing has gone out for delivery yet). */
 const EDITABLE = ['WHATSAPP_RECEIVED', 'PENDING_APPROVAL', 'APPROVED', 'ASSIGNED', 'ACCEPTED'];
+const CANCELLABLE = ['PENDING_APPROVAL', 'WHATSAPP_RECEIVED', 'APPROVED', 'ASSIGNED', 'ACCEPTED'];
+
+/** Why an order action is greyed out (shown on hover). */
+function lockReason(o: { status: string }, action: 'assign' | 'edit' | 'cancel') {
+  const s = o.status;
+  if (s === 'CANCELLED') return 'Order is cancelled.';
+  if (s === 'REJECTED') return 'Order was rejected.';
+  if (['PENDING_APPROVAL', 'WHATSAPP_RECEIVED'].includes(s) && action === 'assign') return 'Approve the order first, then assign a delivery boy.';
+  if (['OUT_FOR_DELIVERY', 'DELIVERED', 'PENDING_VERIFICATION', 'SENT_BACK'].includes(s)) return 'Order is already out for delivery — it cannot be changed now.';
+  // Verified / invoiced / completed
+  return 'Order is delivered and billed — stock, invoice and ledger are posted. Correct it with a credit note or an invoice edit.';
+}
 
 function OrderView({ order: o, onClose, onEdit, onTimeline }: { order: Order; onClose: () => void; onEdit?: () => void; onTimeline: () => void }) {
   const row = (label: string, value: React.ReactNode) => (
@@ -748,6 +818,54 @@ function EditOrderModal({ order, onClose, onDone, onError }: { order: Order; onC
       )}
       <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></Field>
       <p className="text-[11px] text-slate-500">About {inr(estimate)} at standard rates — the customer’s own rates are applied on save.{order.assignedDeliveryBoyName ? ` ${order.assignedDeliveryBoyName} is told about the change.` : ''}</p>
+    </Modal>
+  );
+}
+
+/** Change a customer's credit limit straight from an order flagged "credit limit". */
+function CreditLimitModal({ order, onClose, onSaved }: { order: Order; onClose: () => void; onSaved: (message: string) => void }) {
+  const info = useApiData<{ name: string; shortName: string | null; creditLimit: number; balance: number }>(`/api/customers/${order.customerId}/credit-limit`).data;
+  const [limit, setLimit] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const value = limit ?? (info ? String(info.creditLimit || 0) : '');
+  const needed = info ? Math.max(0, info.balance) + order.totalAmount : 0;
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/customers/${order.customerId}/credit-limit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ creditLimit: Number(value) || 0 }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.success === false) throw new Error(json.error || 'Could not save.');
+      onSaved(json.message || 'Credit limit saved.');
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal open title={`Credit limit — ${partyLabel(order.customerShortName, order.customerName)}`} onClose={onClose} footer={<><Button tone="ghost" onClick={onClose}>Cancel</Button><Button busy={busy} disabled={!info} onClick={save}>Save limit</Button></>}>
+      {!info ? (
+        <p className="text-sm text-slate-500">Loading…</p>
+      ) : (
+        <div className="max-w-md space-y-4">
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold uppercase text-slate-500">Current limit</div><div className="text-sm font-black break-all">{info.creditLimit ? inr(info.creditLimit) : 'No limit'}</div></div>
+            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold uppercase text-slate-500">Outstanding</div><div className={cx('text-sm font-black break-all', info.balance > 0 ? 'text-rose-600' : 'text-emerald-600')}>{inr(info.balance)}</div></div>
+            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50"><div className="text-[10px] font-bold uppercase text-slate-500">This order</div><div className="text-sm font-black break-all">{inr(order.totalAmount)}</div></div>
+          </div>
+          <Field label="New credit limit (₹) — 0 = no limit">
+            <input type="number" min={0} max={10000000000} autoFocus value={value} onChange={(e) => setLimit(e.target.value)} className={inputClass} />
+          </Field>
+          <p className="text-xs text-slate-600">
+            To clear this order the limit needs to be at least <b>{inr(needed)}</b> (outstanding + this order).{' '}
+            <button type="button" className="font-bold text-emerald-700 underline cursor-pointer" onClick={() => setLimit(String(Math.ceil(needed)))}>Use {inr(Math.ceil(needed))}</button>
+          </p>
+          <p className="text-[11px] text-slate-500">Saving re-checks this customer&apos;s orders that are not out for delivery yet. Delivered / completed orders keep their flag as a record.</p>
+          {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
+        </div>
+      )}
     </Modal>
   );
 }

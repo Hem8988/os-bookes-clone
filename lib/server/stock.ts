@@ -75,6 +75,11 @@ export async function requestTransfer(
     },
     include: { items: true },
   });
+  // The Super Admin's own transfer moves the stock straight away.
+  if (actor.role === 'SUPER_ADMIN') {
+    await approveTransfer(tx, actor, transfer.id);
+    return tx.stockTransfer.findUniqueOrThrow({ where: { id: transfer.id }, include: { items: true } });
+  }
   await createApproval(
     tx,
     {

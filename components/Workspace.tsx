@@ -42,6 +42,7 @@ import RoutePanel from './ops/RoutePanel';
 import VehiclesPanel from './ops/VehiclesPanel';
 import CashWalletModule from './CashWalletModule';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
+import CustomerPoModule from './CustomerPoModule';
 import { CustomersModule } from './CustomersModule';
 import CylinderBalanceModule from './CylinderBalanceModule';
 import { Dashboard } from './Dashboard';
@@ -235,6 +236,8 @@ export default function Workspace() {
             onDeleteCustomer={can('customers.manage') ? cust.remove : undefined}
           />
         );
+      case 'customer-pos':
+        return <CustomerPoModule />;
       case 'routes':
         return <RoutesModule />;
       case 'payments':

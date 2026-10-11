@@ -144,7 +144,7 @@ export const PaymentStatusModal: React.FC<PaymentStatusModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[60] flex justify-center bg-slate-900/60 backdrop-blur-sm items-stretch p-0">
       {/* Dynamic QR Popup */}
       {qrPopup?.visible && (
         <div className="absolute z-[70] inset-0 flex items-center justify-center bg-transparent">
@@ -178,7 +178,7 @@ export const PaymentStatusModal: React.FC<PaymentStatusModalProps> = ({
         </div>
       )}
 
-      <div className="w-full max-w-5xl bg-white border border-slate-300 shadow-2xl flex flex-col animate-in fade-in zoom-in duration-200">
+      <div className="w-full bg-white border border-slate-300 shadow-2xl flex flex-col overflow-y-auto animate-in fade-in zoom-in duration-200 max-w-none h-full rounded-none">
         {/* Header */}
         <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
           <h2 className="text-[15px] font-medium">Amount Settlement Details (Advanced Multi-Mode Tally POS Window)</h2>

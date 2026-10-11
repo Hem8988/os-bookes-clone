@@ -7,7 +7,7 @@ import { AmountPad, ChoiceTiles, PosButton, PosTotal, RecentChips, useRecent } f
 import { api, errorMessage, inr, uploadFile } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { useSession } from '../lib/auth';
-import { Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, today, useToast } from './ui';
+import { Paged, Button, Card, Empty, Field, inputClass, Modal, PartyName, StatusBadge, cx, today, useToast } from './ui';
 
 // Late payment entry (SRS §11.5): accountant enters → verification queue →
 // ledger + WhatsApp confirmation. Also manual balance adjustments.
@@ -55,7 +55,7 @@ export default function PaymentsModule() {
           <Empty>No payments.</Empty>
         ) : (
           <div className="overflow-x-auto -m-4">
-            <table className="w-full text-xs">
+            <Paged rows={payments}>{(pageRows, offset) => (<table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500 text-left">
                 <tr>
                   <th className="p-3">Receipt</th>
@@ -67,7 +67,7 @@ export default function PaymentsModule() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {payments.map((p) => (
+                {pageRows.map((p) => (
                   <tr key={p.id}>
                     <td className="p-3 font-mono font-bold">{p.paymentNumber}<div className="text-[10px] text-slate-400">{p.paymentDate}</div></td>
                     <td className="p-3"><PartyName short={p.customerShortName} legal={p.customerName} /></td>
@@ -78,7 +78,7 @@ export default function PaymentsModule() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>)}</Paged>
           </div>
         )}
       </Card>

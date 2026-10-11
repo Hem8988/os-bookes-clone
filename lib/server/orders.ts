@@ -2,6 +2,7 @@ import type { Tx } from '@/lib/db';
 import type { Order } from '@/lib/generated/prisma/client';
 import { createApproval, cancelPendingApprovals } from './approvals';
 import { audit, Actor } from './audit';
+import { poForOrder } from './customerPos';
 import { dayVehicle } from './deliveryDays';
 import type { Effects } from './effects';
 import { badRequest, businessDate, conflict, dateStr, forbidden, notFound, round2 } from './http';
@@ -36,7 +37,7 @@ const ASSIGNABLE: OrderStatus[] = ['APPROVED', 'ASSIGNED', 'ACCEPTED'];
 const CANCELLABLE: OrderStatus[] = ['DRAFT', 'WHATSAPP_RECEIVED', 'PENDING_APPROVAL', 'APPROVED', 'ASSIGNED', 'ACCEPTED'];
 
 export async function setOrderStatus(tx: Tx, order: Pick<Order, 'id' | 'status'>, to: OrderStatus, actorName: string, note?: string, extra: Record<string, unknown> = {}) {
-  await tx.order.update({ where: { id: order.id }, data: { status: to, ...extra } });
+  await tx.order.update({ where: { id: order.id }, data: { status: to, updatedBy: actorName, ...extra } });
   await tx.orderStatusLog.create({ data: { orderId: order.id, fromStatus: order.status, toStatus: to, actorName, note } });
   order.status = to;
 }
@@ -53,6 +54,8 @@ export interface CreateOrderInput {
   notes?: string | null;
   assignedDeliveryBoyId?: string | null;
   vehicleNumber?: string | null;
+  /** Customer PO this order is supplied against. */
+  customerPoId?: string | null;
 }
 
 /**
@@ -82,16 +85,20 @@ export async function createOrder(tx: Tx, actor: Actor, input: CreateOrderInput,
   const deliveryDate = input.requestedDeliveryDate ? dateStr(input.requestedDeliveryDate, 'Delivery date') : today;
   if (deliveryDate < today) throw badRequest('Delivery date cannot be in the past.');
 
+  // Supplied against a customer PO: its products, pending quantities and agreed rates apply.
+  const po = input.customerPoId ? await poForOrder(tx, actor.tenantId, customer.id, input.customerPoId, deliveryDate, lines.map((l) => ({ productId: l.productId, qty: Number(l.qty) }))) : null;
   const items: { productId: string; productName: string; orderedQty: number; unitPrice: number; taxRate: number; totalAmount: number }[] = [];
   for (const line of lines) {
     const qty = Number(line.qty);
     if (!Number.isInteger(qty) || qty < 1) throw badRequest('Quantity must be a whole number of at least 1.');
     const product = await tx.product.findFirst({ where: { id: line.productId, tenantId: actor.tenantId, active: true } });
     if (!product) throw badRequest('One of the products is not available.');
-    const unitPrice = await resolveRate(tx, customer.id, product, deliveryDate);
+    const unitPrice = po?.rates.get(product.id) ?? (await resolveRate(tx, customer.id, product, deliveryDate));
     items.push({ productId: product.id, productName: product.name, orderedQty: qty, unitPrice, taxRate: product.taxRate, totalAmount: round2(qty * unitPrice) });
   }
   const totalAmount = round2(items.reduce((s, i) => s + i.totalAmount, 0));
+  // No address picked: the site the PO is for.
+  if (!input.deliveryAddressId && po?.deliveryAddressId) input = { ...input, deliveryAddressId: po.deliveryAddressId };
   const isCreditOverLimit = customer.creditLimit > 0 && customer.balance + totalAmount > customer.creditLimit;
 
   let address = customer.address;
@@ -127,6 +134,7 @@ export async function createOrder(tx: Tx, actor: Actor, input: CreateOrderInput,
       isCreditOverLimit,
       totalAmount,
       notes: input.notes || null,
+      customerPoId: input.customerPoId || null,
       createdBy: actor.name,
       items: { create: items },
       statusLogs: { create: { toStatus: initialStatus, actorName: actor.name, note: `Created via ${input.source}` } },
@@ -137,11 +145,12 @@ export async function createOrder(tx: Tx, actor: Actor, input: CreateOrderInput,
 
   await audit(tx, actor, { action: 'ORDER_CREATED', entityType: 'Order', entityId: order.id, reference: orderNumber, newValue: { totalAmount, items: itemsText(items), source: input.source } });
 
-  // Managers/admins creating a normal order approve it themselves; everything
-  // else (and any credit-limit breach) waits in the approval queue.
-  const selfApprove = (actor.role === 'SUPER_ADMIN' || actor.role === 'MANAGER') && !isCreditOverLimit;
+  // The Super Admin's own orders never wait — over the credit limit it is his own
+  // override. A manager approves a normal order himself; everything else (and a
+  // manager's credit-limit breach) waits in the approval queue.
+  const selfApprove = actor.role === 'SUPER_ADMIN' || (actor.role === 'MANAGER' && !isCreditOverLimit);
   if (selfApprove) {
-    await approveOrder(tx, actor, order, { creditOverride: false }, effects);
+    await approveOrder(tx, actor, order, { creditOverride: isCreditOverLimit }, effects);
   } else {
     await createApproval(
       tx,
@@ -305,13 +314,14 @@ export async function editOrder(tx: Tx, actor: Actor, order: Order, input: { ite
   if (!lines.length) throw badRequest('Add at least one product with quantity.');
   const deliveryDate = input.requestedDeliveryDate ? dateStr(input.requestedDeliveryDate, 'Delivery date') : order.requestedDeliveryDate;
   if (deliveryDate !== order.requestedDeliveryDate && deliveryDate < businessDate()) throw badRequest('Delivery date cannot be in the past.');
+  const po = order.customerPoId ? await poForOrder(tx, actor.tenantId, customer.id, order.customerPoId, deliveryDate, lines.map((l) => ({ productId: l.productId, qty: Number(l.qty) }))) : null;
   const items: { productId: string; productName: string; orderedQty: number; unitPrice: number; taxRate: number; totalAmount: number }[] = [];
   for (const line of lines) {
     const qty = Number(line.qty);
     if (!Number.isInteger(qty) || qty < 1) throw badRequest('Quantity must be a whole number of at least 1.');
     const product = await tx.product.findFirst({ where: { id: line.productId, tenantId: actor.tenantId, active: true } });
     if (!product) throw badRequest('One of the products is not available.');
-    const unitPrice = await resolveRate(tx, customer.id, product, deliveryDate);
+    const unitPrice = po?.rates.get(product.id) ?? (await resolveRate(tx, customer.id, product, deliveryDate));
     items.push({ productId: product.id, productName: product.name, orderedQty: qty, unitPrice, taxRate: product.taxRate, totalAmount: round2(qty * unitPrice) });
   }
   const totalAmount = round2(items.reduce((s, i) => s + i.totalAmount, 0));
@@ -330,6 +340,7 @@ export async function editOrder(tx: Tx, actor: Actor, order: Order, input: { ite
   await tx.order.update({
     where: { id: order.id },
     data: {
+      updatedBy: actor.name,
       requestedDeliveryDate: deliveryDate,
       priority: input.priority === 'URGENT' ? 'URGENT' : input.priority === 'NORMAL' ? 'NORMAL' : order.priority,
       deliveryAddressId: addressId,

@@ -207,6 +207,8 @@ model Customer {
   internalNotes        String?
   tags                 String[]
   extra                Json?
+  createdBy            String? // staff name who added the party
+  updatedBy            String? // staff name who last saved the party form
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
   user                 User?
@@ -216,6 +218,7 @@ model Customer {
   cylinderBalances     CustomerCylinderBalance[]
   vouchers             CylinderVoucher[]
   orders               Order[]
+  pos                  CustomerPo[]
 
   @@unique([tenantId, customerCode])
   @@index([tenantId, phone])
@@ -285,13 +288,18 @@ model CylinderVoucher {
   regulatorQty  Int      @default(0)
   depositAmount Float    @default(0)
   issueDate     String
-  status        String   @default("ACTIVE") // ACTIVE | CANCELLED | TRANSFERRED | REFUNDED
+  status        String   @default("ACTIVE") // ACTIVE | CANCELLED | TRANSFERRED | REFUNDED | ADJUSTED
+  svNumber      String? // SV / TV number on the oil company's paper voucher
+  paymentMode   String? // CASH | BANK | UPI | CHEQUE | OPENING (taken before DeskShark)
+  source        String   @default("MANUAL") // MANUAL | CUSTOMER_MASTER (deposit card on the customer form)
+  closedOn      String? // date refunded / adjusted
   notes         String?
   createdBy     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@unique([tenantId, voucherNumber])
+  @@index([customerId, productId])
   @@map("cylinder_vouchers")
 }
 
@@ -397,7 +405,10 @@ model Order {
   creditOverrideBy        String?
   totalAmount             Float            @default(0)
   notes                   String?
+  customerPoId            String? // customer's purchase order this order is supplied against
+  customerPo              CustomerPo?      @relation(fields: [customerPoId], references: [id])
   createdBy               String
+  updatedBy               String? // last person to edit it or move its status
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   items                   OrderItem[]
@@ -436,6 +447,55 @@ model OrderStatusLog {
 
   @@index([orderId])
   @@map("order_status_logs")
+}
+
+// Purchase order received FROM a customer (sales side). Orders are supplied against it and
+// verified deliveries count down its quantities. Vendor refill orders are PurchaseOrder.
+model CustomerPo {
+  id                String           @id @default(cuid())
+  tenantId          String           @default("default")
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  poNumber          String // the customer's own PO number
+  poDate            String
+  validTill         String?
+  deliveryDate      String? // "deliver on" date printed on the PO
+  deliveryAddressId String? // customer's delivery address (site) the PO is for
+  paymentTerms      String? // as written on the PO, e.g. "30 days from GRN"
+  vendorCode        String? // our code in the customer's system (printed on the invoice)
+  refNumber         String? // their quotation / indent / reference no.
+  poTotal           Float? // grand total as printed on the PO (with GST), to cross-check
+  fileUrl           String? // PO copy (PDF / photo) in storage
+  source            String // ADMIN | CUSTOMER_PORTAL
+  // RECEIVED (uploaded by the customer, office to check) → OPEN → PARTIAL → FULFILLED; EXPIRED | CANCELLED
+  status            String           @default("OPEN")
+  totalAmount       Float            @default(0) // our value of the lines with GST
+  notes             String?
+  createdBy         String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  items             CustomerPoItem[]
+  orders            Order[]
+
+  @@unique([tenantId, customerId, poNumber])
+  @@index([tenantId, status])
+  @@map("customer_pos")
+}
+
+model CustomerPoItem {
+  id           String     @id @default(cuid())
+  poId         String
+  po           CustomerPo @relation(fields: [poId], references: [id], onDelete: Cascade)
+  productId    String
+  productName  String
+  itemCode     String? // the customer's material / item code (printed on the invoice)
+  qty          Float
+  deliveredQty Float      @default(0)
+  rate         Float      @default(0) // basic rate before GST, as on the PO; 0 = the customer's normal rate
+  taxRate      Float      @default(0) // product GST % when saved
+
+  @@index([poId])
+  @@map("customer_po_items")
 }
 
 // ───────────────────────────── Delivery ─────────────────────────────

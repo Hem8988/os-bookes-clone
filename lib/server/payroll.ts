@@ -6,9 +6,10 @@ import { expenseAccount } from './books/accounts';
 import { ledgerStatement } from './books/reports';
 import { writeVoucher, cancelSourceVoucher } from './books/vouchers';
 import { badRequest, conflict, notFound } from './http';
+import { deliveryIncentive } from './incentive';
 
 // Monthly payroll: attendance → paid days → salary; delivery staff get a per
-// cylinder incentive from their verified deliveries; advances are recovered.
+// cylinder incentive on deliveries the customer has paid for; advances are recovered.
 // Posting creates the salary journal; paying creates the payment voucher.
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -93,9 +94,10 @@ async function computeLine(tenantId: string, e: { id: string; name: string; sala
   const phone10 = String(e.phone || '').replace(/\D/g, '').slice(-10);
   const boyId = e.userId || (phone10.length === 10 ? (await prisma.user.findFirst({ where: { tenantId, role: 'DELIVERY_BOY', mobile: { endsWith: phone10 } }, select: { id: true } }))?.id : null) || null;
   if (boyId) {
-    const agg = await prisma.delivery.aggregate({ where: { tenantId, deliveryBoyId: boyId, deliveryDate: { gte: from, lte: to }, status: 'VERIFIED' }, _count: true, _sum: { deliveredQtyTotal: true } });
-    deliveries = agg._count;
-    cylinders = Math.round(agg._sum.deliveredQtyTotal || 0);
+    // Only cylinders the customer has paid for this month earn incentive.
+    const earned = await deliveryIncentive(tenantId, boyId, month);
+    deliveries = earned.deliveries;
+    cylinders = earned.cylinders;
   }
   const rate = Number((e.extra as { incentivePerCylinder?: number } | null)?.incentivePerCylinder) || 0;
   const incentive = r2(cylinders * rate);

@@ -45,7 +45,7 @@ export default function CashBankPanel() {
           {d.books.map((b) => (
             <Card key={b.account.id} title={b.account.name} actions={<span className="text-xs font-mono font-black">{drCr(b.closing)}</span>}>
               <div className="overflow-x-auto">
-                <Paged rows={b.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
+                <Paged rows={b.rows} size={50}>{(pageRows) => (<table className="w-full text-xs">
                   <thead className="text-slate-500 border-b border-slate-200">
                     <tr>
                       <th className="p-2 text-left">Date</th>

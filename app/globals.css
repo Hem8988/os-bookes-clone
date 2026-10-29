@@ -33,7 +33,8 @@ body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  #printable-invoice {
+  #printable-invoice,
+  .printable-invoice {
     max-width: none !important;
     break-inside: avoid;
   }

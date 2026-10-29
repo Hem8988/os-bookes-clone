@@ -7,6 +7,7 @@ import { createCustomer, customerToClient, deactivateCustomer, updateCustomer } 
 import { Effects } from './effects';
 import { badRequest, conflict, forbidden, notFound } from './http';
 import { cancelInvoice, createManualInvoice, requestOrApplyInvoiceEdit } from './manualInvoices';
+import { syncMissingEmployees } from './staff';
 
 // Back-office collections (masters and documents) exposed to the existing
 // screens as simple lists. Flat models are mapped field-by-field with type
@@ -300,6 +301,8 @@ export async function listCollection(auth: AuthContext, name: string) {
   const cfg = configOf(name);
   assertAccess(auth, cfg.read);
   if (cfg.kind === 'custom') return cfg.list(auth);
+  // Staff logins (delivery boys etc.) show up under Staff & salary without being entered twice.
+  if (name === 'staff') await syncMissingEmployees(prisma, auth.tenantId);
   const rows = await delegate(prisma, cfg.model).findMany({ where: { tenantId: auth.tenantId, ...(cfg.where || {}) }, orderBy: cfg.orderBy });
   // Deleted-but-still-referenced records stay in the database, not on screen.
   return rows.filter((r) => !(r.extra as Row | null)?.deleted).map(toClient);

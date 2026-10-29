@@ -170,7 +170,7 @@ function LedgerStatement({ account, onBack }: { account: Account; onBack: () => 
           <Empty>Loading…</Empty>
         ) : (
           <div className="overflow-x-auto">
-            <Paged rows={s.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={s.rows} size={50}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="bg-slate-900 text-white">
                 <tr>
                   <th className="p-2 text-left">Date</th>

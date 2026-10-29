@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Landmark, CreditCard, Building2, Save, Plus, Check } from 'lucide-react';
 import { BankMaster } from '../lib/types';
+import { AmountWords } from './ui';
 
 interface AddEditBankModalProps {
   isOpen: boolean;
@@ -345,6 +346,7 @@ export const AddEditBankModal: React.FC<AddEditBankModalProps> = ({
                 onChange={(e) => setOpeningBalance(e.target.value === '' ? '' : Number(e.target.value))}
                 className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
+              <AmountWords value={openingBalance} />
             </div>
 
             {/* Current Balance */}
@@ -359,6 +361,7 @@ export const AddEditBankModal: React.FC<AddEditBankModalProps> = ({
                 onChange={(e) => setCurrentBalance(e.target.value === '' ? '' : Number(e.target.value))}
                 className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
+              <AmountWords value={currentBalance} />
             </div>
 
           </div>

@@ -182,7 +182,7 @@ function MessageLog() {
   const load = logQ.reload;
   return (
     <Card title="Latest 200 messages" actions={<Button size="sm" tone="ghost" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" /></Button>}>
-      <Paged rows={rows}>{(pageRows, offset) => (<table className="w-full text-xs">
+      <Paged rows={rows}>{(pageRows) => (<table className="w-full text-xs">
         <thead className="text-slate-500 text-left">
           <tr>
             <th className="p-2">When</th>

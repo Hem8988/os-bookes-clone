@@ -79,7 +79,7 @@ export default function CashWalletModule() {
         {submissions.length === 0 ? (
           <Empty>No submissions.</Empty>
         ) : (
-          <Paged rows={submissions}>{(pageRows, offset) => (<table className="w-full text-xs">
+          <Paged rows={submissions}>{(pageRows) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">No.</th>
@@ -103,7 +103,7 @@ export default function CashWalletModule() {
       </Card>
       <Modal open={!!history} title={`Wallet — ${history?.wallet.ownerName}`} onClose={() => setHistory(null)} wide>
         {history && (
-          <Paged rows={history.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
+          <Paged rows={history.rows} size={50}>{(pageRows) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">When</th>

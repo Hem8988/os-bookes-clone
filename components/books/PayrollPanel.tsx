@@ -47,7 +47,7 @@ export default function PayrollPanel() {
       {!data ? (
         <Empty>Loading…</Empty>
       ) : !data.employees.length ? (
-        <Empty>Add employees (with monthly salary) in Masters → Employees first.</Empty>
+        <Empty>Add your staff with their salary in Staff &amp; salary → Employees first, then come back here.</Empty>
       ) : tab === 'attendance' ? (
         <Attendance key={month} data={data} onSaved={() => { showToast('Attendance saved.'); q.reload(); }} onError={onError} />
       ) : tab === 'advances' ? (
@@ -296,7 +296,7 @@ function Advances({ employees, onDone, onError }: { employees: Emp[]; onDone: (m
   };
   return (
     <Card title={<span className="flex items-center gap-2"><Users className="h-4 w-4" /> Employees</span>}>
-      <Paged rows={employees}>{(pageRows, offset) => (<table className="w-full text-xs">
+      <Paged rows={employees}>{(pageRows) => (<table className="w-full text-xs">
         <thead className="text-slate-500 border-b border-slate-200"><tr><th className="p-2 text-left">Employee</th><th className="p-2 text-right">Salary</th><th className="p-2 text-right">Advance due</th><th className="p-2 text-right">Incentive / cylinder</th><th className="p-2" /></tr></thead>
         <tbody className="divide-y divide-slate-100">
           {pageRows.map((e) => (
@@ -315,7 +315,7 @@ function Advances({ employees, onDone, onError }: { employees: Emp[]; onDone: (m
           ))}
         </tbody>
       </table>)}</Paged>
-      <p className="mt-2 text-[11px] text-slate-500">Incentive counts cylinders in verified deliveries by the employee’s delivery login (link it in Masters → Employees → user). Advances are recovered from the next salary.</p>
+      <p className="mt-2 text-[11px] text-slate-500">Incentive counts cylinders in the employee’s verified deliveries that the customer has fully paid for (oldest dues settled first), in the month the bill got paid. Matched by delivery login (link it in Staff &amp; salary → Employees → user). Advances are recovered from the next salary.</p>
       {form && (
         <Modal open title="Salary advance" onClose={() => setForm(null)} footer={<Button busy={busy} disabled={!(Number(form.amount) > 0) || !form.from} onClick={async () => { if (await post({ action: 'advance', employeeId: form.employeeId, amount: Number(form.amount), fromAccountId: form.from, date: form.date, note: form.note }, 'Advance recorded.')) setForm(null); }}>Give advance</Button>}>
           <div className="grid grid-cols-2 gap-3">

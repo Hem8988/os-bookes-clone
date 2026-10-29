@@ -3,11 +3,13 @@ import { audit } from '@/lib/server/audit';
 import { requireAuth } from '@/lib/server/auth';
 import { badRequest, businessDate, handle, num, ok, optStr, readJson, str } from '@/lib/server/http';
 import { buildRun, giveAdvance, monthAttendance, payRun, postRun, saveAttendance, unpostRun, updateLine } from '@/lib/server/payroll';
+import { syncMissingEmployees } from '@/lib/server/staff';
 
 /** GET ?month=YYYY-MM → that month's payroll (if built), attendance grid and incentive rates. */
 export const GET = handle(async (request: Request) => {
   const auth = await requireAuth(request, 'books.view');
   const month = new URL(request.url).searchParams.get('month') || businessDate().slice(0, 7);
+  await syncMissingEmployees(prisma, auth.tenantId);
   const [run, attendance, employees] = await Promise.all([
     prisma.payrollRun.findUnique({ where: { tenantId_month: { tenantId: auth.tenantId, month } }, include: { lines: { orderBy: { employeeName: 'asc' } } } }),
     monthAttendance(auth.tenantId, month),

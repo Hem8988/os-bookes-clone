@@ -14,6 +14,13 @@ import { cue } from '../lib/feedback';
 import { ChoiceTiles, PosButton, PosTotal, SoundToggle } from './pos';
 import { CartProduct, OrderTiles, useOrderCart } from './OrderCart';
 import { CustomerPo, CustomerPoForm, PO_STATUS_LABEL } from './CustomerPoForm';
+import { EmptyLedger, type EmptyLedgerBalance, type EmptyLedgerMove } from './EmptyLedger';
+
+/** The customer's own empty-cylinder ledger: cylinders given, empties taken back, balance with them. */
+function PortalCylinders() {
+  const q = useApiData<{ balances: EmptyLedgerBalance[]; history: EmptyLedgerMove[] }>('/api/cylinder/ledger');
+  return <Card>{q.data ? <EmptyLedger balances={q.data.balances} history={q.data.history} /> : <Empty>Loading…</Empty>}</Card>;
+}
 
 // Customer self-service portal (V2): balance, cylinders, orders, invoices,
 // payments and statement — the same data the WhatsApp bot answers from.
@@ -29,7 +36,7 @@ interface Portal {
 export function CustomerPortalModule() {
   const { t } = useT();
   const { session } = useSession();
-  const [tab, setTab] = useState<'orders' | 'pos' | 'invoices' | 'payments' | 'statement' | 'complaints'>('orders');
+  const [tab, setTab] = useState<'orders' | 'pos' | 'invoices' | 'payments' | 'statement' | 'cylinders' | 'complaints'>('orders');
   const [ordering, setOrdering] = useState(false);
   const [printing, setPrinting] = useState<InvoiceView | null>(null);
   const [toast, showToast] = useToast();
@@ -70,9 +77,9 @@ export function CustomerPortalModule() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
-                {(['orders', 'pos', 'invoices', 'payments', 'statement', 'complaints'] as const).map((tabKey) => (
+                {(['orders', 'pos', 'invoices', 'payments', 'statement', 'cylinders', 'complaints'] as const).map((tabKey) => (
                   <button key={tabKey} onClick={() => setTab(tabKey)} className={cx('px-3 py-1.5 rounded-lg text-xs font-bold capitalize', tab === tabKey ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600')}>
-                    {tabKey === 'pos' ? t('Purchase orders') : t(tabKey)}
+                    {tabKey === 'pos' ? t('Purchase orders') : tabKey === 'cylinders' ? t('Empty cylinders') : t(tabKey)}
                   </button>
                 ))}
               </div>
@@ -122,9 +129,10 @@ export function CustomerPortalModule() {
             )}
             {tab === 'pos' && <CustomerPos customerId={data.customer.id} onToast={showToast} />}
             {tab === 'complaints' && <CustomerComplaints onToast={showToast} />}
+            {tab === 'cylinders' && <PortalCylinders />}
             {tab === 'statement' && (
               <Card>
-                <Paged rows={data.ledger}>{(pageRows, offset) => (<table className="w-full text-xs">
+                <Paged rows={data.ledger}>{(pageRows) => (<table className="w-full text-xs">
                   <thead className="text-slate-500 text-left">
                     <tr><th className="p-2">Date</th><th className="p-2">Voucher</th><th className="p-2">Details</th><th className="p-2 text-right">Debit</th><th className="p-2 text-right">Credit</th><th className="p-2 text-right">Balance</th></tr>
                   </thead>

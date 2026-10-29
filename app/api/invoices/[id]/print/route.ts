@@ -42,6 +42,31 @@ async function printExtraFor(invoice: Invoice, customer: Customer | null): Promi
 }
 
 /**
+ * Paperwork printed after the invoice: the delivery challan, the delivery proof and how
+ * it was paid (UPI / bank screenshot, cheque photo, receipts entered later against it).
+ */
+async function invoiceAttachments(invoice: Invoice) {
+  const [delivery, payments] = await Promise.all([
+    invoice.deliveryId
+      ? prisma.delivery.findFirst({ where: { id: invoice.deliveryId, tenantId: invoice.tenantId }, select: { deliveryNumber: true, challanNumber: true, challanUrl: true, deliveryProofUrl: true, paymentProofUrl: true, chequePhotoUrl: true, paymentMode: true, paymentAmount: true } })
+      : null,
+    prisma.payment.findMany({ where: { tenantId: invoice.tenantId, invoiceId: invoice.id, proofUrl: { not: null }, status: { not: 'REJECTED' } }, select: { paymentNumber: true, mode: true, amount: true, proofUrl: true }, orderBy: { createdAt: 'asc' } }),
+  ]);
+  const list: { kind: 'challan' | 'delivery' | 'payment'; label: string; url: string }[] = [];
+  const add = (kind: 'challan' | 'delivery' | 'payment', label: string, url: string | null | undefined) => {
+    if (url && !list.some((a) => a.url === url)) list.push({ kind, label, url });
+  };
+  if (delivery) {
+    add('challan', `Delivery challan${delivery.challanNumber ? ` ${delivery.challanNumber}` : ''} · ${delivery.deliveryNumber}`, delivery.challanUrl);
+    add('payment', `Payment ${delivery.paymentMode} ₹${delivery.paymentAmount.toLocaleString('en-IN')} · ${delivery.deliveryNumber}`, delivery.paymentProofUrl);
+    add('payment', `Cheque · ${delivery.deliveryNumber}`, delivery.chequePhotoUrl);
+    add('delivery', `Delivery proof · ${delivery.deliveryNumber}`, delivery.deliveryProofUrl);
+  }
+  for (const p of payments) add('payment', `Payment ${p.paymentNumber} · ${p.mode} ₹${p.amount.toLocaleString('en-IN')}`, p.proofUrl);
+  return list;
+}
+
+/**
  * Everything a printed tax invoice needs: the invoice, buyer address / PAN,
  * place of supply and delivery references. Details frozen on the invoice win;
  * invoices made before that existed fall back to the customer / delivery.
@@ -64,7 +89,7 @@ export const GET = handle(async (request: Request, ctx: Ctx) => {
   const saved = (invoice.extra as Record<string, unknown> | null) ?? {};
   const pick = (k: string) => (typeof saved[k] === 'string' && saved[k] ? (saved[k] as string) : undefined);
   const einv = { irn: pick('irn') || ((print as { irn?: string } | null)?.irn ?? undefined), ackNo: pick('ackNo'), ackDate: pick('ackDate'), signedQr: pick('signedQr'), ewbNo: pick('ewbNo'), ewbDate: pick('ewbDate'), ewbValidUpto: pick('ewbValidUpto') };
-  return ok({ ...invoice, print: print ? { ...print, ...einv } : null, customerPan, canEditRefs: can(auth.role, 'invoices.manage') });
+  return ok({ ...invoice, print: print ? { ...print, ...einv } : null, customerPan, canEditRefs: can(auth.role, 'invoices.manage'), attachments: await invoiceAttachments(invoice) });
 });
 
 /** Save the hand-typed references (GRN / vehicle / challan / P.O. no.) shown on the print. */

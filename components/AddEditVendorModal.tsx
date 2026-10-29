@@ -12,6 +12,7 @@ import { CityInput, PinInput, StateSelect, stateCodeOf } from './PlaceFields';
 import { AddableSelect } from './AddableSelect';
 import { Combobox } from './Combobox';
 import { DepositReceiptModal } from './DepositReceiptModal';
+import { AmountWords } from './ui';
 
 interface AddEditVendorModalProps {
   isOpen: boolean;
@@ -1251,6 +1252,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   onChange={(e) => setPartyLimit(e.target.value === '' ? '' : Number(e.target.value))}
                   className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
                 />
+                <AmountWords value={partyLimit} />
               </div>
               <div className="space-y-1">
                 <label className="font-extrabold text-slate-900 dark:text-slate-100 block">
@@ -1263,6 +1265,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                   onChange={(e) => setOpeningBalance(e.target.value === '' ? '' : Number(e.target.value))}
                   className="w-full px-3 py-2.5 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-black text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+                <AmountWords value={openingBalance} />
               </div>
 
               <div className="space-y-1">

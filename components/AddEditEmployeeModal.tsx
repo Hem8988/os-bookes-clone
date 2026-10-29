@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { EmployeeMaster } from '../lib/types';
 import { CityInput } from './PlaceFields';
+import { AmountWords } from './ui';
 
 interface AddEditEmployeeModalProps {
   isOpen: boolean;
@@ -235,6 +236,7 @@ export const AddEditEmployeeModal: React.FC<AddEditEmployeeModalProps> = ({
                 onChange={(e) => setSalary(e.target.value === '' ? '' : Number(e.target.value))}
                 className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
+              <AmountWords value={salary} />
             </div>
           </div>
 

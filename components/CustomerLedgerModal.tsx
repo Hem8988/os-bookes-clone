@@ -7,6 +7,7 @@ import { useApiData } from '../lib/useApiData';
 import { useCompany } from '../lib/useCompany';
 import { Customer } from '../lib/types';
 import { Paged } from './ui';
+import { EmptyLedger, type EmptyLedgerMove } from './EmptyLedger';
 import { DepositReceiptModal, type DepositVoucherView } from './DepositReceiptModal';
 
 const MODE_LABEL: Record<string, string> = { CASH: 'Cash', BANK: 'Bank', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit' };
@@ -46,12 +47,13 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({ isOpen
 
   const customerId = isOpen && customer ? customer.id : null;
   const ledgerQ = useApiData<{ customer: { balance: number } | null; entries: LedgerRow[] }>(customerId ? `/api/financial/ledger?customerId=${customerId}` : null);
-  const cylinderQ = useApiData<{ balances: CylinderRow[] }>(customerId ? `/api/cylinder/ledger?customerId=${customerId}` : null);
+  const cylinderQ = useApiData<{ balances: CylinderRow[]; history: EmptyLedgerMove[] }>(customerId ? `/api/cylinder/ledger?customerId=${customerId}` : null);
   const depositQ = useApiData<DepositVoucherView[]>(customerId ? `/api/cylinder/vouchers?customerId=${customerId}` : null);
   const entries = ledgerQ.data?.entries ?? [];
   const deposits = (depositQ.data ?? []).filter((v) => v.status !== 'CANCELLED');
   const balance = ledgerQ.data?.customer?.balance ?? 0;
   const cylinders = cylinderQ.data?.balances ?? [];
+  const cylinderHistory = cylinderQ.data?.history ?? [];
   const loading = (ledgerQ.loading && !ledgerQ.data) || (cylinderQ.loading && !cylinderQ.data);
   const error = ledgerQ.error || cylinderQ.error || null;
   const load = () => {
@@ -139,7 +141,7 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({ isOpen
           <div className="print:hidden flex gap-2">
             {(['LEDGER', 'CYLINDERS', 'DEPOSIT'] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`px-3 py-1.5 rounded-lg font-bold ${tab === t ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
-                {t === 'LEDGER' ? 'Account ledger' : t === 'CYLINDERS' ? 'Cylinder balance' : 'Security deposit'}
+                {t === 'LEDGER' ? 'Account ledger' : t === 'CYLINDERS' ? 'Empty cylinder ledger' : 'Security deposit'}
               </button>
             ))}
           </div>
@@ -148,7 +150,7 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({ isOpen
           {loading && <div className="text-slate-500">Loading…</div>}
 
           {tab === 'LEDGER' && !loading && (
-            <Paged rows={ledgerRows} size={50}>{(pageRows, offset) => (<table className="w-full border border-slate-200">
+            <Paged rows={ledgerRows} size={50}>{(pageRows) => (<table className="w-full border border-slate-200">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="p-2 text-left">Date</th>
@@ -264,33 +266,7 @@ export const CustomerLedgerModal: React.FC<CustomerLedgerModalProps> = ({ isOpen
             </div>
           )}
 
-          {tab === 'CYLINDERS' && !loading && (
-            <table className="w-full border border-slate-200">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="p-2 text-left">Product</th>
-                  <th className="p-2 text-right">Opening</th>
-                  <th className="p-2 text-right">Delivered (full)</th>
-                  <th className="p-2 text-right">Empty received</th>
-                  <th className="p-2 text-right">Adjustment</th>
-                  <th className="p-2 text-right">With customer</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {cylinders.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-slate-400">No cylinders recorded.</td></tr>}
-                {cylinders.map((c) => (
-                  <tr key={c.productName}>
-                    <td className="p-2 font-bold">{c.productName}</td>
-                    <td className="p-2 text-right">{c.openingQty}</td>
-                    <td className="p-2 text-right">{c.deliveredQtyTotal}</td>
-                    <td className="p-2 text-right">{c.emptyReceivedTotal}</td>
-                    <td className="p-2 text-right">{c.adjustmentQty}</td>
-                    <td className="p-2 text-right font-black">{c.currentBalance}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {tab === 'CYLINDERS' && !loading && <EmptyLedger balances={cylinders} history={cylinderHistory} />}
         </div>
       </div>
       {receiptOpen && <DepositReceiptModal customerId={customer.id} onClose={() => setReceiptOpen(false)} />}

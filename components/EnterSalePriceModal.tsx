@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Package } from 'lucide-react';
 import { Product } from '../lib/types';
+import { AmountWords } from './ui';
 
 interface EnterSalePriceModalProps {
   isOpen: boolean;
@@ -76,6 +77,7 @@ export const EnterSalePriceModal: React.FC<EnterSalePriceModalProps> = ({
                 onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
                 className="w-full py-2 px-2 rounded-lg bg-sky-50 dark:bg-slate-800/60 border border-sky-200 dark:border-slate-700 text-sm font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
+              <AmountWords value={salePrice} />
             </div>
           </div>
 
@@ -89,6 +91,7 @@ export const EnterSalePriceModal: React.FC<EnterSalePriceModalProps> = ({
               onChange={(e) => setWholesalePrice(parseFloat(e.target.value) || 0)}
               className="w-full py-2 px-3 rounded-lg bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-sm font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
+            <AmountWords value={wholesalePrice} />
           </div>
         </div>
 

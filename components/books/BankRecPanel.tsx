@@ -358,7 +358,7 @@ export default function BankRecPanel() {
                   </div>
                 )}
                 <div className="rounded-xl border border-slate-200">
-                  <Paged rows={visible}>{(pageRows, offset) => (<table className="w-full text-xs">
+                  <Paged rows={visible}>{(pageRows) => (<table className="w-full text-xs">
                     <thead className="sticky -top-5 z-10 bg-slate-50 text-[10px] uppercase text-slate-500">
                       <tr>
                         <th className="p-2 w-6">

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Product, CategoryMaster, BrandMaster, UnitMaster, ProductType } from '../lib/types';
+import { MoneyWords } from './ui';
 
 // Product master (SRS §6): generic enough for LPG today and oxygen /
 // nitrogen / argon later without schema changes.
@@ -165,5 +166,6 @@ const L = ({ label, children, wide }: { label: string; children: React.ReactNode
   <label className={`block space-y-1 ${wide ? 'sm:col-span-2' : ''}`}>
     <span className="font-bold text-slate-600">{label}</span>
     {children}
+    <MoneyWords label={label}>{children}</MoneyWords>
   </label>
 );

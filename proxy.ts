@@ -18,9 +18,11 @@ export function proxy(request: NextRequest) {
   const claims = verifySession(request.cookies.get(SESSION_COOKIE)?.value);
   const home = claims ? ROLE_HOME[claims.role as Role] || '/login' : '/login';
 
-  if (pathname === '/' || pathname === '/login') {
+  // "/" is the public website (it shows "Open dashboard" to a logged-in user).
+  if (pathname === '/') return NextResponse.next();
+  if (pathname === '/login') {
     if (claims) return NextResponse.redirect(new URL(home, request.url));
-    return pathname === '/' ? NextResponse.redirect(new URL('/login', request.url)) : NextResponse.next();
+    return NextResponse.next();
   }
 
   const portal = Object.keys(PORTALS).find((p) => pathname === p || pathname.startsWith(`${p}/`));

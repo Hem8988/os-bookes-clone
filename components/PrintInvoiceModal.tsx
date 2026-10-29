@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link2, Pencil, Printer, X } from 'lucide-react';
+import { Image as ImageIcon, Link2, Pencil, Printer, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCompany } from '../lib/useCompany';
 import { amountInWords, stateLabel, GST_STATES } from '../lib/gst';
@@ -74,7 +74,45 @@ interface PrintExtra {
   itemCodes?: Record<string, string>;
 }
 
-type PrintData = InvoiceView & { print?: PrintExtra | null; customerPan?: string; canEditRefs?: boolean };
+type PrintData = InvoiceView & { print?: PrintExtra | null; customerPan?: string; canEditRefs?: boolean; attachments?: { kind: string; label: string; url: string }[] };
+
+/** GST invoice copies, printed in this order. */
+const COPY_LABELS = [
+  { label: 'Original for Buyer', short: 'Original' },
+  { label: 'Duplicate for Transporter', short: 'Duplicate' },
+  { label: 'Triplicate for Supplier', short: 'Triplicate' },
+];
+const COPIES_KEY = 'deskshark.invoiceCopies';
+function savedCopies(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(COPIES_KEY) || 'null');
+    if (Array.isArray(v) && v.length && v.every((x) => COPY_LABELS.some((c) => c.label === x))) return v;
+  } catch {
+    /* storage off */
+  }
+  return ['Original for Buyer', 'Duplicate for Transporter'];
+}
+
+/** One printed page holding a paperwork photo (challan, payment screenshot, cheque, delivery proof). */
+function AttachmentPage({ label, url, invoiceNumber }: { label: string; url: string; invoiceNumber: string }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <div className="mt-6 print:mt-0 print:break-before-page mx-auto bg-white border border-black p-3 text-black" style={{ width: '100%', maxWidth: 800 }}>
+      <div className="flex items-baseline justify-between gap-3 border-b border-black pb-1 mb-2 text-[12px] font-bold">
+        <span>{label}</span>
+        <span className="font-normal">Attached to invoice {invoiceNumber}</span>
+      </div>
+      {broken ? (
+        <a href={url} target="_blank" rel="noreferrer" className="block py-10 text-center text-sm underline">
+          This file is not an image (e.g. a PDF). Open it to print it separately.
+        </a>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={label} onError={() => setBroken(true)} className="mx-auto max-w-full object-contain" style={{ maxHeight: '250mm' }} />
+      )}
+    </div>
+  );
+}
 
 const REF_FIELDS = [
   { key: 'grnNumber', label: 'GRN No.', type: 'text' },
@@ -128,6 +166,20 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const [paying, setPaying] = useState(false);
   // Print layout: the usual GST invoice, or the IRP e-invoice format (chosen by itself once an IRN exists).
   const [format, setFormat] = useState<'gst' | 'einvoice' | null>(null);
+  // Copies to print (remembered on this device) and whether the challan / payment photos follow them.
+  const [copies, setCopies] = useState<string[]>(() => savedCopies());
+  const [withPhotos, setWithPhotos] = useState(true);
+  const toggleCopy = (label: string) =>
+    setCopies((cur) => {
+      const next = cur.includes(label) ? cur.filter((c) => c !== label) : COPY_LABELS.map((c) => c.label).filter((l) => l === label || cur.includes(l));
+      const final = next.length ? next : cur; // at least one copy
+      try {
+        localStorage.setItem(COPIES_KEY, JSON.stringify(final));
+      } catch {
+        /* storage off */
+      }
+      return final;
+    });
   const sendPayLink = async (invoiceId: string) => {
     setPaying(true);
     setPayMsg('');
@@ -228,77 +280,13 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const cell = 'border-r border-black px-1 py-0.5 align-top';
   const head = 'border-r border-b border-black px-1 py-0.5 font-bold text-left align-top leading-tight';
 
-  const modal = (
-    <div className="invoice-print-root fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex justify-center overflow-y-auto print:static print:block print:bg-white print:p-0 print:overflow-visible print:backdrop-blur-none items-stretch p-0">
-      <div className="w-full bg-white text-black shadow-2xl overflow-hidden flex flex-col print:max-h-none print:rounded-none print:shadow-none print:overflow-visible print:max-w-none max-w-none h-full rounded-none">
-        <div className="print:hidden flex items-center justify-between px-5 py-3 bg-slate-900 text-white">
-          <div className="flex items-center gap-2">
-            <Printer className="h-5 w-5 text-emerald-400" />
-            <h3 className="font-extrabold text-sm">Tax Invoice {inv.invoiceNumber}</h3>
-            <div className="ml-2 flex rounded-lg bg-slate-800 p-0.5 text-[11px] font-bold">
-              {([['gst', 'GST Invoice'], ['einvoice', 'E-Invoice']] as const).map(([k, label]) => (
-                <button key={k} onClick={() => setFormat(k)} className={`px-2.5 py-1 rounded-md cursor-pointer ${layout === k ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {payMsg && <span className="text-[11px] text-emerald-300 max-w-[220px] truncate" title={payMsg}>{payMsg}</span>}
-            {inv.canEditRefs && inv.id && due > 0 && inv.status !== 'Cancelled' && (
-              <button disabled={paying} onClick={() => sendPayLink(inv.id!)} title="Create an online payment link, WhatsApp it to the customer and copy it" className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
-                <Link2 className="h-3.5 w-3.5" /> {paying ? 'Sending…' : 'Send pay link'}
-              </button>
-            )}
-            {inv.canEditRefs && inv.id && !refs && (
-              <button onClick={startEditRefs} className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
-                <Pencil className="h-3.5 w-3.5" /> GRN / Challan
-              </button>
-            )}
-            <button onClick={() => window.print()} className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
-              <Printer className="h-4 w-4" /> Print
-            </button>
-            <button onClick={() => { setRefs(null); onClose(); }} className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer" title="Close">
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        {refs && (
-          <div className="print:hidden px-5 py-3 bg-slate-800 text-white border-t border-slate-700">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {REF_FIELDS.map((f) => (
-                <label key={f.key} className="text-[11px] font-bold text-slate-300">
-                  {f.label}
-                  <input
-                    type={f.type}
-                    value={refs[f.key]}
-                    maxLength={60}
-                    onChange={(e) => setRefs({ ...refs, [f.key]: e.target.value })}
-                    className="mt-0.5 w-full rounded-md bg-slate-900 border border-slate-600 px-2 py-1 text-xs text-white font-normal"
-                  />
-                </label>
-              ))}
-            </div>
-            <div className="mt-2 flex items-center justify-end gap-2">
-              {refError && <span className="mr-auto text-xs text-rose-400">{refError}</span>}
-              <button onClick={() => setRefs(null)} disabled={saving} className="py-1 px-3 rounded-lg text-xs font-bold text-slate-300 hover:text-white cursor-pointer">
-                Cancel
-              </button>
-              <button onClick={saveRefs} disabled={saving} className="py-1 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-black text-xs cursor-pointer">
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="overflow-y-auto p-3 sm:p-5 bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
-          {layout === 'einvoice' ? (
-            <div id="printable-invoice" className="relative mx-auto" style={{ width: '100%', maxWidth: 800 }}>
+  const attachments = inv.attachments ?? [];
+  const renderSheet = (copyLabel: string) => (layout === 'einvoice' ? (
+            <div className="printable-invoice relative mx-auto" style={{ width: '100%', maxWidth: 800 }}>
               <EinvoiceSheet inv={inv} company={company} />
             </div>
           ) : (
-          <div id="printable-invoice" className="relative mx-auto bg-white border border-black text-[11px] leading-snug font-sans text-black" style={{ width: '100%', maxWidth: 800 }}>
+          <div className="printable-invoice relative mx-auto bg-white border border-black text-[11px] leading-snug font-sans text-black" style={{ width: '100%', maxWidth: 800 }}>
             {inv.status === 'Cancelled' && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span className="text-7xl font-black text-rose-600/20 -rotate-12 border-8 border-rose-600/20 px-6">CANCELLED</span>
@@ -308,7 +296,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
             {/* Title strip */}
             <div className="relative px-2 pt-1">
               <div className="text-center font-serif font-bold text-base tracking-wide">GST INVOICE</div>
-              <div className="absolute right-2 top-1 font-serif font-bold text-[12px]">Original for Buyer</div>
+              <div className="absolute right-2 top-1 font-serif font-bold text-[12px]">{copyLabel}</div>
             </div>
 
             {/* Firm header */}
@@ -548,10 +536,105 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
               ))}
             </div>
           </div>
-          )}
-          <div className="mx-auto mt-1 text-center text-[9px] text-slate-500" style={{ maxWidth: 800 }}>
-            {company.name} · Computer generated invoice
+          ));
+
+  const modal = (
+    <div className="invoice-print-root fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex justify-center overflow-y-auto print:static print:block print:bg-white print:p-0 print:overflow-visible print:backdrop-blur-none items-stretch p-0">
+      <div className="w-full bg-white text-black shadow-2xl overflow-hidden flex flex-col print:max-h-none print:rounded-none print:shadow-none print:overflow-visible print:max-w-none max-w-none h-full rounded-none">
+        <div className="print:hidden flex items-center justify-between px-5 py-3 bg-slate-900 text-white">
+          <div className="flex items-center gap-2">
+            <Printer className="h-5 w-5 text-emerald-400" />
+            <h3 className="font-extrabold text-sm">Tax Invoice {inv.invoiceNumber}</h3>
+            <div className="ml-2 flex rounded-lg bg-slate-800 p-0.5 text-[11px] font-bold">
+              {([['gst', 'GST Invoice'], ['einvoice', 'E-Invoice']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setFormat(k)} className={`px-2.5 py-1 rounded-md cursor-pointer ${layout === k ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg bg-slate-800 p-0.5 text-[11px] font-bold" role="group" aria-label="Copies to print">
+              {COPY_LABELS.map((c) => (
+                <button
+                  key={c.label}
+                  onClick={() => toggleCopy(c.label)}
+                  aria-pressed={copies.includes(c.label)}
+                  title={c.label}
+                  className={`px-2 py-1 rounded-md cursor-pointer ${copies.includes(c.label) ? 'bg-emerald-500 text-slate-950' : 'text-slate-300 hover:text-white'}`}
+                >
+                  {c.short}
+                </button>
+              ))}
+            </div>
+            {attachments.length > 0 && (
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-200 cursor-pointer" title={attachments.map((a) => a.label).join('\n')}>
+                <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos(e.target.checked)} className="h-3.5 w-3.5 accent-emerald-500" />
+                <ImageIcon className="h-3.5 w-3.5" /> Challan & payment photos ({attachments.length})
+              </label>
+            )}
+            {payMsg && <span className="text-[11px] text-emerald-300 max-w-[220px] truncate" title={payMsg}>{payMsg}</span>}
+            {inv.canEditRefs && inv.id && due > 0 && inv.status !== 'Cancelled' && (
+              <button disabled={paying} onClick={() => sendPayLink(inv.id!)} title="Create an online payment link, WhatsApp it to the customer and copy it" className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
+                <Link2 className="h-3.5 w-3.5" /> {paying ? 'Sending…' : 'Send pay link'}
+              </button>
+            )}
+            {inv.canEditRefs && inv.id && !refs && (
+              <button onClick={startEditRefs} className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
+                <Pencil className="h-3.5 w-3.5" /> GRN / Challan
+              </button>
+            )}
+            <button onClick={() => window.print()} className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
+              <Printer className="h-4 w-4" /> Print
+            </button>
+            <button onClick={() => { setRefs(null); onClose(); }} className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer" title="Close">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {refs && (
+          <div className="print:hidden px-5 py-3 bg-slate-800 text-white border-t border-slate-700">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {REF_FIELDS.map((f) => (
+                <label key={f.key} className="text-[11px] font-bold text-slate-300">
+                  {f.label}
+                  <input
+                    type={f.type}
+                    value={refs[f.key]}
+                    maxLength={60}
+                    onChange={(e) => setRefs({ ...refs, [f.key]: e.target.value })}
+                    className="mt-0.5 w-full rounded-md bg-slate-900 border border-slate-600 px-2 py-1 text-xs text-white font-normal"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center justify-end gap-2">
+              {refError && <span className="mr-auto text-xs text-rose-400">{refError}</span>}
+              <button onClick={() => setRefs(null)} disabled={saving} className="py-1 px-3 rounded-lg text-xs font-bold text-slate-300 hover:text-white cursor-pointer">
+                Cancel
+              </button>
+              <button onClick={saveRefs} disabled={saving} className="py-1 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-slate-950 font-black text-xs cursor-pointer">
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-y-auto p-3 sm:p-5 bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
+          {/* One sheet per chosen copy, then the paperwork photos — each starts a new printed page. */}
+          {copies.map((copy, i) => (
+            <div key={copy} className={i > 0 ? 'mt-6 print:mt-0 print:break-before-page' : ''}>
+              {renderSheet(copy)}
+              <div className="mx-auto mt-1 text-center text-[9px] text-slate-500" style={{ maxWidth: 800 }}>
+                {company.name} · Computer generated invoice
+              </div>
+            </div>
+          ))}
+          {withPhotos &&
+            attachments.map((att) => (
+              <AttachmentPage key={att.url} label={att.label} url={att.url} invoiceNumber={inv.invoiceNumber} />
+            ))}
         </div>
       </div>
     </div>

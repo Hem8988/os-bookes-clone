@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Boxes,
   FileText,
+  IdCard,
   LayoutDashboard,
   LayoutGrid,
   Star,
@@ -102,7 +103,6 @@ export const MENU: MenuSection[] = [
       { tab: 'books', sub: 'cash-bank', label: 'Cash & bank book', permission: 'books.view' },
       { tab: 'books', sub: 'bank-rec', label: 'Bank reconciliation', permission: 'books.view' },
       { tab: 'books', sub: 'cheques', label: 'Cheque register (PDC / bounce)', permission: 'books.view' },
-      { tab: 'books', sub: 'payroll', label: 'Salary & payroll', permission: 'books.view' },
       { tab: 'books', sub: 'gst', label: 'GSTR-1 & GSTR-3B', permission: 'books.view' },
       { tab: 'books', sub: 'gstr2b', label: 'GSTR-2B match', permission: 'books.view' },
       { tab: 'books', sub: 'einvoice', label: 'E-invoice & e-way bill', permission: 'books.view' },
@@ -110,6 +110,16 @@ export const MENU: MenuSection[] = [
       { tab: 'books', sub: 'final', label: 'P&L · Balance sheet', permission: 'books.view' },
       { tab: 'books', sub: 'reports', label: 'All reports', permission: 'books.view' },
       { tab: 'books', sub: 'ca-pack', label: 'CA pack (monthly)', permission: 'books.view' },
+    ],
+  },
+  {
+    // Staff and their pay in one place (it used to sit deep inside Books and Masters).
+    key: 'staff',
+    label: 'Staff & salary',
+    icon: IdCard,
+    items: [
+      { tab: 'masters', sub: 'employee', label: 'Employees', permission: 'masters.view' },
+      { tab: 'books', sub: 'payroll', label: 'Attendance & salary', permission: 'books.view' },
     ],
   },
   {
@@ -143,7 +153,6 @@ export const MENU: MenuSection[] = [
       { tab: 'masters', sub: 'unit', label: 'Units', permission: 'masters.view' },
       { tab: 'masters', sub: 'bank', label: 'Banks', permission: 'masters.view' },
       { tab: 'masters', sub: 'payment', label: 'Payment modes', permission: 'masters.view' },
-      { tab: 'masters', sub: 'employee', label: 'Employees', permission: 'masters.view' },
       { tab: 'masters', sub: 'expense', label: 'Expense heads', permission: 'masters.view' },
       { tab: 'masters', sub: 'company', label: 'Branches', permission: 'masters.view' },
       // Trucks / tempos (fuel, service, documents) and the delivery boy who drives each.

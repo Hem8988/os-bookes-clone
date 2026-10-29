@@ -83,7 +83,7 @@ export default function VouchersPanel() {
           <Empty>No vouchers in this period.</Empty>
         ) : (
           <div className="overflow-x-auto">
-            <Paged rows={rows}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={rows}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left border-b border-slate-200">
                 <tr>
                   <th className="p-2 w-6" />

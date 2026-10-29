@@ -1866,6 +1866,7 @@ function WalletTab({ toast }: { toast: (m: string, t?: 'ok' | 'error') => void }
   if (!info) return <Empty>{t('Loading…')}</Empty>;
   return (
     <>
+      <IncentiveCard onError={onError} />
       <div className="rounded-2xl p-4 bg-slate-900 text-white">
         <div className="text-[11px] font-bold uppercase opacity-70">{t('Cash in hand')}</div>
         <div className="text-2xl font-black flex items-center gap-1"><IndianRupee className="h-5 w-5" />{info.wallet.balance.toLocaleString('en-IN')}</div>
@@ -1916,6 +1917,96 @@ function WalletTab({ toast }: { toast: (m: string, t?: 'ok' | 'error') => void }
         ))}
       </div>
     </>
+  );
+}
+
+// ───────────────────────── Incentive ─────────────────────────
+
+interface IncentiveRow { id: string; deliveryNumber: string; customerName: string; deliveryDate: string; cylinders: number; invoiceNumber: string | null; amount: number; paidOn: string | null }
+interface IncentiveInfo {
+  month: string;
+  rate: number;
+  deliveries: number;
+  cylinders: number;
+  incentive: number;
+  pendingCylinders: number;
+  pendingIncentive: number;
+  paid: IncentiveRow[];
+  pending: IncentiveRow[];
+  history: { id: string; month: string; status: string; cylinders: number; incentive: number; net: number }[];
+}
+
+const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+/** His own incentive: earned only on cylinders the customer has paid for. */
+function IncentiveCard({ onError }: { onError: (m: string) => void }) {
+  const { t, status } = useT();
+  const [month, setMonth] = useState(() => today().slice(0, 7));
+  const q = useApiData<IncentiveInfo>(`/api/delivery/incentive?month=${month}`, onError);
+  const info = q.data;
+  const row = (d: IncentiveRow, right: React.ReactNode) => (
+    <div key={d.id} className="flex justify-between items-center text-xs py-1 border-b border-slate-50">
+      <span className="min-w-0">
+        <span className="block truncate font-semibold">{d.customerName}</span>
+        <span className="block text-[10px] text-slate-400">{d.invoiceNumber || d.deliveryNumber} · {shortDate(d.deliveryDate)} · {inr(d.amount)}</span>
+      </span>
+      <span className="text-right shrink-0 pl-2">{right}</span>
+    </div>
+  );
+  return (
+    <div className="rounded-2xl bg-white border border-slate-200 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-black">{t('My incentive')}</div>
+        <input type="month" value={month} max={today().slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} className={cx(inputClass, 'w-36 py-1 text-xs')} />
+      </div>
+      {!info ? (
+        <div className="text-[11px] text-slate-400">{t('Loading…')}</div>
+      ) : (
+        <>
+          {info.rate <= 0 && <div className="rounded-xl bg-amber-50 text-amber-800 text-[11px] font-semibold p-2">{t('No incentive rate set for you yet. Ask the office.')}</div>}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-emerald-50 p-2.5">
+              <div className="text-[10px] font-bold uppercase text-emerald-700">{t('Earned')}</div>
+              <div className="text-lg font-black text-emerald-800">{inr(info.incentive)}</div>
+              <div className="text-[10px] text-emerald-700">{t('{cylinders} paid cyl. × {rate}', { cylinders: info.cylinders, rate: inr(info.rate) })}</div>
+            </div>
+            <div className="rounded-xl bg-amber-50 p-2.5">
+              <div className="text-[10px] font-bold uppercase text-amber-700">{t('Awaiting payment')}</div>
+              <div className="text-lg font-black text-amber-800">{inr(info.pendingIncentive)}</div>
+              <div className="text-[10px] text-amber-700">{t('{cylinders} cyl. · get paid to earn it', { cylinders: info.pendingCylinders })}</div>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500">{t('Incentive counts only when the customer pays for the delivery, in the month the bill is fully paid.')}</p>
+          <details>
+            <summary className="text-xs font-black cursor-pointer">{t('Payment pending')} ({info.pending.length})</summary>
+            <div className="mt-1">
+              {info.pending.length === 0 && <div className="text-[11px] text-slate-400">{t('None yet.')}</div>}
+              {info.pending.map((d) => row(d, <strong>{t('{n} cyl.', { n: d.cylinders })}</strong>))}
+            </div>
+          </details>
+          <details>
+            <summary className="text-xs font-black cursor-pointer">{t('Paid this month')} ({info.paid.length})</summary>
+            <div className="mt-1">
+              {info.paid.length === 0 && <div className="text-[11px] text-slate-400">{t('None yet.')}</div>}
+              {info.paid.map((d) => row(d, <><strong>{t('{n} cyl.', { n: d.cylinders })}</strong><div className="text-[10px] text-emerald-700">{t('Paid {date}', { date: d.paidOn ? shortDate(d.paidOn) : '—' })}</div></>))}
+            </div>
+          </details>
+          {info.history.length > 0 && (
+            <details>
+              <summary className="text-xs font-black cursor-pointer">{t('Past salary')}</summary>
+              <div className="mt-1">
+                {info.history.map((h) => (
+                  <div key={h.id} className="flex justify-between items-center text-xs py-1 border-b border-slate-50">
+                    <span>{h.month}<div className="text-[10px] text-slate-400">{t('{n} cyl.', { n: h.cylinders })} · {t('Incentive')} {inr(h.incentive)}</div></span>
+                    <span className="text-right"><strong>{inr(h.net)}</strong><div><StatusBadge status={h.status} label={status(h.status)} /></div></span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -2066,7 +2157,7 @@ function StockTab({ userId, stock, onChanged, toast }: { userId: string; stock: 
         {requests.length === 0 ? (
           <div className="text-[11px] text-slate-400">{t('None.')}</div>
         ) : (
-          <Paged rows={requests}>{(pageRows, offset) => (<table className="w-full text-[11px]">
+          <Paged rows={requests}>{(pageRows) => (<table className="w-full text-[11px]">
             <tbody>
               {pageRows.map((r) => (
                 <tr key={r.id} className="border-t border-slate-100 first:border-t-0 align-top">

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { can, ROLES, Role } from '@/lib/permissions';
 import { isValidMobile, phoneKey } from '@/lib/phone';
 import { audit } from '@/lib/server/audit';
+import { syncEmployeeForUser } from '@/lib/server/staff';
 import { requireAuth } from '@/lib/server/auth';
 import { badRequest, conflict, forbidden, handle, ok, optStr, readJson, str } from '@/lib/server/http';
 import { hashPassword, validatePasswordStrength } from '@/lib/server/password';
@@ -52,5 +53,7 @@ export const POST = handle(async (request: Request) => {
     select: PUBLIC_FIELDS,
   });
   await audit(prisma, auth, { action: 'USER_CREATED', entityType: 'User', entityId: user.id, reference: `${user.name} (${role})`, sensitive: true });
-  return ok(user, `${user.name} created as ${role.replace('_', ' ').toLowerCase()}.`);
+  // Staff are on the payroll too: the employee (salary, attendance) is made with the login.
+  const employeeId = await syncEmployeeForUser(prisma, { ...user, tenantId: auth.tenantId }, { salary: body.salary, salaryType: body.salaryType, incentivePerCylinder: body.incentivePerCylinder });
+  return ok(user, `${user.name} created as ${role.replace('_', ' ').toLowerCase()}${employeeId ? ' and added to Staff & salary' : ''}.`);
 });

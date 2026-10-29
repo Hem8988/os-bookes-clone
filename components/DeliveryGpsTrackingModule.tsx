@@ -93,7 +93,7 @@ export default function DeliveryGpsTrackingModule() {
         {deliveries.length === 0 ? (
           <Empty>No deliveries on this date.</Empty>
         ) : (
-          <Paged rows={deliveries}>{(pageRows, offset) => (<table className="w-full text-xs">
+          <Paged rows={deliveries}>{(pageRows) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">Delivery</th>

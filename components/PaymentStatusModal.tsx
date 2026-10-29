@@ -3,6 +3,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { X, Check, ChevronDown } from 'lucide-react';
 import { BankMaster, Customer, PurchaseOrderPayment, NarrationMaster } from '../lib/types';
+import { AmountWords } from './ui';
 
 interface PaymentStatusModalProps {
   isOpen: boolean;
@@ -249,6 +250,7 @@ export const PaymentStatusModal: React.FC<PaymentStatusModalProps> = ({
                     placeholder={row.id === nextEmptyId && remaining > 0 ? remaining.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : ''}
                     className="w-full border border-slate-300 bg-amber-50/30 px-2 py-1.5 text-right focus:outline-none focus:border-sky-500 text-black font-black text-lg"
                   />
+                  <AmountWords value={row.amount || ''} />
                 </div>
                 <div className="relative">
                   <input
@@ -340,6 +342,7 @@ export const PaymentStatusModal: React.FC<PaymentStatusModalProps> = ({
                   className="w-32 text-right font-medium text-sm text-slate-800 border border-slate-300 bg-white px-2 py-1 focus:outline-none focus:border-sky-500"
                 />
               </div>
+              <AmountWords value={cashTendered || ''} className="max-w-sm text-right -mt-3" />
               <div className="flex items-center justify-between max-w-sm">
                 <span className="text-[13px] text-slate-600 font-medium">Cash to be Returned:</span>
                 <span className="w-32 text-right font-semibold text-sm text-green-600">

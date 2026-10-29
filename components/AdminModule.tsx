@@ -44,7 +44,7 @@ function UsersPanel() {
   return (
     <Card title="Users & roles" actions={<Button size="sm" onClick={() => setCreating(true)}><UserPlus className="h-3.5 w-3.5" /> Add user</Button>}>
       {toast}
-      <Paged rows={users}>{(pageRows, offset) => (<table className="w-full text-xs">
+      <Paged rows={users}>{(pageRows) => (<table className="w-full text-xs">
         <thead className="text-slate-500 text-left">
           <tr>
             <th className="p-2">Name</th>
@@ -74,8 +74,38 @@ function UsersPanel() {
   );
 }
 
+/** Staff logins are on the payroll: salary entered here goes to Staff & salary → Employees. */
+const STAFF_ROLES: Role[] = ['DELIVERY_BOY', 'MANAGER', 'ACCOUNTANT'];
+type Pay = { salary: string; salaryType: 'Month' | 'Day'; incentivePerCylinder: string };
+function PayFields({ role, pay, onChange }: { role: Role; pay: Pay; onChange: (p: Pay) => void }) {
+  if (!STAFF_ROLES.includes(role)) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+      <div className="text-xs font-black text-slate-700">Salary <span className="font-normal text-slate-500">· also adds them to Staff &amp; salary for attendance and pay</span></div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={pay.salaryType === 'Day' ? 'Salary per day ₹' : 'Salary per month ₹'}>
+          <input type="number" min={0} value={pay.salary} onChange={(e) => onChange({ ...pay, salary: e.target.value })} className={inputClass} placeholder="0" />
+        </Field>
+        <Field label="Paid by">
+          <select value={pay.salaryType} onChange={(e) => onChange({ ...pay, salaryType: e.target.value as 'Month' | 'Day' })} className={inputClass}>
+            <option value="Month">Month (fixed)</option>
+            <option value="Day">Day (daily wage)</option>
+          </select>
+        </Field>
+      </div>
+      {role === 'DELIVERY_BOY' && (
+        <Field label="Incentive per cylinder delivered ₹" hint="Added to the salary for every delivered cylinder the customer has paid for.">
+          <input type="number" min={0} step="0.5" value={pay.incentivePerCylinder} onChange={(e) => onChange({ ...pay, incentivePerCylinder: e.target.value })} className={inputClass} placeholder="0" />
+        </Field>
+      )}
+    </div>
+  );
+}
+const payBody = (role: Role, pay: Pay) => (STAFF_ROLES.includes(role) ? { salary: pay.salary, salaryType: pay.salaryType, incentivePerCylinder: pay.incentivePerCylinder } : {});
+
 function CreateUserModal({ onClose, onDone, onError }: { onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
   const [form, setForm] = useState({ name: '', email: '', mobile: '', role: 'DELIVERY_BOY' as Role, password: '', customerId: '', twoFactorEnabled: false });
+  const [pay, setPay] = useState<Pay>({ salary: '', salaryType: 'Month', incentivePerCylinder: '' });
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -84,7 +114,7 @@ function CreateUserModal({ onClose, onDone, onError }: { onClose: () => void; on
   const submit = async () => {
     setBusy(true);
     try {
-      const res = await fetch('/api/users/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const res = await fetch('/api/users/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, ...payBody(form.role, pay) }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       onDone(json.message);
@@ -114,6 +144,7 @@ function CreateUserModal({ onClose, onDone, onError }: { onClose: () => void; on
           </select>
         </Field>
       )}
+      <PayFields role={form.role} pay={pay} onChange={setPay} />
       <Field label="Initial password" hint="At least 8 characters with letters and numbers. Ask the user to change it.">
         <input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} />
       </Field>
@@ -125,6 +156,10 @@ function CreateUserModal({ onClose, onDone, onError }: { onClose: () => void; on
 function EditUserModal({ user, onClose, onDone, onError }: { user: UserRow; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
   const [form, setForm] = useState({ name: user.name, mobile: user.mobile || '', role: user.role, status: user.status, twoFactorEnabled: user.twoFactorEnabled, password: '' });
   const [busy, setBusy] = useState(false);
+  // Current salary from the employee record (null until loaded / none yet).
+  const payQ = useApiData<{ salary: number; salaryType: string; incentivePerCylinder: number } | null>(`/api/users/${user.id}`);
+  const [payEdit, setPayEdit] = useState<Pay | null>(null);
+  const pay: Pay = payEdit ?? { salary: payQ.data ? String(payQ.data.salary || '') : '', salaryType: payQ.data?.salaryType === 'Day' ? 'Day' : 'Month', incentivePerCylinder: payQ.data ? String(payQ.data.incentivePerCylinder || '') : '' };
   const patch = async (body: Record<string, unknown>) => {
     setBusy(true);
     try {
@@ -146,7 +181,7 @@ function EditUserModal({ user, onClose, onDone, onError }: { user: UserRow; onCl
       footer={
         <>
           <Button tone="secondary" busy={busy} onClick={() => patch({ revokeSessions: true, unlock: true })}>Sign out everywhere</Button>
-          <Button busy={busy} onClick={() => patch({ name: form.name, mobile: form.mobile, role: form.role, status: form.status, twoFactorEnabled: form.twoFactorEnabled, ...(form.password ? { password: form.password } : {}) })}>Save</Button>
+          <Button busy={busy} onClick={() => patch({ name: form.name, mobile: form.mobile, role: form.role, status: form.status, twoFactorEnabled: form.twoFactorEnabled, ...(form.password ? { password: form.password } : {}), ...(payEdit ? payBody(form.role, payEdit) : {}) })}>Save</Button>
         </>
       }
     >
@@ -164,6 +199,7 @@ function EditUserModal({ user, onClose, onDone, onError }: { user: UserRow; onCl
           </select>
         </Field>
       </div>
+      <PayFields role={form.role} pay={pay} onChange={setPayEdit} />
       <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={form.twoFactorEnabled} onChange={(e) => setForm({ ...form, twoFactorEnabled: e.target.checked })} /> Require OTP at login</label>
       <Field label="Reset password (optional)"><input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputClass} placeholder="Leave empty to keep" /></Field>
     </Modal>
@@ -190,7 +226,7 @@ function DevicesPanel() {
       {devices.length === 0 ? (
         <Empty>No devices yet. A delivery boy&apos;s first login creates a pending device here.</Empty>
       ) : (
-        <Paged rows={devices}>{(pageRows, offset) => (<table className="w-full text-xs">
+        <Paged rows={devices}>{(pageRows) => (<table className="w-full text-xs">
           <thead className="text-slate-500 text-left">
             <tr>
               <th className="p-2">User</th>
@@ -254,7 +290,7 @@ function AuditPanel() {
       }
     >
       {toast}
-      <Paged rows={rows}>{(pageRows, offset) => (<table className="w-full text-xs">
+      <Paged rows={rows}>{(pageRows) => (<table className="w-full text-xs">
         <thead className="text-slate-500 text-left">
           <tr>
             <th className="p-2">When</th>

@@ -5,7 +5,7 @@ import { Banknote, Clock, Landmark, Printer, Receipt, Search, Smartphone, Trash2
 import { Customer, Product, Invoice, InvoiceItem } from '../lib/types';
 import { cue } from '../lib/feedback';
 import { ChoiceTiles, PosButton, RecentChips, SoundToggle, Stepper, useRecent } from './pos';
-import { cx, partyLabel } from './ui';
+import { AmountWords, cx, partyLabel } from './ui';
 
 interface BillingModuleProps {
   customers: Customer[];
@@ -294,6 +294,7 @@ export const BillingModule: React.FC<BillingModuleProps> = ({ customers, product
             <div className="flex-1">
               <div className="text-[10px] font-black uppercase text-slate-500">Grand total</div>
               <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{rupees(grandTotal)}</div>
+              <AmountWords value={grandTotal} />
             </div>
             <PosButton busy={busy} disabled={!lineItems.length || !selectedCustomer} onClick={() => void handleSaveInvoice()}>
               <Printer className="h-4 w-4" /> Save &amp; print

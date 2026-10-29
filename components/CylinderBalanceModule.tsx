@@ -73,7 +73,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
           {filtered.length === 0 ? (
             <Empty>No cylinders with customers.</Empty>
           ) : (
-            <Paged rows={filtered}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={filtered}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">Customer</th>
@@ -104,7 +104,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
           {vouchers.length === 0 ? (
             <Empty>No vouchers issued.</Empty>
           ) : (
-            <Paged rows={vouchers}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={vouchers}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">Voucher</th>
@@ -142,7 +142,7 @@ export default function CylinderBalanceModule({ initialSubTab = 'customer' }: { 
 
       <Modal open={!!history} title={`Cylinder ledger — ${history?.customerName}`} onClose={() => setHistory(null)} wide>
         {history && (
-          <Paged rows={history.rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
+          <Paged rows={history.rows} size={50}>{(pageRows) => (<table className="w-full text-xs">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">When</th>

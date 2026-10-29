@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { amountInWords } from '../lib/gst';
 
 // Small shared building blocks for the operations screens.
 
@@ -53,13 +54,47 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
   </button>
 );
 
-export const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode; className?: string }> = ({ label, hint, children, className }) => (
-  <label className={cx('block space-y-1', className)}>
-    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">{label}</span>
-    {children}
-    {hint && <span className="block text-[10px] text-slate-400">{hint}</span>}
-  </label>
-);
+/** "Rs. Twelve Thousand Nine Hundred Fifty only" under an amount box (nothing for empty / zero). */
+export const AmountWords: React.FC<{ value: unknown; className?: string }> = ({ value, className }) => {
+  const n = typeof value === 'number' ? value : Number(String(value ?? '').replace(/,/g, ''));
+  if (!Number.isFinite(n) || n === 0) return null;
+  return <span className={cx('block text-[11px] font-semibold leading-snug text-emerald-700', className)}>{n < 0 ? 'Minus ' : ''}{amountInWords(n)}</span>;
+};
+
+// Labels of money boxes: ₹ or a sure money word always; a looser word (rate, value…) only when
+// the label is not about a percentage, a quantity or a count.
+const SURE_MONEY = /₹|\b(amount|price|limit|balance|deposit|salary|paid|total|charges?|wages?|fee|fees|bonus|advance|collected|mrp)\b/i;
+const MAYBE_MONEY = /\b(cash|value|basic|due|fine|rent|opening|expense|income|cost|rate)\b/i;
+const NOT_MONEY = /%|\b(qty|quantity|gst|tax|interest|days?|cylinders?|count|no\.?|number|percent|hsn|kg|litres?)\b/i;
+const isMoneyLabel = (label: string) => SURE_MONEY.test(label) || (MAYBE_MONEY.test(label) && !NOT_MONEY.test(label));
+
+/** Number box inside a Field, if that is all it holds. */
+function numberChildValue(children: React.ReactNode): { found: boolean; value: unknown } {
+  const kids = React.Children.toArray(children);
+  if (kids.length !== 1 || !React.isValidElement(kids[0])) return { found: false, value: null };
+  const el = kids[0] as React.ReactElement<{ type?: string; value?: unknown }>;
+  return el.type === 'input' && el.props.type === 'number' ? { found: true, value: el.props.value } : { found: false, value: null };
+}
+
+/** Words for a labelled number box when the label is about money — for form wrappers other than Field. */
+export const MoneyWords: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
+  const num = numberChildValue(children);
+  return num.found && isMoneyLabel(label) ? <AmountWords value={num.value} /> : null;
+};
+
+/** Labelled form field. A money box (₹ / amount / price … in the label) also shows the amount in words under it. */
+export const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode; className?: string; words?: boolean }> = ({ label, hint, children, className, words }) => {
+  const num = numberChildValue(children);
+  const showWords = words ?? (num.found && isMoneyLabel(label));
+  return (
+    <label className={cx('block space-y-1', className)}>
+      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">{label}</span>
+      {children}
+      {showWords && <AmountWords value={num.value} />}
+      {hint && <span className="block text-[10px] text-slate-400">{hint}</span>}
+    </label>
+  );
+};
 
 export const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 

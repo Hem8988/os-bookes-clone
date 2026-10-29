@@ -77,7 +77,7 @@ export default function ReportsModule({ initialReport = 'sales' }: { initialRepo
 
 const Table = ({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) => (
   <div className="overflow-x-auto">
-    <Paged rows={rows} size={50}>{(pageRows, offset) => (<table className="w-full text-xs">
+    <Paged rows={rows} size={50}>{(pageRows) => (<table className="w-full text-xs">
       <thead className="text-slate-500 text-left">
         <tr>{head.map((h) => <th key={h} className="p-2">{h}</th>)}</tr>
       </thead>

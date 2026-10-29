@@ -55,7 +55,7 @@ export default function PaymentsModule() {
           <Empty>No payments.</Empty>
         ) : (
           <div className="overflow-x-auto -m-4">
-            <Paged rows={payments}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={payments}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500 text-left">
                 <tr>
                   <th className="p-3">Receipt</th>

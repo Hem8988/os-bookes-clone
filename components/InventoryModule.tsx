@@ -125,7 +125,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
             </Card>
           </div>
           <Card title="Held by customers">
-            <Paged rows={data.customerHoldings}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={data.customerHoldings}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">Product</th>
@@ -152,7 +152,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
           {transfers.length === 0 ? (
             <Empty>No transfers yet.</Empty>
           ) : (
-            <Paged rows={transfers}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={transfers}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">No.</th>
@@ -181,7 +181,7 @@ export function InventoryModule({ initialTab = 'overview', onNavigate }: { initi
       ) : tab === 'movements' ? (
         <Card title="Stock movements (latest 300)">
           <div className="overflow-x-auto">
-            <Paged rows={movements}>{(pageRows, offset) => (<table className="w-full text-xs">
+            <Paged rows={movements}>{(pageRows) => (<table className="w-full text-xs">
               <thead className="text-slate-500 text-left">
                 <tr>
                   <th className="p-2">When</th>
@@ -290,7 +290,7 @@ function InwardRegister({ onError }: { onError: (m: string) => void }) {
         <Empty>No plant / supplier loads in this period.</Empty>
       ) : (
         <div className="overflow-x-auto">
-          <Paged rows={shown}>{(pageRows, offset) => (<table className="w-full text-xs min-w-[860px]">
+          <Paged rows={shown}>{(pageRows) => (<table className="w-full text-xs min-w-[860px]">
             <thead className="text-slate-500 text-left">
               <tr>
                 <th className="p-2">When</th>

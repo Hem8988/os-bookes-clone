@@ -84,6 +84,8 @@ const COPY_LABELS = [
   { label: 'Triplicate for Supplier', short: 'Triplicate' },
 ];
 const COPIES_KEY = 'deskshark.invoiceCopies';
+/** The only copy that goes to the customer (WhatsApp / Download PDF); the others are for printing. */
+const BUYER_COPY = COPY_LABELS[0].label;
 function savedCopies(): string[] {
   try {
     const v = JSON.parse(localStorage.getItem(COPIES_KEY) || 'null');
@@ -631,7 +633,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
               </button>
             )}
             {inv.canEditRefs && inv.id && inv.status !== 'Cancelled' && (
-              <button disabled={waSending} onClick={() => sendPdfOnWhatsApp(inv.id!)} title="Make a PDF of this invoice and send it to the customer's WhatsApp" className="py-1.5 px-3 rounded-lg bg-[#25D366] hover:bg-[#1ebe5b] disabled:opacity-60 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
+              <button disabled={waSending} onClick={() => sendPdfOnWhatsApp(inv.id!)} title="Send the buyer's copy (with the challan / payment photos if ticked) to the customer's WhatsApp as a PDF" className="py-1.5 px-3 rounded-lg bg-[#25D366] hover:bg-[#1ebe5b] disabled:opacity-60 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
                 <MessageCircle className="h-3.5 w-3.5" /> {waSending ? 'Sending…' : 'WhatsApp PDF'}
               </button>
             )}
@@ -685,10 +687,16 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
         )}
 
         <div ref={pagesRef} className="overflow-y-auto p-3 sm:p-5 bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
-          {/* One sheet per chosen copy, then the paperwork photos — each starts a new printed page. */}
+          {/* One sheet per chosen copy, then the paperwork photos — each starts a new printed page.
+              The PDF for the customer (WhatsApp / download) takes only the buyer's copy and the photos. */}
+          {!copies.includes(BUYER_COPY) && (
+            <div aria-hidden className="print:hidden" style={{ position: 'fixed', left: -10000, top: 0, width: 800 }}>
+              <div data-pdf-page>{renderSheet(BUYER_COPY)}</div>
+            </div>
+          )}
           {copies.map((copy, i) => (
             <div key={copy} className={i > 0 ? 'mt-6 print:mt-0 print:break-before-page' : ''}>
-              <div data-pdf-page>{renderSheet(copy)}</div>
+              <div data-pdf-page={copy === BUYER_COPY ? '' : undefined}>{renderSheet(copy)}</div>
               <div className="mx-auto mt-1 text-center text-[9px] text-slate-500" style={{ maxWidth: 800 }}>
                 {company.name} · Computer generated invoice
               </div>

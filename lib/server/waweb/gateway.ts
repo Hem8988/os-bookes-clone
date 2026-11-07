@@ -45,7 +45,9 @@ type State = {
 const g = globalThis as unknown as { __deskWa?: State };
 const state: State = (g.__deskWa ??= { sessions: new Map(), choices: new Map(), booted: false });
 
-const SESS_DIR = path.join(process.cwd(), 'storage', 'wa-sessions');
+// Logins outlive deploys when WA_SESSION_DIR points outside the app folder. Do not symlink
+// <app>/storage out of the project instead: the build traces this folder and rejects such links.
+const SESS_DIR = process.env.WA_SESSION_DIR || path.join(process.cwd(), 'storage', 'wa-sessions');
 const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
 const AUTO_GAP_MS: [number, number] = [2000, 5000];
 const CHOICE_TTL_MS = 60 * 60_000;

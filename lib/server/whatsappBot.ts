@@ -306,7 +306,9 @@ export async function handleIncomingMessage(phone: string, rawText: string) {
       return askQty(phone, next);
     }
     case 'ENTER_QTY': {
-      const qty = Number(text);
+      // "10", "10 cylinder", "cylinder 10 chahiye" — exactly one number in the message.
+      const nums = text.match(/\d+/g);
+      const qty = nums && nums.length === 1 ? Number(nums[0]) : NaN;
       if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) return retry(conv, phone, () => askQty(phone, draft), `Quantity 1 se ${MAX_QTY} ke beech number mein bhejein.`);
       const productId = draft.productIds?.[draft.index || 0];
       const next: Draft = { ...draft, qtys: { ...(draft.qtys || {}), [productId || '']: qty }, index: (draft.index || 0) + 1 };
@@ -339,16 +341,19 @@ export async function handleIncomingMessage(phone: string, rawText: string) {
       return showSummary(phone, customer, next);
     }
     case 'CONFIRM': {
-      if (text === 'C:NO' || ['no', 'nahi', 'n'].includes(lower)) {
+      // "YES ✅", "c:yes", "Haan ji" → "yes"; "1" / "2" are the numbered choices of the summary.
+      const word = lower.replace(/[^a-z0-9:]+/g, ' ').trim();
+      if (['c:no', 'no', 'nahi', 'nhi', 'na', 'n', '2'].includes(word)) {
         await save(conv, { step: 'IDLE', failedAttempts: 0, draft: null });
         return sendWhatsAppText(TENANT, phone, '❌ Order cancel kar diya. Naye order ke liye "Hi" bhejein.');
       }
-      if (text !== 'C:YES' && !['yes', 'haan', 'ha', 'y', 'confirm'].includes(lower)) {
-        return retry(conv, phone, () => showSummary(phone, customer, draft), 'YES ya NO chunein.');
+      if (!['c:yes', 'yes', 'y', 'haan', 'han', 'ha', 'haan ji', 'ha ji', 'ji', 'ok', 'okay', 'confirm', '1'].includes(word)) {
+        return retry(conv, phone, () => showSummary(phone, customer, draft), '1 (YES) ya 2 (NO) bhejein.');
       }
       const effects = new Effects();
+      let orderNumber = '';
       try {
-        await transaction((tx) =>
+        const order = await transaction((tx) =>
           createOrder(
             tx,
             systemActor(TENANT, `WhatsApp (${customer.name})`),
@@ -361,14 +366,22 @@ export async function handleIncomingMessage(phone: string, rawText: string) {
             effects
           )
         );
+        orderNumber = order.orderNumber;
       } catch (error) {
         await save(conv, { step: 'IDLE', failedAttempts: 0, draft: null });
         const message = error instanceof ApiError ? error.message : 'Order save nahi ho paya.';
         return sendWhatsAppText(TENANT, phone, `⚠️ ${message}\n${await supportText()}`);
       }
       await save(conv, { step: 'IDLE', failedAttempts: 0, draft: null });
-      // The ORDER_RECEIVED template (sent after commit) is the confirmation.
-      effects.schedule();
+      // The ORDER_RECEIVED template goes to the customer's registered WhatsApp number. When this chat
+      // is from another number, confirm here as well so the person who ordered always hears back.
+      const registered = phoneKey(customer.whatsappNumber || customer.phone || '');
+      if (registered !== phoneKey(phone)) {
+        await sendWhatsAppText(TENANT, phone, `✅ Order confirm ho gaya!\nOrder No: ${orderNumber}\nDelivery: ${draft.date}\n\nStatus ke liye "Hi" bhej kar 2 chunein.`);
+      }
+      // Run now, not effects.schedule(): this runs from a WhatsApp event, not inside a request,
+      // where next/server after() can be tied to an old request and never fire.
+      void effects.flush();
       return;
     }
     default:

@@ -386,6 +386,11 @@ export function rememberChoices(channel: string, phone: string, ids: string[]) {
   state.choices.set(`${channel}|${phone}`, { ids, at: Date.now() });
 }
 
+/** Any other message to this chat replaces the last numbered list: "4" then means 4, not option 4. */
+export function clearChoices(channel: string, phone: string) {
+  state.choices.delete(`${channel}|${phone}`);
+}
+
 export function resolveChoice(channel: string, phone: string, text: string): string | null {
   const n = text.trim().match(/^(\d{1,2})\.?$/)?.[1];
   if (!n) return null;

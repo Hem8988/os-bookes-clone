@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/db';
 import { toWhatsAppNumber } from '@/lib/phone';
 import { isStoredFile, readStoredFile } from '../storage';
-import { isConnected, rememberChoices, sendViaSession, sessionForChannel, type WaContent } from '../waweb/gateway';
+import { clearChoices, isConnected, rememberChoices, sendViaSession, sessionForChannel, type WaContent } from '../waweb/gateway';
 import { msg91Config, whatsappReady, whatsappSessionRaw } from './msg91';
 
 const API_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
@@ -64,15 +64,21 @@ function toMsg91(payload: Record<string, unknown>): Record<string, unknown> | nu
 
 type Choice = { id: string; title: string; description?: string };
 
+/** "1. Place Order — Naya cylinder order" lines, as the customer reads them. */
+function choiceLines(options: Choice[]) {
+  return options
+    .map((o, i) => {
+      const n = `${i + 1}.`;
+      const title = o.title.trim().startsWith(n) ? o.title.trim() : `${n} ${o.title.trim()}`;
+      return o.description ? `${title} — ${o.description}` : title;
+    })
+    .join('\n');
+}
+
 /** Numbered text in place of buttons / lists (WhatsApp Web cannot send them); the ids are remembered for the reply. */
 function numbered(channel: string, to: string, body: string, options: Choice[]) {
   rememberChoices(channel, to, options.map((o) => o.id));
-  const lines = options.map((o, i) => {
-    const n = `${i + 1}.`;
-    const title = o.title.trim().startsWith(n) ? o.title.trim() : `${n} ${o.title.trim()}`;
-    return o.description ? `${title} — ${o.description}` : title;
-  });
-  return `${body}\n\n${lines.join('\n')}\n\n_Number bhej kar chunein (jaise 1)._`;
+  return `${body}\n\n${choiceLines(options)}\n\n_Number bhej kar chunein (jaise 1)._`;
 }
 
 /** Our stored copy (/api/files/…) is read from storage; any other http(s) link is fetched by WhatsApp Web. */
@@ -88,6 +94,8 @@ async function mediaSource(link: string): Promise<{ data?: Buffer; url?: string;
 async function toWeb(channel: string, payload: Record<string, unknown>): Promise<WaContent | { error: string }> {
   const to = String(payload.to);
   const type = String(payload.type);
+  const interactive = type === 'interactive' ? (payload.interactive as { type: string }).type : '';
+  if (interactive !== 'button' && interactive !== 'list') clearChoices(channel, to);
   if (type === 'text') return { text: (payload.text as { body: string }).body };
   if (type === 'image' || type === 'document') {
     const m = payload[type] as { link: string; caption?: string; filename?: string };
@@ -210,7 +218,8 @@ export async function sendWhatsAppButtons(tenantId: string, phone: string, text:
       action: { buttons: buttons.map((b) => ({ type: 'reply', reply: { id: b.id, title: b.title.slice(0, 20) } })) },
     },
   });
-  await log(tenantId, to, `${text}\n[${buttons.map((b) => `${b.id}: ${b.title}`).join(' | ')}]`, result);
+  // The inbox shows the options as the customer reads them, not the internal ids.
+  await log(tenantId, to, `${text}\n\n${choiceLines(buttons)}`, result);
   return result;
 }
 
@@ -229,7 +238,7 @@ export async function sendWhatsAppList(tenantId: string, phone: string, text: st
       },
     },
   });
-  await log(tenantId, to, `${text}\n${rows.map((r) => `• [${r.id}] ${r.title}`).join('\n')}`, result);
+  await log(tenantId, to, `${text}\n\n${choiceLines(rows.slice(0, 10))}`, result);
   return result;
 }
 

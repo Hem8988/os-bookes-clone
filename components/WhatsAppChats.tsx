@@ -11,7 +11,8 @@ import { Badge, Button, Empty, Field, inputClass, Modal, StatusBadge, cx, useToa
 
 interface ChatRow { phone: string; name: string | null; customerId: string | null; lastPreview: string | null; lastActivityAt: string; lastInboundAt: string | null; unread: number; botPaused: boolean; assignedToName: string | null; assignedToId: string | null }
 interface TemplateOption { key: string; name: string; fields: string[] }
-interface ListData { chats: ChatRow[]; unreadChats: number; connected: boolean; templates: TemplateOption[] }
+interface ChannelOption { key: string; label: string; number: string | null; status: string; mine: boolean; company: boolean; unread: number }
+interface ListData { chats: ChatRow[]; unreadChats: number; connected: boolean; templates: TemplateOption[]; channel: string | null; channels: ChannelOption[] }
 interface Message { id: string; direction: 'IN' | 'OUT'; body: string; status: string; error: string | null; mediaUrl: string | null; mediaType: string | null; sentBy: string | null; templateKey: string | null; createdAt: string }
 interface CustomerInfo {
   id: string;
@@ -69,9 +70,36 @@ export default function WhatsAppChats() {
   // Opened from a notification link: …&chat=<number>.
   const [selected, setSelected] = useState<string | null>(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('chat')));
   const [starting, setStarting] = useState(false);
-  const listQ = useApiData<ListData>(`/api/whatsapp/chats?${new URLSearchParams({ filter, q: q.trim() })}`, (m) => showToast(m, 'error'));
+  // Which of our WhatsApp numbers: "main" (company) or "u:<userId>"; from a notification link …&channel=.
+  const [channel, setChannel] = useState<string | null>(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('channel')));
+  const params = new URLSearchParams({ filter, q: q.trim(), ...(channel ? { channel } : {}) });
+  const listQ = useApiData<ListData>(`/api/whatsapp/chats?${params}`, (m) => showToast(m, 'error'));
   usePoll(listQ.reload, 8000);
   const list = listQ.data;
+  const active = channel ?? list?.channel ?? null;
+  const current = list?.channels.find((c) => c.key === active);
+  const isBotChannel = active === 'main';
+
+  const pickChannel = (key: string) => {
+    setChannel(key);
+    setSelected(null);
+  };
+
+  if (list && list.channels.length === 0) {
+    return (
+      <div className="space-y-3">
+        {toast}
+        <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+          <MessageSquare className="h-5 w-5 text-emerald-600" /> WhatsApp Chats
+        </h2>
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-2">
+          <p className="text-sm font-bold text-slate-800">Your WhatsApp is not linked yet.</p>
+          <p className="text-xs text-slate-500">Open WhatsApp → Numbers and scan the QR with your phone. If you don’t see the button, ask the admin to allow WhatsApp for you.</p>
+          <a href="/admin?tab=whatsapp&sub=numbers" className="inline-block mt-1 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500">Open WhatsApp → Numbers</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -81,13 +109,34 @@ export default function WhatsAppChats() {
           <MessageSquare className="h-5 w-5 text-emerald-600" /> WhatsApp Chats
           {!!list?.unreadChats && <Badge tone="green">{list.unreadChats} unread</Badge>}
         </h2>
-        <Button onClick={() => setStarting(true)}>
+        <Button onClick={() => setStarting(true)} disabled={!active}>
           <Plus className="h-4 w-4" /> New chat
         </Button>
       </div>
+      {list && list.channels.length > 1 && (
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="WhatsApp number">
+          {list.channels.map((ch) => (
+            <button
+              key={ch.key}
+              type="button"
+              role="tab"
+              aria-selected={ch.key === active}
+              onClick={() => pickChannel(ch.key)}
+              className={cx('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition', ch.key === active ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}
+            >
+              <span className={cx('h-2 w-2 rounded-full', ch.status === 'CONNECTED' ? 'bg-emerald-400' : ch.status === 'TEAM' ? 'bg-slate-300' : 'bg-amber-400')} aria-hidden />
+              {ch.label}
+              {ch.number && <span className={cx('font-semibold', ch.key === active ? 'text-emerald-100' : 'text-slate-400')}>{showPhone(ch.number)}</span>}
+              {ch.unread > 0 && <span className={cx('min-w-5 h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center', ch.key === active ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white')}>{ch.unread}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       {list && !list.connected && (
         <div className="p-3 rounded-xl bg-amber-50 text-amber-900 text-xs font-semibold">
-          WhatsApp is not connected yet, so replies are only saved here (not sent). An admin can connect MSG91 in WhatsApp → Bot, templates &amp; log → MSG91.
+          {current && current.status !== 'TEAM'
+            ? 'This WhatsApp number is not connected right now, so messages cannot go out. Open WhatsApp → Numbers and scan the QR again.'
+            : 'WhatsApp is not connected yet, so replies are only saved here (not sent). Link the company number in WhatsApp → Numbers.'}
         </div>
       )}
 
@@ -129,9 +178,11 @@ export default function WhatsAppChats() {
                       <span className="truncate text-xs text-slate-500">{c.lastPreview || '—'}</span>
                       {c.unread > 0 && <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">{c.unread}</span>}
                     </span>
-                    <span className="flex gap-1 mt-0.5">
-                      {c.botPaused ? <span className="text-[10px] font-bold text-sky-700">● {c.assignedToName || 'Team'}</span> : <span className="text-[10px] font-bold text-slate-400">● Bot</span>}
-                    </span>
+                    {isBotChannel && (
+                      <span className="flex gap-1 mt-0.5">
+                        {c.botPaused ? <span className="text-[10px] font-bold text-sky-700">● {c.assignedToName || 'Team'}</span> : <span className="text-[10px] font-bold text-slate-400">● Bot</span>}
+                      </span>
+                    )}
                   </span>
                 </button>
               ))
@@ -139,15 +190,16 @@ export default function WhatsAppChats() {
           </div>
         </aside>
 
-        {selected ? (
-          <Thread key={selected} phone={selected} templates={list?.templates ?? []} onBack={() => setSelected(null)} onChanged={() => listQ.reload()} toast={showToast} />
+        {selected && active ? (
+          <Thread key={`${active}|${selected}`} phone={selected} channel={active} botChannel={isBotChannel} templates={list?.templates ?? []} onBack={() => setSelected(null)} onChanged={() => listQ.reload()} toast={showToast} />
         ) : (
           <div className="hidden md:flex xl:col-span-2 items-center justify-center bg-[#efeae2] text-sm text-slate-500">Choose a chat on the left.</div>
         )}
       </div>
 
-      {starting && (
+      {starting && active && (
         <NewChatModal
+          channel={active}
           onClose={() => setStarting(false)}
           onOpened={(phone) => {
             setStarting(false);
@@ -202,8 +254,9 @@ function Bubble({ m }: { m: Message }) {
   );
 }
 
-function Thread({ phone, templates, onBack, onChanged, toast }: { phone: string; templates: TemplateOption[]; onBack: () => void; onChanged: () => void; toast: (m: string, tone?: 'ok' | 'error') => void }) {
-  const q = useApiData<ThreadData>(`/api/whatsapp/chats/${phone}`, (m) => toast(m, 'error'));
+function Thread({ phone, channel, botChannel, templates, onBack, onChanged, toast }: { phone: string; channel: string; botChannel: boolean; templates: TemplateOption[]; onBack: () => void; onChanged: () => void; toast: (m: string, tone?: 'ok' | 'error') => void }) {
+  const url = `/api/whatsapp/chats/${phone}?channel=${encodeURIComponent(channel)}`;
+  const q = useApiData<ThreadData>(url, (m) => toast(m, 'error'));
   usePoll(q.reload, 5000);
   const d = q.data;
   const [text, setText] = useState('');
@@ -228,7 +281,7 @@ function Thread({ phone, templates, onBack, onChanged, toast }: { phone: string;
   const act = async (body: Record<string, unknown>, quiet = false) => {
     setBusy(true);
     try {
-      const r = await apiWithMessage(`/api/whatsapp/chats/${phone}`, body);
+      const r = await apiWithMessage(url, body);
       if (!quiet && r.message) toast(r.message);
       q.reload();
       onChanged();
@@ -286,11 +339,13 @@ function Thread({ phone, templates, onBack, onChanged, toast }: { phone: string;
             <div className="truncate text-sm font-black text-slate-900">{c.name || showPhone(c.phone)}</div>
             <div className="text-[11px] text-slate-500">{showPhone(c.phone)}{c.assignedToName ? ` · with ${c.assignedToName}` : ''}</div>
           </div>
-          <Button size="sm" tone={c.botPaused ? 'secondary' : 'ghost'} busy={busy} onClick={() => act({ action: c.botPaused ? 'resumeBot' : 'pauseBot' })} title={c.botPaused ? 'Let the ordering bot answer again' : 'Stop the bot and handle the chat yourself'}>
-            {c.botPaused ? <Bot className="h-3.5 w-3.5" /> : <UserRound className="h-3.5 w-3.5" />}
-            {c.botPaused ? 'Give back to bot' : 'Take over'}
-          </Button>
-          {!c.assignedToId && (
+          {botChannel && (
+            <Button size="sm" tone={c.botPaused ? 'secondary' : 'ghost'} busy={busy} onClick={() => act({ action: c.botPaused ? 'resumeBot' : 'pauseBot' })} title={c.botPaused ? 'Let the ordering bot answer again' : 'Stop the bot and handle the chat yourself'}>
+              {c.botPaused ? <Bot className="h-3.5 w-3.5" /> : <UserRound className="h-3.5 w-3.5" />}
+              {c.botPaused ? 'Give back to bot' : 'Take over'}
+            </Button>
+          )}
+          {botChannel && !c.assignedToId && (
             <Button size="sm" tone="ghost" busy={busy} onClick={() => act({ action: 'assign' })}>
               Assign to me
             </Button>
@@ -311,7 +366,7 @@ function Thread({ phone, templates, onBack, onChanged, toast }: { phone: string;
         </div>
 
         <footer className="border-t border-slate-200 bg-slate-50 p-2 space-y-2">
-          {!c.botPaused && <div className="text-[11px] text-slate-500 px-1">The bot is answering this chat. Sending a reply takes it over.</div>}
+          {botChannel && !c.botPaused && <div className="text-[11px] text-slate-500 px-1">The bot is answering this chat. Sending a reply takes it over.</div>}
           {locked ? (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-900">
               <Clock className="h-4 w-4 shrink-0" />
@@ -373,7 +428,7 @@ function CustomerPanel({ customer, chat }: { customer: CustomerInfo | null; chat
       {!customer ? (
         <div className="text-slate-500">
           <div className="font-black text-slate-800 text-sm mb-1">{chat.name || showPhone(chat.phone)}</div>
-          This number is not a customer in DeskShark yet.
+          This number is not saved as a customer yet.
         </div>
       ) : (
         <>
@@ -461,7 +516,7 @@ function TemplateModal({ templates, customerName, busy, onClose, onSend }: { tem
   );
 }
 
-function NewChatModal({ onClose, onOpened, toast }: { onClose: () => void; onOpened: (phone: string) => void; toast: (m: string, tone?: 'ok' | 'error') => void }) {
+function NewChatModal({ channel, onClose, onOpened, toast }: { channel: string; onClose: () => void; onOpened: (phone: string) => void; toast: (m: string, tone?: 'ok' | 'error') => void }) {
   const [search, setSearch] = useState('');
   const results = useApiData<{ id: string; name: string; phone: string; whatsappNumber: string | null; area: string | null }[]>(`/api/whatsapp/chats?customers=${encodeURIComponent(search.trim())}`, (m) => toast(m, 'error'));
   const [busy, setBusy] = useState(false);
@@ -469,7 +524,7 @@ function NewChatModal({ onClose, onOpened, toast }: { onClose: () => void; onOpe
   const open = async (body: Record<string, unknown>) => {
     setBusy(true);
     try {
-      const r = await apiWithMessage<{ phone: string }>('/api/whatsapp/chats', body);
+      const r = await apiWithMessage<{ phone: string }>('/api/whatsapp/chats', { ...body, channel });
       onOpened(r.data.phone);
     } catch (e) {
       toast(errorMessage(e), 'error');

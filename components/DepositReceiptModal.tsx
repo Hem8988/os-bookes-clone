@@ -26,7 +26,7 @@ export interface DepositVoucherView {
   customer: { name: string; shortName: string | null; customerCode: string; phone?: string; address?: string; city?: string | null; state?: string | null; pincode?: string | null; gstin?: string | null };
 }
 
-const MODE_LABEL: Record<string, string> = { CASH: 'Cash', BANK: 'Bank transfer', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit (before DeskShark)' };
+const MODE_LABEL: Record<string, string> = { CASH: 'Cash', BANK: 'Bank transfer', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit (taken earlier)' };
 const money = (n: number) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dmy = (d?: string | null) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : d || '');
 

@@ -544,7 +544,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `DeskShark_Bank_Details_${Date.now()}.csv`);
+    link.setAttribute('download', `PramukhIndane_Bank_Details_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -567,7 +567,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `DeskShark_Company_Details_${Date.now()}.csv`);
+    link.setAttribute('download', `PramukhIndane_Company_Details_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -591,7 +591,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `DeskShark_Party_Details_${Date.now()}.csv`);
+    link.setAttribute('download', `PramukhIndane_Party_Details_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

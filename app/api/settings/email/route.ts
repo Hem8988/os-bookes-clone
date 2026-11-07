@@ -64,7 +64,7 @@ export const POST = handle(async (request: Request) => {
     throw badRequest(`Could not log in to the email server: ${e instanceof Error ? e.message : String(e)}`);
   }
   const company = await getSetting(auth.tenantId, 'company');
-  const r = await sendEmail(auth.tenantId, to, `Test email — ${company.name}`, `This is a test from DeskShark.\n\nIf you can read this, email is working: CA packs, invoices and reminders will be delivered.\n\nSent by ${auth.name}.`, 'SMTP_TEST');
+  const r = await sendEmail(auth.tenantId, to, `Test email — ${company.name}`, `This is a test from ${company.name}.\n\nIf you can read this, email is working: CA packs, invoices and reminders will be delivered.\n\nSent by ${auth.name}.`, 'SMTP_TEST');
   if (r.status === 'FAILED') throw badRequest(`Sending failed: ${r.error}`);
   return ok({ to }, `Test email sent to ${to}.`);
 });

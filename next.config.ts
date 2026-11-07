@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // Native canvas (renders invoice PDFs to read the e-invoice QR) must be loaded by Node, not bundled.
-  serverExternalPackages: ["@napi-rs/canvas"],
+  // Baileys (built-in WhatsApp gateway) keeps live sockets and has optional native deps: load it with Node too.
+  serverExternalPackages: ["@napi-rs/canvas", "@whiskeysockets/baileys", "pino", "qrcode"],
 };
 
 export default nextConfig;

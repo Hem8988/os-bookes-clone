@@ -16,7 +16,7 @@ import { PENDING_LOGIN_COOKIE, readCookie, verifyPendingLogin } from '@/lib/serv
 
 function relyingParty(request: Request) {
   const origin = process.env.APP_URL || new URL(request.url).origin;
-  return { origin, rpID: new URL(origin).hostname, rpName: 'DeskShark' };
+  return { origin, rpID: new URL(origin).hostname, rpName: 'Pramukh Indane' };
 }
 
 async function loadPending(request: Request) {

@@ -28,7 +28,7 @@ export interface LoginAttempt {
 
 const actorFor = (user: User, request: Request) => ({ tenantId: user.tenantId, userId: user.id, name: user.name, role: user.role, ip: clientIp(request), userAgent: userAgent(request) });
 
-async function findUser(identifier: string) {
+export async function findUser(identifier: string) {
   const raw = identifier.trim().toLowerCase();
   if (!raw) return null;
 
@@ -103,7 +103,7 @@ export async function beginLogin(request: Request, input: LoginAttempt) {
     }
     if (security.deviceBindingRequired) {
       deviceId = (input.deviceId || '').trim().slice(0, 100) || null;
-      if (!deviceId) throw new ApiError(400, 'This device could not be identified. Please use the DeskShark delivery app.', 'DEVICE_REQUIRED');
+      if (!deviceId) throw new ApiError(400, 'This device could not be identified. Please use the Pramukh Indane delivery app.', 'DEVICE_REQUIRED');
       let device = await prisma.userDevice.findUnique({ where: { userId_deviceId: { userId: user.id, deviceId } } });
       if (!device) {
         const effects = new Effects();
@@ -153,16 +153,31 @@ export async function beginLogin(request: Request, input: LoginAttempt) {
   return pendingResponse(user, deviceId, steps);
 }
 
-export async function sendLoginOtp(user: User) {
+export type OtpPurpose = 'LOGIN' | 'RESET';
+
+export async function sendLoginOtp(user: User, purpose: OtpPurpose = 'LOGIN') {
   const code = generateOtp();
-  await prisma.loginOtp.create({ data: { userId: user.id, purpose: 'LOGIN', codeHash: hashOtp(code), expiresAt: new Date(Date.now() + OTP_TTL_MS) } });
-  await notifyCustomer(user.tenantId, { name: user.name, phone: user.mobile || '', whatsappNumber: user.mobile }, 'OTP', { code });
+  if (purpose === 'RESET') {
+    // A new reset code replaces any older unused one.
+    await prisma.loginOtp.updateMany({ where: { userId: user.id, purpose, consumedAt: null }, data: { consumedAt: new Date() } });
+  }
+  await prisma.loginOtp.create({ data: { userId: user.id, purpose, codeHash: hashOtp(code), expiresAt: new Date(Date.now() + OTP_TTL_MS) } });
+  // Local development has no WhatsApp/SMS, so print the code on the dev server console.
+  if (process.env.NODE_ENV !== 'production') console.info(`[dev] ${purpose} OTP for ${user.email || user.mobile}: ${code}`);
+  await notifyCustomer(
+    user.tenantId,
+    { name: user.name, phone: user.mobile || '', whatsappNumber: user.mobile, email: purpose === 'RESET' ? user.email : null },
+    'OTP',
+    { code },
+    purpose === 'RESET' ? 'Password reset OTP' : undefined
+  );
 }
 
-export async function checkOtp(userId: string, code: string) {
-  const otp = await prisma.loginOtp.findFirst({ where: { userId, purpose: 'LOGIN', consumedAt: null }, orderBy: { createdAt: 'desc' } });
-  if (!otp || otp.expiresAt < new Date()) throw new ApiError(400, 'OTP expired. Log in again to get a new one.', 'OTP_EXPIRED');
-  if (otp.attempts >= 5) throw new ApiError(429, 'Too many wrong OTP attempts. Log in again.', 'OTP_LOCKED');
+export async function checkOtp(userId: string, code: string, purpose: OtpPurpose = 'LOGIN') {
+  const reset = purpose === 'RESET';
+  const otp = await prisma.loginOtp.findFirst({ where: { userId, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
+  if (!otp || otp.expiresAt < new Date()) throw new ApiError(400, reset ? 'OTP expired. Request a new code.' : 'OTP expired. Log in again to get a new one.', 'OTP_EXPIRED');
+  if (otp.attempts >= 5) throw new ApiError(429, reset ? 'Too many wrong OTP attempts. Request a new code.' : 'Too many wrong OTP attempts. Log in again.', 'OTP_LOCKED');
   if (otp.codeHash !== hashOtp(code.trim())) {
     await prisma.loginOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
     throw new ApiError(400, 'Wrong OTP.', 'OTP_INVALID');

@@ -5,6 +5,7 @@ import { DEFAULT_TEMPLATES } from '@/lib/whatsapp';
 import { requireAuth } from '@/lib/server/auth';
 import { badRequest, handle, notFound, ok, readJson, str } from '@/lib/server/http';
 import { whatsappReadyFor } from '@/lib/server/messaging/whatsapp';
+import { resolveChannel } from '@/lib/server/waweb/access';
 
 /** Values the team fills in when sending a template from a chat (the rest come from the company / customer). */
 const AUTO_VARS = new Set(['companyName', 'supportPhone', 'customerName', 'portalLink', 'due', 'paymentStatus']);
@@ -33,9 +34,13 @@ export const GET = handle(async (request: Request) => {
     return ok(customers.filter((c) => phoneKey(c.whatsappNumber || c.phone).length === 10));
   }
 
+  const { channel, channels } = await resolveChannel(auth, url.searchParams.get('channel'));
+  const templates = DEFAULT_TEMPLATES.filter((t) => t.key !== 'OTP').map((t) => ({ key: t.key, name: t.name, fields: t.variables.filter((v) => !AUTO_VARS.has(v)) }));
+  if (!channel) return ok({ chats: [], unreadChats: 0, connected: false, channel: null, channels, templates });
+
   const filter = url.searchParams.get('filter') || 'all';
   const q = (url.searchParams.get('q') || '').trim();
-  const where: Prisma.WhatsAppConversationWhereInput = { tenantId: auth.tenantId };
+  const where: Prisma.WhatsAppConversationWhereInput = { tenantId: auth.tenantId, channel };
   if (filter === 'unread') where.unread = { gt: 0 };
   if (filter === 'mine') where.assignedToId = auth.userId;
   if (filter === 'human') where.botPaused = true;
@@ -47,13 +52,16 @@ export const GET = handle(async (request: Request) => {
       orderBy: { lastActivityAt: 'desc' },
       take: 200,
     }),
-    prisma.whatsAppConversation.aggregate({ where: { tenantId: auth.tenantId, unread: { gt: 0 } }, _count: true }),
+    prisma.whatsAppConversation.groupBy({ by: ['channel'], where: { tenantId: auth.tenantId, channel: { in: channels.map((c) => c.key) }, unread: { gt: 0 } }, _count: true }),
   ]);
+  const unreadBy = Object.fromEntries(unreadTotal.map((u) => [u.channel, u._count]));
   return ok({
     chats,
-    unreadChats: unreadTotal._count,
-    connected: await whatsappReadyFor(auth.tenantId),
-    templates: DEFAULT_TEMPLATES.filter((t) => t.key !== 'OTP').map((t) => ({ key: t.key, name: t.name, fields: t.variables.filter((v) => !AUTO_VARS.has(v)) })),
+    unreadChats: unreadBy[channel] || 0,
+    connected: await whatsappReadyFor(auth.tenantId, channel),
+    channel,
+    channels: channels.map((c) => ({ ...c, unread: unreadBy[c.key] || 0 })),
+    templates,
   });
 });
 
@@ -72,10 +80,12 @@ export const POST = handle(async (request: Request) => {
     customerId = c.id;
   } else phone = toWhatsAppNumber(str(body.phone, 'Mobile number', { required: true }));
   if (!/^\d{11,15}$/.test(phone)) throw badRequest('Enter a 10-digit mobile number.');
+  const { channel } = await resolveChannel(auth, typeof body.channel === 'string' && body.channel ? body.channel : null);
+  if (!channel) throw badRequest('Link your WhatsApp first (WhatsApp → Numbers).');
   const chat = await prisma.whatsAppConversation.upsert({
-    where: { tenantId_phone: { tenantId: auth.tenantId, phone } },
-    create: { tenantId: auth.tenantId, phone, name, customerId, lastActivityAt: new Date() },
+    where: { tenantId_channel_phone: { tenantId: auth.tenantId, channel, phone } },
+    create: { tenantId: auth.tenantId, channel, phone, name, customerId, lastActivityAt: new Date() },
     update: { ...(customerId ? { customerId } : {}), ...(name ? { name } : {}) },
   });
-  return ok({ phone: chat.phone });
+  return ok({ phone: chat.phone, channel });
 });

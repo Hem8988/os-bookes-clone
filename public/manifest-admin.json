@@ -1,6 +1,6 @@
 {
-  "name": "DeskShark Office",
-  "short_name": "DeskShark",
+  "name": "Pramukh Indane — Office",
+  "short_name": "Pramukh Indane",
   "description": "Orders, stock, billing, payments and books for gas distributors.",
   "id": "/admin",
   "start_url": "/admin",

@@ -10,6 +10,8 @@ import { createOrder } from './orders';
 import { resolveRate } from './pricing';
 import { notifyRoles } from './notify';
 import { getSetting } from './settings';
+import { payUrlFor } from './payPage';
+import { handleNewContact } from './whatsappLeadBot';
 
 // Official-number ordering bot (SRS §7.3, §13). One conversation row per
 // phone keeps the multi-step state so a flow survives across messages.
@@ -28,7 +30,22 @@ const MENU_ROWS = [
   { id: 'M5', title: '5. Payment History', description: 'Pichhli payments' },
   { id: 'M6', title: '6. Invoice', description: 'Latest invoices' },
   { id: 'M7', title: '7. Contact Support', description: 'Office se baat karein' },
+  { id: 'M8', title: '8. Repeat Last Order', description: 'Pichhla order dobara' },
 ];
+const MENU_MAX = MENU_ROWS.length;
+
+/** The customer's last order that can be repeated (not cancelled / rejected), with its still-active products. */
+async function lastOrder(customer: Customer) {
+  const order = await prisma.order.findFirst({
+    where: { tenantId: TENANT, customerId: customer.id, status: { notIn: ['CANCELLED', 'REJECTED'] } },
+    orderBy: { createdAt: 'desc' },
+    include: { items: true },
+  });
+  if (!order) return null;
+  const active = new Set((await prisma.product.findMany({ where: { tenantId: TENANT, active: true, id: { in: order.items.map((i) => i.productId) } }, select: { id: true } })).map((p) => p.id));
+  const items = order.items.filter((i) => active.has(i.productId) && i.orderedQty > 0);
+  return items.length ? { order, items } : null;
+}
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
@@ -49,7 +66,12 @@ async function save(conv: WhatsAppConversation, data: Partial<Pick<WhatsAppConve
 
 async function showMenu(phone: string, customer: Customer) {
   const company = await getSetting(TENANT, 'company');
-  await sendWhatsAppList(TENANT, phone, `Namaste ${customer.contactPerson || customer.name}! 🙏\n${company.name} mein aapka swagat hai.\nNeeche se option chunein (ya number bhejein):`, 'Menu', MENU_ROWS);
+  const last = await lastOrder(customer);
+  // "Repeat Last Order" shows what will be repeated, and only when there is something to repeat.
+  const rows = MENU_ROWS.flatMap((r) =>
+    r.id !== 'M8' ? [r] : last ? [{ ...r, description: last.items.map((i) => `${i.productName} × ${i.orderedQty}`).join(', ').slice(0, 72) }] : []
+  );
+  await sendWhatsAppList(TENANT, phone, `Namaste ${customer.contactPerson || customer.name}! 🙏\n${company.name} mein aapka swagat hai.\nNeeche se option chunein (ya number bhejein):`, 'Menu', rows);
 }
 
 async function supportText() {
@@ -185,7 +207,14 @@ async function menuAction(choice: string, conv: WhatsAppConversation, phone: str
       const invoices = await prisma.invoice.findMany({ where: { customerId: customer.id, status: { not: 'Cancelled' } }, orderBy: { createdAt: 'desc' }, take: 3 });
       const base = process.env.APP_URL;
       const text = invoices.length
-        ? invoices.map((i) => `• ${i.invoiceNumber} (${i.date}) — ${inr(i.grandTotal)} — ${i.status}${base ? `\n  ${base}/customer?invoice=${i.id}` : ''}`).join('\n')
+        ? (
+            await Promise.all(
+              invoices.map(async (i) => {
+                const pay = await payUrlFor(TENANT, i.id);
+                return `• ${i.invoiceNumber} (${i.date}) — ${inr(i.grandTotal)} — ${i.status}${base ? `\n  ${base}/customer?invoice=${i.id}` : ''}${pay ? `\n  💳 Pay ${inr(Math.max(i.grandTotal - i.paidAmount, 0))}: ${pay}` : ''}`;
+              })
+            )
+          ).join('\n')
         : 'Koi invoice nahi hai.';
       await sendWhatsAppText(TENANT, phone, `📄 Invoices\n${text}`);
       break;
@@ -196,8 +225,24 @@ async function menuAction(choice: string, conv: WhatsAppConversation, phone: str
       await sendWhatsAppText(TENANT, phone, `Hamari team jaldi aapse yahin baat karegi. 🙏\nAap apna sawal likh kar bhej dijiye.\n${await supportText()}`);
       await notifyRoles(TENANT, ['SUPER_ADMIN', 'MANAGER'], { title: `WhatsApp: ${customer.name} wants to talk`, body: 'Customer chose Contact Support in the WhatsApp menu.', link: `/admin?tab=whatsapp&sub=chats&chat=${phone}` });
       break;
+    case '8': {
+      // Same products and quantities as last time; only the delivery date is asked, then the usual summary → YES.
+      const last = await lastOrder(customer);
+      if (!last) {
+        await sendWhatsAppText(TENANT, phone, 'Aapka koi pichhla order nahi mila. Naya order ke liye 1 bhejein.');
+        break;
+      }
+      const draft: Draft = {
+        productIds: last.items.map((i) => i.productId),
+        qtys: Object.fromEntries(last.items.map((i) => [i.productId, i.orderedQty])),
+        index: last.items.length,
+      };
+      await save(conv, { step: 'SELECT_DATE', failedAttempts: 0, draft });
+      await sendWhatsAppText(TENANT, phone, `🔁 Pichhla order (${last.order.orderNumber}):\n${last.items.map((i) => `• ${i.productName} × ${i.orderedQty}`).join('\n')}\n\nYahi order dobara bhejte hain.`);
+      return askDate(phone);
+    }
     default:
-      return retry(conv, phone, () => showMenu(phone, customer), 'Menu se 1 se 7 tak koi option chunein.');
+      return retry(conv, phone, () => showMenu(phone, customer), `Menu se 1 se ${MENU_MAX} tak koi option chunein.`);
   }
   await save(conv, { step: 'IDLE', failedAttempts: 0, draft: null });
 }
@@ -207,18 +252,17 @@ export async function handleIncomingMessage(phone: string, rawText: string) {
   const text = rawText.trim();
   const lower = text.toLowerCase();
   const customer = await findCustomer(phone);
-  if (!customer) {
-    await sendWhatsAppText(TENANT, phone, `Yeh number hamare registered customers mein nahi hai. 🙏\nOrder ke liye office se sampark karein.\n${await supportText()}`);
-    return;
-  }
+  // Not a customer yet: the lead bot asks a few questions and makes an inquiry (lib/server/whatsappLeadBot.ts).
+  if (!customer) return handleNewContact(TENANT, phone, text);
   if (customer.status !== 'ACTIVE') {
     await sendWhatsAppText(TENANT, phone, `Aapka account abhi ${customer.status === 'BLOCKED' ? 'blocked' : 'inactive'} hai, isliye order nahi le sakte.\n${await supportText()}`);
     return;
   }
 
   let conv = await prisma.whatsAppConversation.upsert({
-    where: { tenantId_phone: { tenantId: TENANT, phone } },
-    create: { tenantId: TENANT, phone, customerId: customer.id },
+    // The bot only answers the company number ("main" channel).
+    where: { tenantId_channel_phone: { tenantId: TENANT, channel: 'main', phone } },
+    create: { tenantId: TENANT, channel: 'main', phone, customerId: customer.id },
     update: {},
   });
 
@@ -230,7 +274,7 @@ export async function handleIncomingMessage(phone: string, rawText: string) {
   }
 
   if (['hi', 'hello', 'hii', 'menu', 'start', '0', 'namaste'].includes(lower) || conv.step === 'IDLE') {
-    const menuPick = text.match(/^M?([1-7])$/i);
+    const menuPick = text.match(/^M?([1-8])$/i);
     if (conv.step === 'IDLE' && menuPick) {
       conv = await save(conv, { step: 'MENU', failedAttempts: 0, customerId: customer.id });
       return menuAction(menuPick[1], conv, phone, customer);
@@ -247,7 +291,7 @@ export async function handleIncomingMessage(phone: string, rawText: string) {
 
   switch (conv.step) {
     case 'MENU': {
-      const pick = text.match(/^M?([1-7])\b/i);
+      const pick = text.match(/^M?([1-8])\b/i);
       return menuAction(pick ? pick[1] : '', conv, phone, customer);
     }
     case 'SELECT_PRODUCT': {

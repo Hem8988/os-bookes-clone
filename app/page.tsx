@@ -6,8 +6,8 @@ import { prisma } from '@/lib/db';
 import { ROLE_HOME, type Role } from '@/lib/permissions';
 import { getSetting } from '@/lib/server/settings';
 import { SESSION_COOKIE, verifySession } from '@/lib/server/sessionToken';
-import { Cylinder } from '@/components/site/Cylinder';
-import { Flame, Gauge, HeroTruck } from '@/components/site/Graphics';
+import { Flame, Gauge } from '@/components/site/Graphics';
+import { InquiryForm } from '@/components/site/InquiryForm';
 import { OrderRoad } from '@/components/site/OrderRoad';
 import { SiteMotion } from '@/components/site/SiteMotion';
 import styles from '@/components/site/site.module.css';
@@ -157,8 +157,6 @@ export default async function Home() {
   const sizes = cylinders.map((c) => `${c.kg} kg`);
   const sizeText = sizes.length > 1 ? `${sizes.slice(0, -1).join(', ')} and ${sizes[sizes.length - 1]}` : sizes[0] || 'commercial';
   const login = dashboard ? { href: dashboard, label: 'Open dashboard' } : { href: '/login', label: 'Customer login' };
-  // The cylinders are unloaded once the truck has parked.
-  const unloadAt = 1250;
 
   return (
     <div className={`${styles.page} ${display.variable} ${body.variable}`}>
@@ -179,6 +177,7 @@ export default async function Home() {
             <a href="#cylinders">Cylinders</a>
             <a href="#ordering">Ordering</a>
             <a href="#safety">Safety</a>
+            <a href="#inquiry">Inquiry</a>
             <a href="#contact">Contact</a>
           </nav>
           <a href={login.href} className={`${styles.btn} ${styles.btnQuiet}`}>{login.label}</a>
@@ -225,13 +224,16 @@ export default async function Home() {
                 </span>
               </p>
             </div>
-            <div className={styles.scene}>
-              <div className={styles.lineup} aria-label="Cylinder sizes we supply">
-                {lineup.map((c, i) => (
-                  <Cylinder key={c.id} label={`${c.kg} kg`} color={sizeInfo(c.kg).color} height={Math.round(Math.min(360, Math.max(160, 210 * Math.pow(c.kg / 19, 0.32))))} delay={unloadAt + i * 160} />
-                ))}
+            <div className={styles.heroSide}>
+              {/* Quick inquiry for new customers; the full form is in #inquiry. */}
+              <div className={styles.heroForm}>
+                <InquiryForm compact sizes={(cylinders.length ? cylinders : lineup).map((c) => `${c.kg} kg`)} />
               </div>
-              <HeroTruck />
+              {/* The real Indane cylinder family (cropped to the cylinders from the range banner). */}
+              <figure className={styles.heroPhoto}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/site/indane-family-range.webp" width={1704} height={566} alt="Indane cylinders we supply: XtraTej, Nanocut, Jumbo, Xtralite, the 5 kg Chhotu and domestic cylinders" fetchPriority="high" />
+              </figure>
             </div>
           </div>
         </section>
@@ -345,6 +347,37 @@ export default async function Home() {
                 </li>
               ))}
             </ul>
+          </div>
+        </section>
+
+        <section id="inquiry" className={`${styles.section} ${styles.howBand}`}>
+          <div className={`${styles.wrap} ${styles.inquiryGrid}`}>
+            <div>
+              <h2 data-reveal className={`${styles.display} ${styles.sectionTitle}`}>Send an inquiry</h2>
+              <p data-reveal style={delay(80)} className={styles.sectionLead}>
+                Tell us what you need and we will call you back with rates and a delivery plan.
+              </p>
+              <ol data-reveal style={delay(160)} className={styles.inquirySteps}>
+                <li>
+                  <span>
+                    <b>Fill the form</b> — name, mobile and what you need.
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>We call you back</b> with rates for your cylinders and area.
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>Supply starts</b> — order any time on WhatsApp after that.
+                  </span>
+                </li>
+              </ol>
+            </div>
+            <div data-reveal style={delay(120)}>
+              <InquiryForm sizes={(cylinders.length ? cylinders : lineup).map((c) => `${c.kg} kg`)} />
+            </div>
           </div>
         </section>
 

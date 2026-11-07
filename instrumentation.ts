@@ -7,5 +7,8 @@ export async function register() {
     }
     const { startScheduler } = await import('./lib/server/scheduler');
     startScheduler();
+    // Built-in WhatsApp gateway: reconnect every linked number (WA_GATEWAY=off disables it).
+    const { bootGateway } = await import('./lib/server/waweb/gateway');
+    void bootGateway();
   }
 }

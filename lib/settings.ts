@@ -158,7 +158,7 @@ export type SettingKey = keyof SettingsMap;
 
 export const DEFAULT_SETTINGS: SettingsMap = {
   company: {
-    name: 'DeskShark Gas Distribution',
+    name: 'Pramukh Indane',
     legalName: '',
     gstin: '',
     stateCode: '',

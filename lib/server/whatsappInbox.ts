@@ -11,7 +11,10 @@ import { handleIncomingMessage } from './whatsappBot';
 const BOT_TENANT = process.env.DEFAULT_TENANT_ID || 'default';
 
 export type InboundMedia = { kind: 'image' | 'document' | 'video' | 'audio' | 'sticker'; download: () => Promise<Buffer | null>; caption?: string };
-export type Inbound = { phone: string; text: string; providerId?: string | null; name?: string | null; media?: InboundMedia | null };
+/** channel: which of our numbers got it — "main" (company number / Meta / MSG91) or "u:<userId>" (a staff member's own). */
+export type Inbound = { phone: string; text: string; providerId?: string | null; name?: string | null; media?: InboundMedia | null; channel?: string };
+
+const chatLink = (channel: string, phone: string) => `/admin?tab=whatsapp&sub=chats&channel=${encodeURIComponent(channel)}&chat=${phone}`;
 
 export function findCustomerByPhone(tenantId: string, phone: string) {
   const key = phoneKey(phone);
@@ -32,6 +35,7 @@ async function keepMedia(tenantId: string, media: InboundMedia) {
 /** Store an incoming WhatsApp message, update its chat, then let the bot or a person answer. */
 export async function receiveWhatsApp(tenantId: string, input: Inbound) {
   const phone = toWhatsAppNumber(input.phone);
+  const channel = input.channel || 'main';
   if (!phone) return { duplicate: false };
   const text = (input.text || input.media?.caption || '').trim();
   const mediaUrl = input.media ? await keepMedia(tenantId, input.media) : null;
@@ -48,18 +52,20 @@ export async function receiveWhatsApp(tenantId: string, input: Inbound) {
         status: 'RECEIVED',
         mediaUrl: mediaUrl ?? undefined,
         mediaType: input.media?.kind,
+        waChannel: channel,
       },
     });
   } catch {
     return { duplicate: true };
   }
 
-  const before = await prisma.whatsAppConversation.findUnique({ where: { tenantId_phone: { tenantId, phone } } });
+  const key = { tenantId_channel_phone: { tenantId, channel, phone } };
+  const before = await prisma.whatsAppConversation.findUnique({ where: key });
   const customer = before?.customerId ? null : await findCustomerByPhone(tenantId, phone);
   const now = new Date();
   const conv = await prisma.whatsAppConversation.upsert({
-    where: { tenantId_phone: { tenantId, phone } },
-    create: { tenantId, phone, customerId: customer?.id, name: input.name || customer?.name || null, lastPreview: preview(text, input.media?.kind), lastActivityAt: now, lastInboundAt: now, unread: 1 },
+    where: key,
+    create: { tenantId, channel, phone, customerId: customer?.id, name: input.name || customer?.name || null, lastPreview: preview(text, input.media?.kind), lastActivityAt: now, lastInboundAt: now, unread: 1 },
     update: {
       lastPreview: preview(text, input.media?.kind),
       lastActivityAt: now,
@@ -70,18 +76,42 @@ export async function receiveWhatsApp(tenantId: string, input: Inbound) {
     },
   });
 
+  // Tell a person once per burst of messages, not for every line.
+  const quiet = !before?.lastInboundAt || now.getTime() - before.lastInboundAt.getTime() > 10 * 60_000 || before.unread === 0;
+  const message = { title: `WhatsApp: ${conv.name || phone}`, body: preview(text, input.media?.kind) || 'New message', link: chatLink(channel, phone) };
+
+  // A staff member's own number: no bot, the message is theirs.
+  if (channel.startsWith('u:')) {
+    if (quiet) await notifyUsers(tenantId, [channel.slice(2)], message);
+    return { duplicate: false, conversation: conv };
+  }
+
   if (conv.botPaused) {
-    // A person handles this chat: tell them (once per burst of messages, not for every line).
-    const quiet = !before?.lastInboundAt || now.getTime() - before.lastInboundAt.getTime() > 10 * 60_000 || before.unread === 0;
-    if (quiet) {
-      const message = { title: `WhatsApp: ${conv.name || phone}`, body: preview(text, input.media?.kind) || 'New message', link: `/admin?tab=whatsapp&sub=chats&chat=${phone}` };
-      await (conv.assignedToId ? notifyUsers(tenantId, [conv.assignedToId], message) : notifyRoles(tenantId, ['SUPER_ADMIN', 'MANAGER'], message));
-    }
+    if (quiet) await (conv.assignedToId ? notifyUsers(tenantId, [conv.assignedToId], message) : notifyRoles(tenantId, ['SUPER_ADMIN', 'MANAGER'], message));
     return { duplicate: false, conversation: conv };
   }
   // The ordering bot works on text and button replies of the main company only.
   if (text && tenantId === BOT_TENANT) await handleIncomingMessage(phone, text);
   return { duplicate: false, conversation: conv };
+}
+
+/**
+ * A message typed on the linked phone itself (WhatsApp Web shows it to us too). Messages the app
+ * sent carry the same id and are already logged, so the unique providerId skips them.
+ */
+export async function recordOwnMessage(tenantId: string, channel: string, phone: string, body: string, providerId: string) {
+  const to = toWhatsAppNumber(phone);
+  if (await prisma.messageLog.findUnique({ where: { providerId }, select: { id: true } })) return;
+  try {
+    await prisma.messageLog.create({ data: { tenantId, channel: 'WHATSAPP', direction: 'OUT', recipient: to, body, providerId, status: 'SENT', sentBy: 'Phone', waChannel: channel } });
+  } catch {
+    return;
+  }
+  await prisma.whatsAppConversation.upsert({
+    where: { tenantId_channel_phone: { tenantId, channel, phone: to } },
+    create: { tenantId, channel, phone: to, lastPreview: preview(body), lastActivityAt: new Date(), botPaused: channel === 'main' },
+    update: { lastPreview: preview(body), lastActivityAt: new Date(), unread: 0, ...(channel === 'main' ? { botPaused: true } : {}) },
+  });
 }
 
 const RANK: Record<string, number> = { SIMULATED: 0, FAILED: 0, SENT: 1, DELIVERED: 2, READ: 3 };

@@ -32,6 +32,8 @@ export const PERMISSIONS = {
   'dashboard.view': [SA, MG, AC, DB],
   'customers.view': [SA, MG, AC],
   'customers.manage': [SA],
+  // Website inquiry form: see and follow up the inquiries.
+  'inquiries.manage': [SA, MG],
   'products.view': [SA, MG, AC, DB],
   'products.manage': [SA],
   'masters.view': [SA, MG, AC],

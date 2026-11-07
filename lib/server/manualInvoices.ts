@@ -10,6 +10,7 @@ import { notifyCustomer } from './notify';
 import { nextInvoiceNumber, nextNumber } from './sequence';
 import { getSetting } from './settings';
 import { COMPANY_WALLET, getWallet, postWallet } from './wallet';
+import { payUrlFor } from './payPage';
 
 // Invoices typed in the Billing screen (counter sales, accessories, deposits…).
 // They post to the ledger immediately because they are entered by accounts;
@@ -176,8 +177,8 @@ export async function createManualInvoice(tx: Tx, actor: Actor, data: Row, effec
   }
   const saved = await tx.invoice.update({ where: { id: invoice.id }, data: { balanceAfter: balance }, include: { items: true } });
   await audit(tx, actor, { action: 'INVOICE_CREATED', entityType: 'Invoice', entityId: invoice.id, reference: invoice.invoiceNumber, newValue: { grandTotal: invoice.grandTotal, paid } });
-  effects.add('invoice message', () =>
-    notifyCustomer(actor.tenantId, customer, 'INVOICE', { invoiceNumber: saved.invoiceNumber, date, amount: saved.grandTotal.toLocaleString('en-IN'), paid: paid.toLocaleString('en-IN'), outstanding: balance.toLocaleString('en-IN'), link: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/+$/, '')}/customer?invoice=${saved.id}` : '' }, `Invoice ${saved.invoiceNumber}`)
+  effects.add('invoice message', async () =>
+    notifyCustomer(actor.tenantId, customer, 'INVOICE', { invoiceNumber: saved.invoiceNumber, date, amount: saved.grandTotal.toLocaleString('en-IN'), paid: paid.toLocaleString('en-IN'), outstanding: balance.toLocaleString('en-IN'), link: process.env.APP_URL ? `${process.env.APP_URL.replace(/\/+$/, '')}/customer?invoice=${saved.id}` : '', payLink: (await payUrlFor(actor.tenantId, saved.id)) || '' }, `Invoice ${saved.invoiceNumber}`)
   );
   return saved;
 }

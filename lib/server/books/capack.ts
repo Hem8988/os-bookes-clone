@@ -141,7 +141,7 @@ function statement(wb: ExcelJS.Workbook, name: string, title: string, subtitle: 
 export async function reportWorkbook(tenantId: string, report: { title: string; columns: { key: string; label: string; type?: string; total?: boolean }[]; rows: Record<string, unknown>[]; note?: string; summary?: { label: string; value: number | string }[] }, from: string, to: string) {
   const company = await getSetting(tenantId, 'company');
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'DeskShark';
+  wb.creator = 'Pramukh Indane';
   const firm = company.legalName || company.name;
   const cols: Col[] = report.columns.map((c) => ({ header: c.label, key: c.key, money: c.type === 'money', total: c.type === 'money' ? c.total !== false : false, width: c.type === 'money' ? 15 : c.type === 'date' ? 12 : c.type === 'number' ? 10 : 24 }));
   const ws = sheet(wb, report.title, report.title, `${firm}${company.gstin ? ` · GSTIN ${company.gstin}` : ''} · ${from} to ${to}`, cols, report.rows, { note: report.note });
@@ -184,7 +184,7 @@ export async function buildCaWorkbook(tenantId: string, month: string): Promise<
   const period = `${monthLabel(month)} (${from} to ${to})`;
   const sub = `${firm}${company.gstin ? ` · GSTIN ${company.gstin}` : ''} · ${period}`;
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'DeskShark';
+  wb.creator = 'Pramukh Indane';
   wb.created = new Date();
 
   // 1. Summary

@@ -1090,3 +1090,214 @@
     transform: none;
   }
 }
+
+/* Inquiry form (home page, #inquiry) */
+.inquiryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: 56px;
+  align-items: start;
+}
+.inquirySteps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 18px;
+  counter-reset: step;
+}
+.inquirySteps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+  align-items: start;
+  color: var(--ink-soft);
+}
+.inquirySteps li::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+}
+.inquirySteps b {
+  color: var(--ink);
+}
+.formCard {
+  background: var(--paper);
+  border: 2px solid var(--steel);
+  border-radius: 22px;
+  padding: 32px;
+  box-shadow: 0 24px 48px -32px rgba(19, 34, 46, 0.45);
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.fieldWide {
+  grid-column: 1 / -1;
+}
+.fieldPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 2px solid var(--steel-dark);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+textarea.input {
+  resize: vertical;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(30, 91, 168, 0.2);
+}
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.formActions {
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+}
+.formActions .btn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+  transform: none;
+}
+.formNote {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.formError {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fdecee;
+  color: var(--red-dark);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.formDoneTitle {
+  font-size: 2.4rem;
+  margin: 0 0 10px;
+  color: var(--green);
+}
+.formCard > .formNote + .btn {
+  margin-top: 20px;
+}
+@media (max-width: 860px) {
+  .inquiryGrid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .formCard {
+    padding: 22px;
+  }
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Hero: quick inquiry card above the truck scene */
+.heroSide {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+.heroForm {
+  position: relative;
+  z-index: 2;
+  animation: fadeUp 800ms var(--ease-out) 500ms both;
+}
+.formCompact {
+  padding: 26px;
+}
+.formCompact .formGrid {
+  gap: 14px;
+  margin-top: 16px;
+}
+.formCompact .formActions {
+  margin-top: 18px;
+}
+.formCompactTitle {
+  font-size: clamp(1.7rem, 2.6vw, 2.2rem);
+  margin: 0 0 6px;
+  line-height: 1;
+}
+@media (max-width: 860px) {
+  .heroSide {
+    gap: 20px;
+  }
+  .formCompact {
+    padding: 20px;
+  }
+}
+
+/* Hero photo: the cylinders from the Indane range banner (logo and slogan cropped off).
+   Crop box in the 1704×566 banner: x 236–1040, y 30–560 (all cylinders). Percent margins follow the width. */
+.heroPhoto {
+  position: relative;
+  margin: 0 0 48px;
+  overflow: hidden;
+  aspect-ratio: 804 / 530;
+  border-radius: 22px;
+  background: #fce3d5;
+  box-shadow: 0 24px 48px -30px rgba(19, 34, 46, 0.5);
+  animation: fadeUp 900ms var(--ease-out) 700ms both;
+}
+.heroPhoto img {
+  display: block;
+  width: 211.94%;
+  max-width: none;
+  height: auto;
+  margin-left: -29.35%;
+  margin-top: -3.73%;
+}
+@media (max-width: 860px) {
+  .heroPhoto {
+    margin-bottom: 32px;
+  }
+}
+.heroPhoto::after {
+  /* hides the tail of the Indane logo that sits above the first cylinder */
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 13%;
+  height: 30%;
+  background: radial-gradient(120% 120% at 0 0, #fce3d5 75%, rgba(252, 227, 213, 0) 100%);
+  pointer-events: none;
+}

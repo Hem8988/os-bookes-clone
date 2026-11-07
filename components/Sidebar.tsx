@@ -72,6 +72,7 @@ export const MENU: MenuSection[] = [
     icon: Users,
     items: [
       { tab: 'customers', label: 'Customers', permission: 'customers.view' },
+      { tab: 'inquiries', label: 'Website inquiries', permission: 'inquiries.manage' },
       { tab: 'customer-pos', label: 'Customer POs', permission: 'orders.view' },
       { tab: 'vendors', label: 'Plants / suppliers', permission: 'customers.view' },
       { tab: 'routes', label: 'Routes & areas', permission: 'masters.view' },
@@ -165,6 +166,7 @@ export const MENU: MenuSection[] = [
     icon: MessageSquare,
     items: [
       { tab: 'whatsapp', sub: 'chats', label: 'Chats', permission: 'whatsapp.chat' },
+      { tab: 'whatsapp', sub: 'numbers', label: 'Numbers (QR link)', permission: 'whatsapp.chat' },
       { tab: 'whatsapp', label: 'Bot, templates & log', permission: 'whatsapp.manage' },
     ],
   },
@@ -228,10 +230,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, activeSub, can, onN
   return (
     <aside className="w-64 flex-shrink-0 border-r border-slate-200 bg-white text-slate-700 h-full flex flex-col p-3 select-none overflow-y-auto">
       <div className="flex items-center gap-3 px-3 py-3 mb-3 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
-        <div className="h-9 w-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-sm">{initials(company.name)}</div>
+        {company.logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={company.logo} alt="" className="h-9 w-9 rounded-lg object-contain" />
+        ) : (
+          <div className="h-9 w-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-sm">{initials(company.name)}</div>
+        )}
         <div className="min-w-0">
           <h1 className="font-extrabold text-slate-900 text-sm truncate">{company.name}</h1>
-          <p className="text-[11px] text-emerald-700 font-bold">DeskShark ERP</p>
+          <p className="text-[11px] text-emerald-700 font-bold">Indane LPG Distributor</p>
         </div>
       </div>
 

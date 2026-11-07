@@ -35,9 +35,33 @@ model User {
   updatedAt        DateTime      @updatedAt
   sessions         UserSession[]
   devices          UserDevice[]
+  // The admin lets this staff member link their own WhatsApp (WhatsApp → Numbers).
+  whatsappAllowed  Boolean       @default(false)
+  waSession        WaSession?
 
   @@index([tenantId, role])
   @@map("users")
+}
+
+// A WhatsApp number linked by QR (WhatsApp Web, built-in gateway). One per staff member.
+// The company number (isCompany) carries the automatic messages and the ordering bot;
+// its chats use the "main" channel, every other number's chats use "u:<userId>".
+model WaSession {
+  id          String    @id @default(cuid())
+  tenantId    String    @default("default")
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isCompany   Boolean   @default(false)
+  status      String    @default("NEW") // NEW | CONNECTING | QR | CONNECTED | RECONNECTING | QR_EXPIRED | LOGGED_OUT | STOPPED
+  number      String?
+  name        String?
+  lastError   String?
+  connectedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@map("wa_sessions")
 }
 
 model UserSession {
@@ -978,6 +1002,35 @@ model ApprovalLog {
   @@map("approval_logs")
 }
 
+// Inquiry from the public website form (/#inquiry). The admin and managers get it on WhatsApp.
+model Inquiry {
+  id            String    @id @default(cuid())
+  tenantId      String    @default("default")
+  inquiryNumber String
+  name          String
+  phone         String
+  email         String?
+  businessName  String?
+  city          String?
+  need          String // NEW_CONNECTION | REGULAR_SUPPLY | URGENT_REFILL | BULK | OTHER
+  cylinderSize  String?
+  monthlyQty    Int?
+  message       String?
+  status        String    @default("NEW") // NEW | CONTACTED | CONVERTED | CLOSED
+  notes         String?
+  source        String    @default("WEBSITE")
+  ip            String?
+  handledById   String?
+  handledByName String?
+  contactedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, inquiryNumber])
+  @@index([tenantId, status, createdAt])
+  @@map("inquiries")
+}
+
 // ───────────────────────────── Messaging ─────────────────────────────
 
 model Notification {
@@ -1026,8 +1079,11 @@ model WhatsAppConversation {
   botPaused      Boolean   @default(false)
   assignedToId   String?
   assignedToName String?
+  // Which of our numbers this chat is on: "main" (company number / bot) or "u:<userId>".
+  channel        String    @default("main")
 
-  @@unique([tenantId, phone])
+  @@unique([tenantId, channel, phone])
+  @@index([tenantId, channel, lastActivityAt])
   @@index([tenantId, lastActivityAt])
   @@map("whatsapp_conversations")
 }
@@ -1066,10 +1122,13 @@ model MessageLog {
   mediaType   String?
   // Staff member who typed a chat reply.
   sentBy      String?
+  // WhatsApp only: which of our numbers ("main" or "u:<userId>"), see WhatsAppConversation.channel.
+  waChannel   String   @default("main")
   createdAt   DateTime @default(now())
 
   @@index([tenantId, channel, createdAt])
   @@index([tenantId, channel, recipient, createdAt])
+  @@index([tenantId, waChannel, recipient, createdAt])
   @@map("message_logs")
 }
 

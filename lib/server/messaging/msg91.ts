@@ -34,8 +34,15 @@ export async function msg91Config(tenantId: string): Promise<Msg91Config> {
 }
 
 export const digits = (v: string) => v.replace(/\D/g, '');
-export const smsReady = (c: Msg91Config) => !!c.authKey && c.smsEnabled;
-export const whatsappReady = (c: Msg91Config) => !!c.authKey && c.whatsappEnabled && !!c.whatsappNumber;
+
+/**
+ * MSG91 is switched OFF for now: nothing is sent through MSG91 (SMS or WhatsApp),
+ * even if a key is saved in Settings or .env. Set to true to turn it back on.
+ */
+export const MSG91_ENABLED = false;
+
+export const smsReady = (c: Msg91Config) => MSG91_ENABLED && !!c.authKey && c.smsEnabled;
+export const whatsappReady = (c: Msg91Config) => MSG91_ENABLED && !!c.authKey && c.whatsappEnabled && !!c.whatsappNumber;
 
 export type Msg91Result = { ok: boolean; data?: unknown; requestId?: string; error?: string };
 

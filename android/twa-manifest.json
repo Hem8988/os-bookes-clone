@@ -1,8 +1,8 @@
 {
   "packageId": "com.deskshark.delivery",
   "host": "erp.example.com",
-  "name": "DeskShark Delivery",
-  "launcherName": "DeskShark",
+  "name": "Pramukh Indane Delivery",
+  "launcherName": "Pramukh Indane",
   "display": "standalone",
   "orientation": "portrait",
   "themeColor": "#059669",

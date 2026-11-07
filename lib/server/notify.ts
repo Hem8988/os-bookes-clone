@@ -7,7 +7,7 @@ import { sendPush } from './messaging/push';
 import { sendSms } from './messaging/sms';
 import { toWhatsAppNumber } from '@/lib/phone';
 import { msg91Config, whatsappReady, whatsappSendSession, whatsappSendTemplate } from './messaging/msg91';
-import { log as logWhatsApp, RichParts, sendWhatsAppRich, sendWhatsAppTemplate, sendWhatsAppText, whatsappConfigured } from './messaging/whatsapp';
+import { log as logWhatsApp, RichParts, sendWhatsAppRich, sendWhatsAppTemplate, sendWhatsAppText, whatsappReadyFor, whatsappRoute } from './messaging/whatsapp';
 import { getSetting } from './settings';
 
 type Vars = Record<string, string | number | null | undefined>;
@@ -60,7 +60,8 @@ export async function prepareMessage(tenantId: string, templateKey: string, cust
     company,
     allVars,
     parts,
-    text: renderTemplate(template.body, allVars),
+    // Invoice with something due and a pay link (lib/server/payPage.ts): added under any template text.
+    text: renderTemplate(template.body, allVars) + (allVars.payLink && money(allVars.due) ? `\n\n💳 Pay online (UPI): ${allVars.payLink}` : ''),
     smsText: renderTemplate(def?.sms || template.body, allVars),
   };
 }
@@ -73,8 +74,16 @@ export const buttonSuffix = (url: string) => {
   return appUrl && url.startsWith(`${appUrl}/`) ? url.slice(appUrl.length + 1) : url;
 };
 
-/** WhatsApp through MSG91 when it is switched on, else the Meta Cloud API. */
-export async function sendCustomerWhatsApp(tenantId: string, phone: string, templateKey: string, m: Prepared, extra: { sentBy?: string } = {}) {
+/**
+ * A templated message: from the linked WhatsApp number of the channel (company number for "main")
+ * as a normal message, else MSG91 when it is switched on, else the Meta Cloud API.
+ */
+export async function sendCustomerWhatsApp(tenantId: string, phone: string, templateKey: string, m: Prepared, extra: { sentBy?: string; channel?: string } = {}) {
+  const channel = extra.channel || 'main';
+  const { route } = await whatsappRoute(tenantId, channel);
+  if (route === 'web' || route === 'web-offline') {
+    return sendWhatsAppRich(tenantId, phone, m.text, m.parts, templateKey, { sentBy: extra.sentBy, channel, priority: !!extra.sentBy });
+  }
   const c = await msg91Config(tenantId);
   if (!whatsappReady(c)) {
     return m.template.metaTemplateName
@@ -112,7 +121,7 @@ export async function notifyCustomer(tenantId: string, customer: CustomerContact
 
   if (phone) {
     const c = await msg91Config(tenantId);
-    const waReady = whatsappConfigured() || whatsappReady(c);
+    const waReady = await whatsappReadyFor(tenantId);
     // Without any WhatsApp set up this only logs the message (SIMULATED).
     const result = await sendCustomerWhatsApp(tenantId, phone, templateKey, m);
     // SMS: the messages chosen in WhatsApp → MSG91, and OTP / payment alerts whenever WhatsApp is off or failed.

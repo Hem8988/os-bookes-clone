@@ -14,11 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DeskShark — Cylinder Distribution ERP",
-  description: "Orders, deliveries, cylinder inventory, cash and accounts for LPG and industrial gas distributors.",
+  title: "Pramukh Indane — Indane LPG Distributor",
+  description: "Pramukh Indane — commercial and domestic Indane LPG cylinders, orders, deliveries and accounts.",
   manifest: "/manifest.json",
   icons: { icon: "/icon.svg", apple: "/icon-192.png" },
-  appleWebApp: { capable: true, title: "DeskShark", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Pramukh Indane", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

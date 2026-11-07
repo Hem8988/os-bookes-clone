@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pramukh Indane">
+  <rect width="512" height="512" rx="112" fill="#14245c"/>
+  <path fill="#f26b21" d="M256 64c42 78 140 128 140 240 0 84-62 144-140 144s-140-60-140-144c0-66 36-108 68-146 4 52 28 80 52 88-14-66-2-130 20-182z"/>
+  <path fill="#ffffff" fill-rule="evenodd" d="M204 236h74c36 0 62 26 62 60s-26 60-62 60h-32v52h-42zm42 38v44h30c12 0 22-10 22-22s-10-22-22-22z"/>
+</svg>

@@ -2,7 +2,7 @@
 // web-push. API responses are never cached (they contain customer data and
 // must always be fresh); offline delivery entries live in IndexedDB instead.
 
-const CACHE = 'deskshark-shell-v4';
+const CACHE = 'deskshark-shell-v5';
 // On localhost (next dev) build files keep their names while their content
 // changes, so nothing is cached there — otherwise the browser shows stale CSS / JS.
 const DEV = ['localhost', '127.0.0.1'].includes(self.location.hostname);
@@ -59,7 +59,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'DeskShark', body: 'You have a new update.', link: '/' };
+  let data = { title: 'Pramukh Indane', body: 'You have a new update.', link: '/' };
   try {
     data = { ...data, ...event.data.json() };
   } catch (e) {

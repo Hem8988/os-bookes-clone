@@ -213,7 +213,7 @@ function VoucherModal({ initial, onClose, onSaved, onError }: { initial: Partial
         <Field label="Deposit received by">
           <select value={form.paymentMode || ''} onChange={(e) => setForm({ ...form, paymentMode: e.target.value || null })} className={inputClass}>
             <option value="">—</option>
-            {Object.entries({ CASH: 'Cash', BANK: 'Bank transfer / NEFT', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit (before DeskShark)' }).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            {Object.entries({ CASH: 'Cash', BANK: 'Bank transfer / NEFT', UPI: 'UPI', CHEQUE: 'Cheque', OPENING: 'Old deposit (taken earlier)' }).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </Field>
       </div>

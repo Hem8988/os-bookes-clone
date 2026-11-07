@@ -89,7 +89,7 @@ export async function syncCustomerDeposits(tx: Tx, actor: Actor, customer: { id:
     }
     if (!voucher && status !== 'ACTIVE' && !line.voucherNo) continue; // refunded / adjusted with nothing on record: nothing to show
     const depositAmount = line.status === 'Free' ? 0 : round2(line.fee * line.qty);
-    if (depositAmount > 0 && !mode && !voucher?.paymentMode) throw badRequest('Choose how the cylinder deposit was received (Cash / Bank / UPI / Cheque, or "Old deposit" if it was taken before DeskShark).');
+    if (depositAmount > 0 && !mode && !voucher?.paymentMode) throw badRequest('Choose how the cylinder deposit was received (Cash / Bank / UPI / Cheque, or "Old deposit" if it was taken before this software).');
 
     const data = {
       productId,

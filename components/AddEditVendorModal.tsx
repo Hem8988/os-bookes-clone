@@ -419,7 +419,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
     if (emailAddress.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress.trim())) errors.push({ field: 'email', message: 'Email is not valid.' });
     const noVoucher = depositRows.filter((r) => r.voucherMissing);
     if (noVoucher.length) errors.push({ field: 'voucher', message: `Enter the SV / TV voucher number for: ${noVoucher.map((r) => r.product.name).join(', ')} (needed when the deposit is Free or Paid).` });
-    if (!depositMode && depositRows.some((r) => r.qty > 0 && r.status === 'Paid' && r.total > 0)) errors.push({ field: 'depositMode', message: 'Choose how the cylinder deposit was received (Cash / Bank / UPI / Cheque, or "Old deposit" if it was taken before DeskShark).' });
+    if (!depositMode && depositRows.some((r) => r.qty > 0 && r.status === 'Paid' && r.total > 0)) errors.push({ field: 'depositMode', message: 'Choose how the cylinder deposit was received (Cash / Bank / UPI / Cheque, or "Old deposit" if it was taken before this software).' });
     return errors;
   };
   /** Show the problems at the top of the form and mark the boxes. */
@@ -1163,7 +1163,7 @@ export const AddEditVendorModal: React.FC<AddEditVendorModalProps> = ({
                     <option value="BANK">Bank transfer / NEFT</option>
                     <option value="UPI">UPI</option>
                     <option value="CHEQUE">Cheque</option>
-                    <option value="OPENING">Old deposit (taken before DeskShark)</option>
+                    <option value="OPENING">Old deposit (taken earlier)</option>
                   </select>
                 </label>
                 <label className="flex flex-col gap-1">

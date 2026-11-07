@@ -99,6 +99,14 @@ export const DEFAULT_TEMPLATES: TemplateDefinition[] = [
     card: { label: 'Amount Paid', value: 'amount', money: true, badge: 'Received', note: 'Receipt : {{paymentNumber}}' },
   }),
   template({
+    key: 'PAYMENT_COLLECTED',
+    name: 'Cash Collected',
+    trigger: 'Delivery boy collects a payment (Collect), right away',
+    sms: 'Dear {{customerName}}, Rs {{amount}} ({{mode}}) received by {{collectedBy}}. Receipt {{paymentNumber}}. Outstanding Rs {{outstanding}}. - {{companyName}}',
+    body: `Hey {{customerName}},\n\nWe have received your payment. Thank you!\n\nReceipt No: {{paymentNumber}}\nAmount Received: ₹{{amount}}\nMode: {{mode}}\nCollected by: {{collectedBy}}\nBalance Outstanding: ₹{{outstanding}}${SIGN_OFF}`,
+    card: { label: 'Amount Received', value: 'amount', money: true, badge: '{{mode}}', note: 'Receipt : {{paymentNumber}}' },
+  }),
+  template({
     key: 'INVOICE',
     name: 'Invoice',
     trigger: 'Delivery verified / invoice created',
@@ -177,6 +185,7 @@ export const SAMPLE_VARS: Record<string, string> = {
   amount: '3,300',
   mode: 'CASH',
   paymentNumber: 'RCP-512',
+  collectedBy: 'Ramesh',
   invoiceNumber: 'BL/2026/7023114',
   date: '08-10-2026',
   paid: '3,300',

@@ -114,6 +114,19 @@ export async function recordFieldCollection(tx: Tx, actor: Actor, input: Omit<La
     const wallet = await getWallet(tx, actor.tenantId, 'DELIVERY_BOY', actor.userId, actor.name);
     await postWallet(tx, wallet.id, { type: 'COLLECTION', amount: payment.amount, referenceType: 'PAYMENT', referenceId: payment.id, notes: `Dues collected ${payment.paymentNumber} (${payment.customerName})`, performedBy: actor.name });
   }
+  // The customer hears at once how much the delivery boy took (accounts verify it later).
+  // The balance goes down on verification, so the outstanding shown already counts this payment.
+  const customer = await tx.customer.findUniqueOrThrow({ where: { id: payment.customerId } });
+  const outstanding = round2(customer.balance - payment.amount);
+  effects.add('payment collected message', () =>
+    notifyCustomer(actor.tenantId, customer, 'PAYMENT_COLLECTED', {
+      amount: payment.amount.toLocaleString('en-IN'),
+      mode: payment.mode,
+      paymentNumber: payment.paymentNumber,
+      collectedBy: actor.name,
+      outstanding: outstanding.toLocaleString('en-IN'),
+    })
+  );
   return payment;
 }
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, Image as ImageIcon, Link2, MessageCircle, Pencil, Printer, X } from 'lucide-react';
-import { sheetToPdf } from '../lib/sheetPdf';
+import { sheetsToPdf } from '../lib/sheetPdf';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCompany } from '../lib/useCompany';
 import { amountInWords, stateLabel, GST_STATES } from '../lib/gst';
@@ -98,7 +98,7 @@ function savedCopies(): string[] {
 function AttachmentPage({ label, url, invoiceNumber }: { label: string; url: string; invoiceNumber: string }) {
   const [broken, setBroken] = useState(false);
   return (
-    <div className="mt-6 print:mt-0 print:break-before-page mx-auto bg-white border border-black p-3 text-black" style={{ width: '100%', maxWidth: 800 }}>
+    <div data-pdf-page data-pdf-fit="page" className="mt-6 print:mt-0 print:break-before-page mx-auto bg-white border border-black p-3 text-black" style={{ width: '100%', maxWidth: 800 }}>
       <div className="flex items-baseline justify-between gap-3 border-b border-black pb-1 mb-2 text-[12px] font-bold">
         <span>{label}</span>
         <span className="font-normal">Attached to invoice {invoiceNumber}</span>
@@ -172,8 +172,9 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const [payMsg, setPayMsg] = useState('');
   const [paying, setPaying] = useState(false);
   const [waSending, setWaSending] = useState(false);
-  // The first printed sheet: what the WhatsApp PDF is made from.
-  const sheetRef = useRef<HTMLDivElement>(null);
+  // Everything printed (the chosen copies, then the paperwork photos): what the PDF is made from.
+  const pagesRef = useRef<HTMLDivElement>(null);
+  const pdfPages = () => Array.from(pagesRef.current?.querySelectorAll<HTMLElement>('[data-pdf-page]') ?? []);
   // Print layout: the usual GST invoice, or the IRP e-invoice format (chosen by itself once an IRN exists).
   const [format, setFormat] = useState<'gst' | 'einvoice' | null>(null);
   // Copies to print (remembered on this device) and whether the challan / payment photos follow them.
@@ -208,10 +209,10 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   /** Public page: save the sheet on screen as a PDF file. */
   const [downloading, setDownloading] = useState(false);
   const downloadPdf = async () => {
-    if (!sheetRef.current || !inv) return;
+    if (!pdfPages().length || !inv) return;
     setDownloading(true);
     try {
-      const pdf = await sheetToPdf(sheetRef.current);
+      const pdf = await sheetsToPdf(pdfPages());
       const url = URL.createObjectURL(pdf);
       const a = document.createElement('a');
       a.href = url;
@@ -228,11 +229,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   };
   /** PDF of the sheet on screen → the customer's WhatsApp (from the company number). */
   const sendPdfOnWhatsApp = async (invoiceId: string) => {
-    if (!sheetRef.current) return;
+    if (!pdfPages().length) return;
     setWaSending(true);
     setPayMsg('');
     try {
-      const pdf = await sheetToPdf(sheetRef.current);
+      const pdf = await sheetsToPdf(pdfPages());
       const form = new FormData();
       form.append('file', pdf, 'invoice.pdf');
       const res = await fetch(`/api/invoices/${encodeURIComponent(invoiceId)}/whatsapp`, { method: 'POST', body: form, credentials: 'same-origin' });
@@ -683,11 +684,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
           </div>
         )}
 
-        <div className="overflow-y-auto p-3 sm:p-5 bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
+        <div ref={pagesRef} className="overflow-y-auto p-3 sm:p-5 bg-slate-100 print:bg-white print:p-0 print:overflow-visible">
           {/* One sheet per chosen copy, then the paperwork photos — each starts a new printed page. */}
           {copies.map((copy, i) => (
             <div key={copy} className={i > 0 ? 'mt-6 print:mt-0 print:break-before-page' : ''}>
-              <div ref={i === 0 ? sheetRef : undefined}>{renderSheet(copy)}</div>
+              <div data-pdf-page>{renderSheet(copy)}</div>
               <div className="mx-auto mt-1 text-center text-[9px] text-slate-500" style={{ maxWidth: 800 }}>
                 {company.name} · Computer generated invoice
               </div>

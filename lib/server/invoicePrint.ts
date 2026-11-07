@@ -65,10 +65,10 @@ export async function invoiceAttachments(invoice: Invoice) {
 
 /**
  * Everything a printed tax invoice needs: the invoice, buyer address / PAN, place of supply,
- * delivery references and IRN / e-way bill. `attachments`: the paperwork photos (staff and the
- * customer's own login only — the public page cannot load protected files anyway).
+ * delivery references and IRN / e-way bill. `attachments`: the paperwork photos; with
+ * `publicToken` their links go through the public invoice link (/api/public/invoice/<token>/file/<n>).
  */
-export async function invoicePrintData(invoice: Invoice & { items: InvoiceItem[] }, opts: { canEditRefs: boolean; attachments: boolean }) {
+export async function invoicePrintData(invoice: Invoice & { items: InvoiceItem[] }, opts: { canEditRefs: boolean; attachments: boolean; publicToken?: string }) {
   const customer = await prisma.customer.findFirst({ where: { id: invoice.customerId, tenantId: invoice.tenantId } });
   const print = await printExtraFor(invoice, customer);
   const extra = (customer?.extra as Record<string, unknown> | null) ?? {};
@@ -84,6 +84,11 @@ export async function invoicePrintData(invoice: Invoice & { items: InvoiceItem[]
     print: print ? { ...print, ...einv } : null,
     customerPan,
     canEditRefs: opts.canEditRefs,
-    attachments: opts.attachments ? await invoiceAttachments(invoice) : [],
+    attachments: opts.attachments
+      ? (await invoiceAttachments(invoice)).map((a, i) =>
+          // Public page: protected files are served through the invoice's signed link.
+          opts.publicToken ? { ...a, url: `/api/public/invoice/${encodeURIComponent(opts.publicToken)}/file/${i}` } : a
+        )
+      : [],
   };
 }

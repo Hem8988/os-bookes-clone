@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 import { audit } from '@/lib/server/audit';
 import { rateLimit, requireAuth } from '@/lib/server/auth';
 import { ApiError, badRequest, handle, notFound, ok } from '@/lib/server/http';
-import { sendWhatsAppMedia } from '@/lib/server/messaging/whatsapp';
+import { customerWhatsAppNumbers, sendToFirstOnWhatsApp, sendWhatsAppMedia } from '@/lib/server/messaging/whatsapp';
 import { publicMediaUrl } from '@/lib/server/messaging/publicMedia';
 import { storeFile } from '@/lib/server/storage';
 
@@ -26,8 +26,8 @@ export const POST = handle(async (request: Request, ctx: Ctx) => {
   if (!invoice) throw notFound('Invoice not found.');
   if (invoice.status === 'Cancelled') throw badRequest('This invoice is cancelled.');
   const customer = invoice.customerId ? await prisma.customer.findFirst({ where: { id: invoice.customerId, tenantId: auth.tenantId }, select: { name: true, phone: true, whatsappNumber: true } }) : null;
-  const phone = customer?.whatsappNumber || customer?.phone;
-  if (!phone) throw badRequest('This customer has no WhatsApp or mobile number. Add it on the customer first.');
+  const numbers = customer ? customerWhatsAppNumbers(customer) : [];
+  if (!numbers.length) throw badRequest('This customer has no WhatsApp or mobile number. Add it on the customer first.');
 
   const form = await request.formData().catch(() => null);
   const file = form?.get('file');
@@ -38,12 +38,16 @@ export const POST = handle(async (request: Request, ctx: Ctx) => {
 
   const due = Math.max(0, Math.round((invoice.grandTotal - invoice.paidAmount) * 100) / 100);
   const caption = `Invoice ${invoice.invoiceNumber} — ₹${invoice.grandTotal.toLocaleString('en-IN')}${due > 0 ? `\nBalance due: ₹${due.toLocaleString('en-IN')}` : '\nFully paid ✅'}`;
-  const r = await sendWhatsAppMedia(
-    auth.tenantId,
-    phone,
-    { kind: 'document', link: publicMediaUrl(stored.url) || stored.url, storedUrl: stored.url, caption, filename: `Invoice-${invoice.invoiceNumber.replace(/[^\w-]+/g, '-')}.pdf` },
-    { sentBy: auth.name, priority: true }
+  // The WhatsApp number first; when it is not on WhatsApp, the customer's mobile.
+  const r = await sendToFirstOnWhatsApp(numbers, (to) =>
+    sendWhatsAppMedia(
+      auth.tenantId,
+      to,
+      { kind: 'document', link: publicMediaUrl(stored.url) || stored.url, storedUrl: stored.url, caption, filename: `Invoice-${invoice.invoiceNumber.replace(/[^\w-]+/g, '-')}.pdf` },
+      { sentBy: auth.name, priority: true }
+    )
   );
+  const phone = r.phone;
   if (!r.ok) throw new ApiError(502, `WhatsApp did not take the invoice: ${r.error || 'unknown error'}`, 'SEND_FAILED');
 
   await prisma.invoice.update({ where: { id: invoice.id }, data: { sentAt: new Date() } });

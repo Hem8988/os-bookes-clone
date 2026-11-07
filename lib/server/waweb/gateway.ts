@@ -349,7 +349,7 @@ function toBaileys(c: WaContent): AnyMessageContent {
  * Send from one linked number. Sends of a number go one after another; automatic messages
  * (priority false) keep a few seconds' gap so the number looks less like a robot.
  */
-export function sendViaSession(sessionId: string, phone: string, content: WaContent, opts: { priority?: boolean } = {}): Promise<{ ok: boolean; providerId?: string; error?: string }> {
+export function sendViaSession(sessionId: string, phone: string, content: WaContent, opts: { priority?: boolean } = {}): Promise<{ ok: boolean; providerId?: string; error?: string; notOnWhatsApp?: boolean }> {
   const s = state.sessions.get(sessionId);
   if (!s || s.status !== 'CONNECTED' || !s.sock) return Promise.resolve({ ok: false, error: 'This WhatsApp number is not connected. Open WhatsApp → Numbers and scan the QR again.' });
   const to = phone.replace(/\D/g, '');
@@ -365,7 +365,7 @@ export function sendViaSession(sessionId: string, phone: string, content: WaCont
     }
     try {
       const [check] = (await sock.onWhatsApp(to)) || [];
-      if (!check?.exists) return { ok: false, error: `+${to} is not on WhatsApp.` };
+      if (!check?.exists) return { ok: false, error: `+${to} is not on WhatsApp.`, notOnWhatsApp: true };
       if (!opts.priority) {
         await sock.sendPresenceUpdate('composing', check.jid).catch(() => {});
         await sleep(600 + Math.min(2500, ('text' in content ? content.text.length : 40) * 15));

@@ -48,6 +48,33 @@ export interface SendResult {
   error?: string;
   /** No WhatsApp set up: only logged. */
   simulated?: boolean;
+  /** The linked number checked: this phone has no WhatsApp account. */
+  notOnWhatsApp?: boolean;
+}
+
+/**
+ * The customer's numbers to try on WhatsApp: the WhatsApp number first, then the mobile when
+ * it is a different number (a wrong WhatsApp number then still reaches the customer).
+ */
+export function customerWhatsAppNumbers(c: { whatsappNumber?: string | null; phone?: string | null }): string[] {
+  const out: string[] = [];
+  for (const n of [c.whatsappNumber, c.phone]) {
+    const v = (n || '').trim();
+    if (v && !out.some((o) => o.replace(/\D/g, '').slice(-10) === v.replace(/\D/g, '').slice(-10))) out.push(v);
+  }
+  return out;
+}
+
+/** Send to the first number that is on WhatsApp; the result says which one was used. */
+export async function sendToFirstOnWhatsApp<R extends { ok: boolean; notOnWhatsApp?: boolean }>(numbers: string[], send: (phone: string) => Promise<R>): Promise<R & { phone: string }> {
+  let last: (R & { phone: string }) | null = null;
+  for (const phone of numbers) {
+    const r = await send(phone);
+    last = { ...r, phone };
+    if (!r.notOnWhatsApp) return last;
+  }
+  if (!last) throw new Error('No number to send to.');
+  return last;
 }
 
 /** Meta-style payload → MSG91 session message (text, buttons / list, media). */

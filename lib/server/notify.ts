@@ -7,7 +7,7 @@ import { sendPush } from './messaging/push';
 import { sendSms } from './messaging/sms';
 import { toWhatsAppNumber } from '@/lib/phone';
 import { msg91Config, whatsappReady, whatsappSendSession, whatsappSendTemplate } from './messaging/msg91';
-import { log as logWhatsApp, RichParts, sendWhatsAppRich, sendWhatsAppTemplate, sendWhatsAppText, whatsappReadyFor, whatsappRoute } from './messaging/whatsapp';
+import { customerWhatsAppNumbers, log as logWhatsApp, RichParts, sendToFirstOnWhatsApp, sendWhatsAppRich, sendWhatsAppTemplate, sendWhatsAppText, whatsappReadyFor, whatsappRoute } from './messaging/whatsapp';
 import { getSetting } from './settings';
 
 type Vars = Record<string, string | number | null | undefined>;
@@ -117,13 +117,15 @@ const SMS_FALLBACK = ['OTP', 'PAYMENT_RECEIVED'];
 export async function notifyCustomer(tenantId: string, customer: CustomerContact, templateKey: string, vars: Vars, emailSubject?: string) {
   const m = await prepareMessage(tenantId, templateKey, customer.name, vars);
   if (!m) return;
-  const phone = customer.whatsappNumber || customer.phone;
+  const numbers = customerWhatsAppNumbers(customer);
+  const phone = numbers[0];
 
   if (phone) {
     const c = await msg91Config(tenantId);
     const waReady = await whatsappReadyFor(tenantId);
     // Without any WhatsApp set up this only logs the message (SIMULATED).
-    const result = await sendCustomerWhatsApp(tenantId, phone, templateKey, m);
+    // A WhatsApp number that is not on WhatsApp falls back to the customer's mobile.
+    const result = await sendToFirstOnWhatsApp(numbers, (n) => sendCustomerWhatsApp(tenantId, n, templateKey, m));
     // SMS: the messages chosen in WhatsApp → MSG91, and OTP / payment alerts whenever WhatsApp is off or failed.
     const smsPhone = customer.phone || phone;
     if ((c.smsEnabled && c.smsKeys.includes(templateKey)) || ((!result.ok || !waReady) && SMS_FALLBACK.includes(templateKey))) {

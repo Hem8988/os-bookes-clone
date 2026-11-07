@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 import { audit } from '@/lib/server/audit';
 import { rateLimit, requireAuth } from '@/lib/server/auth';
 import { ApiError, badRequest, handle, notFound, ok } from '@/lib/server/http';
-import { sendWhatsAppMedia } from '@/lib/server/messaging/whatsapp';
+import { customerWhatsAppNumbers, sendToFirstOnWhatsApp, sendWhatsAppMedia } from '@/lib/server/messaging/whatsapp';
 import { publicMediaUrl } from '@/lib/server/messaging/publicMedia';
 import { storeFile } from '@/lib/server/storage';
 
@@ -36,8 +36,8 @@ export const POST = handle(async (request: Request) => {
   if (matches.length === 0) throw notFound(`Customer "${customerName || customerId}" was not found.`);
   if (matches.length > 1) throw badRequest(`More than one customer is named "${customerName}". Send it from WhatsApp → Chats instead.`);
   const customer = matches[0];
-  const phone = customer.whatsappNumber || customer.phone;
-  if (!phone) throw badRequest(`${customer.name} has no WhatsApp or mobile number. Add it on the customer first.`);
+  const numbers = customerWhatsAppNumbers(customer);
+  if (!numbers.length) throw badRequest(`${customer.name} has no WhatsApp or mobile number. Add it on the customer first.`);
 
   const file = form.get('file');
   if (!file || typeof file === 'string') throw badRequest('The document PDF is missing.');
@@ -47,12 +47,16 @@ export const POST = handle(async (request: Request) => {
 
   const title = field(form, 'title', 120) || 'Document';
   const caption = [title, field(form, 'caption', 500)].filter(Boolean).join('\n');
-  const r = await sendWhatsAppMedia(
-    auth.tenantId,
-    phone,
-    { kind: 'document', link: publicMediaUrl(stored.url) || stored.url, storedUrl: stored.url, caption, filename: `${title.replace(/[^\w-]+/g, '-').replace(/-+$/, '')}.pdf` },
-    { sentBy: auth.name, priority: true }
+  // The WhatsApp number first; when it is not on WhatsApp, the customer's mobile.
+  const r = await sendToFirstOnWhatsApp(numbers, (to) =>
+    sendWhatsAppMedia(
+      auth.tenantId,
+      to,
+      { kind: 'document', link: publicMediaUrl(stored.url) || stored.url, storedUrl: stored.url, caption, filename: `${title.replace(/[^\w-]+/g, '-').replace(/-+$/, '')}.pdf` },
+      { sentBy: auth.name, priority: true }
+    )
   );
+  const phone = r.phone;
   if (!r.ok) throw new ApiError(502, `WhatsApp did not take the document: ${r.error || 'unknown error'}`, 'SEND_FAILED');
 
   await audit(prisma, auth, { action: 'DOCUMENT_WHATSAPP_SENT', entityType: 'Customer', entityId: customer.id, reference: `${title} → ${phone}` });

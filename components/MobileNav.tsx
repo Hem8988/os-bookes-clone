@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Boxes, ChevronRight, LayoutDashboard, LogOut, Menu, Receipt, Search, Truck, Users, Wallet, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Boxes, ChevronRight, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Search, Truck, Users, Wallet, X } from 'lucide-react';
 import type { Permission } from '../lib/permissions';
 import { initials, useCompany } from '../lib/useCompany';
 import { MENU } from './Sidebar';
 import { SoundToggle } from './pos';
-import { cx } from './ui';
+import { cx, useToast } from './ui';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 // Phone navigation for the back office, like a mobile app: a bottom tab bar
 // with the most used screens and a full-screen "More" menu with everything else.
@@ -54,6 +56,8 @@ export function MobileTabBar({ activeTab, can, onNavigate, onMore, moreOpen }: {
 export function MobileMenu({ open, activeTab, activeSub, can, userName, roleLabel, onNavigate, onClose, onLogout }: { open: boolean; activeTab: string; activeSub?: string; can: (p: Permission) => boolean; userName: string; roleLabel: string; onNavigate: (tab: string, sub?: string) => void; onClose: () => void; onLogout: () => void }) {
   const company = useCompany();
   const [query, setQuery] = useState('');
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [toast, showToast] = useToast();
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();
     return MENU.map((s) => ({ ...s, items: s.items.filter((i) => can(i.permission) && (!q || i.label.toLowerCase().includes(q) || s.label.toLowerCase().includes(q))) })).filter((s) => s.items.length);
@@ -111,10 +115,21 @@ export function MobileMenu({ open, activeTab, activeSub, can, userName, roleLabe
           <div className="flex-1 flex items-center justify-between rounded-2xl bg-white border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">
             Tap sounds <SoundToggle className="bg-slate-100 text-slate-700" />
           </div>
+          <button onClick={() => setPasswordOpen(true)} className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-4 py-3 text-sm font-black text-slate-700">
+            <KeyRound className="h-4 w-4" /> Password
+          </button>
           <button onClick={onLogout} className="flex items-center gap-2 rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm font-black text-rose-700">
             <LogOut className="h-4 w-4" /> Logout
           </button>
         </div>
+        {typeof document !== 'undefined' &&
+          createPortal(
+            <>
+              {toast}
+              {passwordOpen && <ChangePasswordModal onClose={() => setPasswordOpen(false)} onDone={(m) => { showToast(m); setPasswordOpen(false); }} />}
+            </>,
+            document.body
+          )}
       </div>
     </div>
   );

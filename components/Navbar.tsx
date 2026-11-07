@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Building2,
   LayoutGrid,
   Search,
   UserCheck,
   LogOut,
+  KeyRound,
   PlusCircle,
   Users,
   Truck,
@@ -17,6 +19,8 @@ import {
 import { Customer, Product, Invoice } from '../lib/types';
 import { useCompany } from '../lib/useCompany';
 import { NotificationBell } from './NotificationBell';
+import { ChangePasswordModal } from './ChangePasswordModal';
+import { useToast } from './ui';
 
 const levenshteinDistance = (a: string, b: string): number => {
   const rows = a.length + 1;
@@ -84,6 +88,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   invoices = [],
   onOpenMenu,
 }) => {
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [toast, showToast] = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState(false);
@@ -328,7 +334,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
                 <span className="text-[10px] text-slate-500 font-medium">{roleLabel}</span>
               </div>
-              
+
+              <button
+                onClick={() => setPasswordOpen(true)}
+                title="Change my password"
+                aria-label="Change my password"
+                className="p-1.5 rounded-md text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors ml-1 cursor-pointer"
+              >
+                <KeyRound className="h-4 w-4" />
+              </button>
               <button
                 onClick={onLogout}
                 title="Logout"
@@ -340,6 +354,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           );
         })()}
       </div>
+      {/* Portal: the header's backdrop-blur would otherwise trap these fixed overlays inside it. */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <>
+            {toast}
+            {passwordOpen && <ChangePasswordModal onClose={() => setPasswordOpen(false)} onDone={(m) => { showToast(m); setPasswordOpen(false); }} />}
+          </>,
+          document.body
+        )}
     </header>
   );
 };

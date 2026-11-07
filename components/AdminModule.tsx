@@ -5,6 +5,8 @@ import { KeyRound, RefreshCw, ShieldAlert, Smartphone, UserPlus } from 'lucide-r
 import { api, errorMessage } from '../lib/api';
 import { useApiData } from '../lib/useApiData';
 import { ROLE_LABELS, ROLES, Role } from '../lib/permissions';
+import { useSession } from '../lib/auth';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { Paged, Badge, Button, Card, Empty, Field, inputClass, Modal, StatusBadge, cx, dateTime, useToast } from './ui';
 
 // Users & roles, device binding and the audit trail (Super Admin).
@@ -36,7 +38,9 @@ export function AdminModule({ initialTab = 'users' }: { initialTab?: Tab }) {
 function UsersPanel() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [passwordFor, setPasswordFor] = useState<UserRow | null>(null);
   const [toast, showToast] = useToast();
+  const me = useSession().session?.user.id;
   const usersQ = useApiData<UserRow[]>('/api/users/roles', (m) => showToast(m, 'error'));
   const users = usersQ.data ?? [];
   const load = usersQ.reload;
@@ -63,12 +67,17 @@ function UsersPanel() {
               <td className="p-2"><StatusBadge status={u.status} /></td>
               <td className="p-2">{u.twoFactorEnabled ? <Badge tone="green">On</Badge> : <span className="text-slate-400">—</span>}</td>
               <td className="p-2">{dateTime(u.lastLoginAt)}<div className="text-[10px] text-slate-400">{u.lastLoginIp}</div></td>
-              <td className="p-2 text-right"><Button size="sm" tone="ghost" onClick={() => setEditing(u)}>Manage</Button></td>
+              <td className="p-2 text-right whitespace-nowrap">
+                <Button size="sm" tone="ghost" onClick={() => setPasswordFor(u)} title={u.id === me ? 'Change my password' : `Change ${u.name}'s password`}><KeyRound className="h-3.5 w-3.5" /> Password</Button>
+                <Button size="sm" tone="ghost" onClick={() => setEditing(u)}>Manage</Button>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>)}</Paged>
       {creating && <CreateUserModal onClose={() => setCreating(false)} onDone={(m) => { showToast(m); setCreating(false); void load(); }} onError={(m) => showToast(m, 'error')} />}
+      {/* Own row: current password + this device stays signed in. Others: admin sets a new one. */}
+      {passwordFor && <ChangePasswordModal user={passwordFor.id === me ? undefined : passwordFor} onClose={() => setPasswordFor(null)} onDone={(m) => { showToast(m); setPasswordFor(null); }} />}
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} onDone={(m) => { showToast(m); setEditing(null); void load(); }} onError={(m) => showToast(m, 'error')} />}
     </Card>
   );
@@ -181,7 +190,7 @@ function EditUserModal({ user, onClose, onDone, onError }: { user: UserRow; onCl
       footer={
         <>
           <Button tone="secondary" busy={busy} onClick={() => patch({ revokeSessions: true, unlock: true })}>Sign out everywhere</Button>
-          <Button busy={busy} onClick={() => patch({ name: form.name, mobile: form.mobile, role: form.role, status: form.status, twoFactorEnabled: form.twoFactorEnabled, ...(form.password ? { password: form.password } : {}), ...(payEdit ? payBody(form.role, payEdit) : {}) })}>Save</Button>
+          <Button busy={busy} onClick={() => patch({ name: form.name, mobile: form.mobile, role: form.role, ...(form.status !== user.status ? { status: form.status } : {}), twoFactorEnabled: form.twoFactorEnabled, ...(form.password ? { password: form.password } : {}), ...(payEdit ? payBody(form.role, payEdit) : {}) })}>Save</Button>
         </>
       }
     >

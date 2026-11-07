@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
-import { Printer, X, Building2, ShieldCheck, CheckCircle2, QrCode, FileText } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Printer, X, Building2, ShieldCheck, CheckCircle2, QrCode, FileText, MessageCircle } from 'lucide-react';
 import { PurchaseOrderItem } from '../lib/types';
+import { sheetToPdf } from '../lib/sheetPdf';
 import { initials, useCompany } from '../lib/useCompany';
 
 export interface PrintTotal {
@@ -26,6 +27,8 @@ export interface PrintDocumentModalProps {
   totals: PrintTotal[];
   detailRows?: { label: string; value: string }[];
   remark?: string;
+  /** Customer documents only: shows "WhatsApp PDF", which sends this sheet to the customer. */
+  whatsapp?: { customerName: string; customerId?: string; caption?: string };
   onClose: () => void;
 }
 
@@ -81,11 +84,38 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
   totals,
   detailRows,
   remark,
+  whatsapp,
   onClose,
 }) => {
   const company = useCompany();
   const handlePrint = () => {
     window.print();
+  };
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [waSending, setWaSending] = useState(false);
+  const [waMsg, setWaMsg] = useState('');
+  /** PDF of the sheet → the customer's WhatsApp (from the company number). */
+  const sendOnWhatsApp = async () => {
+    if (!whatsapp || !sheetRef.current) return;
+    setWaSending(true);
+    setWaMsg('');
+    try {
+      const pdf = await sheetToPdf(sheetRef.current);
+      const form = new FormData();
+      form.append('file', pdf, 'document.pdf');
+      form.append('customerName', whatsapp.customerName);
+      if (whatsapp.customerId) form.append('customerId', whatsapp.customerId);
+      form.append('title', `${docTypeLabel} ${docNumber}`);
+      if (whatsapp.caption) form.append('caption', whatsapp.caption);
+      const res = await fetch('/api/documents/whatsapp', { method: 'POST', body: form, credentials: 'same-origin' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.success === false) throw new Error(json.error || 'Could not send on WhatsApp.');
+      setWaMsg(json.message || 'Sent on WhatsApp.');
+    } catch (e) {
+      setWaMsg(e instanceof Error ? e.message : 'Could not send on WhatsApp.');
+    } finally {
+      setWaSending(false);
+    }
   };
 
   // Extract main total amount for words & calculations
@@ -161,6 +191,18 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5">
+            {waMsg && <span className="text-[11px] text-emerald-300 max-w-[260px] truncate" title={waMsg}>{waMsg}</span>}
+            {whatsapp && (
+              <button
+                onClick={sendOnWhatsApp}
+                disabled={waSending}
+                title={`Make a PDF of this ${docTypeLabel.toLowerCase()} and send it to ${whatsapp.customerName}'s WhatsApp`}
+                className="py-2 px-4 rounded-xl bg-[#25D366] hover:bg-[#1ebe5b] disabled:opacity-60 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>{waSending ? 'Sending…' : 'WhatsApp PDF'}</span>
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
@@ -179,8 +221,10 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
         </div>
 
         {/* Printable Document Sheet (A4 Proportional) */}
-        <div className="p-6 sm:p-8 md:p-10 overflow-y-auto font-sans text-xs space-y-5 select-text bg-white" id="printable-invoice">
-          
+        <div className="overflow-y-auto bg-white" id="printable-invoice">
+        {/* The sheet itself (unscrolled), which the WhatsApp PDF is made from. */}
+        <div ref={sheetRef} className="p-6 sm:p-8 md:p-10 font-sans text-xs space-y-5 select-text bg-white">
+
           {/* Header Branding & Official GST Info */}
           <div className="border-2 border-slate-900 rounded-xl overflow-hidden">
             {/* Top Bar Banner */}
@@ -473,6 +517,7 @@ export const PrintDocumentModal: React.FC<PrintDocumentModalProps> = ({
           <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
             This is a Computer Generated Tax Document under the Central Goods and Services Tax Act, 2017.
           </div>
+        </div>
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Image as ImageIcon, Link2, Pencil, Printer, X } from 'lucide-react';
+import { Image as ImageIcon, Link2, MessageCircle, Pencil, Printer, X } from 'lucide-react';
+import { sheetToPdf } from '../lib/sheetPdf';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCompany } from '../lib/useCompany';
 import { amountInWords, stateLabel, GST_STATES } from '../lib/gst';
@@ -164,6 +165,9 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const [refError, setRefError] = useState('');
   const [payMsg, setPayMsg] = useState('');
   const [paying, setPaying] = useState(false);
+  const [waSending, setWaSending] = useState(false);
+  // The first printed sheet: what the WhatsApp PDF is made from.
+  const sheetRef = useRef<HTMLDivElement>(null);
   // Print layout: the usual GST invoice, or the IRP e-invoice format (chosen by itself once an IRN exists).
   const [format, setFormat] = useState<'gst' | 'einvoice' | null>(null);
   // Copies to print (remembered on this device) and whether the challan / payment photos follow them.
@@ -193,6 +197,25 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
       setPayMsg(e instanceof Error ? e.message : 'Could not create the link.');
     } finally {
       setPaying(false);
+    }
+  };
+  /** PDF of the sheet on screen → the customer's WhatsApp (from the company number). */
+  const sendPdfOnWhatsApp = async (invoiceId: string) => {
+    if (!sheetRef.current) return;
+    setWaSending(true);
+    setPayMsg('');
+    try {
+      const pdf = await sheetToPdf(sheetRef.current);
+      const form = new FormData();
+      form.append('file', pdf, 'invoice.pdf');
+      const res = await fetch(`/api/invoices/${encodeURIComponent(invoiceId)}/whatsapp`, { method: 'POST', body: form, credentials: 'same-origin' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.success === false) throw new Error(json.error || 'Could not send the invoice.');
+      setPayMsg(json.message || 'Invoice sent on WhatsApp.');
+    } catch (e) {
+      setPayMsg(e instanceof Error ? e.message : 'Could not send the invoice.');
+    } finally {
+      setWaSending(false);
     }
   };
   if (!invoice || !inv) return null;
@@ -579,6 +602,11 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
                 <Link2 className="h-3.5 w-3.5" /> {paying ? 'Sending…' : 'Send pay link'}
               </button>
             )}
+            {inv.canEditRefs && inv.id && inv.status !== 'Cancelled' && (
+              <button disabled={waSending} onClick={() => sendPdfOnWhatsApp(inv.id!)} title="Make a PDF of this invoice and send it to the customer's WhatsApp" className="py-1.5 px-3 rounded-lg bg-[#25D366] hover:bg-[#1ebe5b] disabled:opacity-60 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
+                <MessageCircle className="h-3.5 w-3.5" /> {waSending ? 'Sending…' : 'WhatsApp PDF'}
+              </button>
+            )}
             {inv.canEditRefs && inv.id && !refs && (
               <button onClick={startEditRefs} className="py-1.5 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center gap-1 cursor-pointer">
                 <Pencil className="h-3.5 w-3.5" /> GRN / Challan
@@ -625,7 +653,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
           {/* One sheet per chosen copy, then the paperwork photos — each starts a new printed page. */}
           {copies.map((copy, i) => (
             <div key={copy} className={i > 0 ? 'mt-6 print:mt-0 print:break-before-page' : ''}>
-              {renderSheet(copy)}
+              <div ref={i === 0 ? sheetRef : undefined}>{renderSheet(copy)}</div>
               <div className="mx-auto mt-1 text-center text-[9px] text-slate-500" style={{ maxWidth: 800 }}>
                 {company.name} · Computer generated invoice
               </div>

@@ -828,6 +828,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
             { label: 'Refund Value', value: `₹${printSReturn.amount.toLocaleString('en-IN')}`, emphasize: true },
           ]}
           remark={printSReturn.remark}
+          whatsapp={{ customerName: printSReturn.partyName }}
           onClose={() => setPrintSReturn(null)}
         />
       )}
@@ -845,6 +846,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
           items={printChallan.items}
           totals={[{ label: 'Total Quantity', value: `${printChallan.totalQty}`, emphasize: true }]}
           remark={printChallan.remark}
+          whatsapp={{ customerName: printChallan.customerName, caption: `Vehicle: ${printChallan.vehicleNumber} · Qty: ${printChallan.totalQty}` }}
           onClose={() => setPrintChallan(null)}
         />
       )}
@@ -871,6 +873,7 @@ export const InventoryHubModule: React.FC<InventoryHubModuleProps> = ({
             { label: 'Grand Total', value: `₹${printQuotation.grandTotal.toLocaleString('en-IN')}`, emphasize: true },
           ]}
           remark={printQuotation.remark}
+          whatsapp={{ customerName: printQuotation.customerName, caption: `Valid for ${printQuotation.validDays} days` }}
           onClose={() => setPrintQuotation(null)}
         />
       )}

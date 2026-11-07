@@ -10,7 +10,7 @@ import { createOrder } from './orders';
 import { resolveRate } from './pricing';
 import { notifyRoles } from './notify';
 import { getSetting } from './settings';
-import { payUrlFor } from './payPage';
+import { invoiceViewUrl, payUrlFor } from './payPage';
 import { handleNewContact } from './whatsappLeadBot';
 
 // Official-number ordering bot (SRS §7.3, §13). One conversation row per
@@ -205,13 +205,14 @@ async function menuAction(choice: string, conv: WhatsAppConversation, phone: str
     }
     case '6': {
       const invoices = await prisma.invoice.findMany({ where: { customerId: customer.id, status: { not: 'Cancelled' } }, orderBy: { createdAt: 'desc' }, take: 3 });
-      const base = process.env.APP_URL;
       const text = invoices.length
         ? (
             await Promise.all(
               invoices.map(async (i) => {
                 const pay = await payUrlFor(TENANT, i.id);
-                return `• ${i.invoiceNumber} (${i.date}) — ${inr(i.grandTotal)} — ${i.status}${base ? `\n  ${base}/customer?invoice=${i.id}` : ''}${pay ? `\n  💳 Pay ${inr(Math.max(i.grandTotal - i.paidAmount, 0))}: ${pay}` : ''}`;
+                // Opens without a login (signed link).
+                const view = invoiceViewUrl(i.id);
+                return `• ${i.invoiceNumber} (${i.date}) — ${inr(i.grandTotal)} — ${i.status}${view ? `\n  📄 ${view}` : ''}${pay ? `\n  💳 Pay ${inr(Math.max(i.grandTotal - i.paidAmount, 0))}: ${pay}` : ''}`;
               })
             )
           ).join('\n')

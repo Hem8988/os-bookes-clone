@@ -7,7 +7,8 @@ import { sendPush } from './messaging/push';
 import { sendSms } from './messaging/sms';
 import { toWhatsAppNumber } from '@/lib/phone';
 import { msg91Config, whatsappReady, whatsappSendSession, whatsappSendTemplate } from './messaging/msg91';
-import { customerWhatsAppNumbers, log as logWhatsApp, RichParts, sendToFirstOnWhatsApp, sendWhatsAppRich, sendWhatsAppTemplate, sendWhatsAppText, whatsappReadyFor, whatsappRoute } from './messaging/whatsapp';
+import { customerWhatsAppNumbers, log as logWhatsApp, RichParts, sendToFirstOnWhatsApp, sendWhatsAppMedia, sendWhatsAppRich, sendWhatsAppTemplate, sendWhatsAppText, whatsappReadyFor, whatsappRoute } from './messaging/whatsapp';
+import { storeFile } from './storage';
 import { getSetting } from './settings';
 
 type Vars = Record<string, string | number | null | undefined>;
@@ -114,7 +115,26 @@ const SMS_FALLBACK = ['OTP', 'PAYMENT_RECEIVED'];
  * Send a templated message to a customer on WhatsApp (and email when the
  * customer has one). Called from Effects, i.e. after the DB commit.
  */
-export async function notifyCustomer(tenantId: string, customer: CustomerContact, templateKey: string, vars: Vars, emailSubject?: string) {
+/** A PDF to send with the message (the invoice), made only when it can actually be attached. */
+type MakePdf = () => Promise<{ data: Buffer; filename: string } | null>;
+
+/**
+ * From the linked company number: the PDF as a document, the message text as its caption
+ * (one message instead of card + text). null when there is no linked number or no PDF.
+ */
+async function sendWithPdf(tenantId: string, numbers: string[], templateKey: string, m: Prepared, makePdf: MakePdf) {
+  const { route } = await whatsappRoute(tenantId, 'main');
+  if (route !== 'web') return null;
+  const pdf = await makePdf().catch(() => null);
+  if (!pdf) return null;
+  const stored = await storeFile(tenantId, pdf.data);
+  const caption = (m.parts.button ? `${m.text}\n\n${m.parts.button.label}: ${m.parts.button.url}` : m.text)
+    // The template says "click the button"; on a document the link is written out instead.
+    .replace(/Click the '([^']+)' button to view your invoice/i, 'Invoice PDF attached. Open the link below to view it online');
+  return sendToFirstOnWhatsApp(numbers, (to) => sendWhatsAppMedia(tenantId, to, { kind: 'document', link: stored.url, storedUrl: stored.url, caption: caption.slice(0, 1024), filename: pdf.filename }));
+}
+
+export async function notifyCustomer(tenantId: string, customer: CustomerContact, templateKey: string, vars: Vars, emailSubject?: string, makePdf?: MakePdf) {
   const m = await prepareMessage(tenantId, templateKey, customer.name, vars);
   if (!m) return;
   const numbers = customerWhatsAppNumbers(customer);
@@ -123,9 +143,12 @@ export async function notifyCustomer(tenantId: string, customer: CustomerContact
   if (phone) {
     const c = await msg91Config(tenantId);
     const waReady = await whatsappReadyFor(tenantId);
+    // With a PDF (invoice) and a linked number: the PDF with the text as caption. When that did
+    // not go out (no Chromium, send failed), the usual card + link message is sent instead.
+    const withPdf = makePdf ? await sendWithPdf(tenantId, numbers, templateKey, m, makePdf) : null;
     // Without any WhatsApp set up this only logs the message (SIMULATED).
     // A WhatsApp number that is not on WhatsApp falls back to the customer's mobile.
-    const result = await sendToFirstOnWhatsApp(numbers, (n) => sendCustomerWhatsApp(tenantId, n, templateKey, m));
+    const result = withPdf?.ok ? withPdf : await sendToFirstOnWhatsApp(numbers, (n) => sendCustomerWhatsApp(tenantId, n, templateKey, m));
     // SMS: the messages chosen in WhatsApp → MSG91, and OTP / payment alerts whenever WhatsApp is off or failed.
     const smsPhone = customer.phone || phone;
     if ((c.smsEnabled && c.smsKeys.includes(templateKey)) || ((!result.ok || !waReady) && SMS_FALLBACK.includes(templateKey))) {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Image as ImageIcon, Link2, MessageCircle, Pencil, Printer, X } from 'lucide-react';
+import { Download, Image as ImageIcon, Link2, MessageCircle, Pencil, Printer, X } from 'lucide-react';
 import { sheetToPdf } from '../lib/sheetPdf';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCompany } from '../lib/useCompany';
@@ -128,6 +128,11 @@ type RefKey = (typeof REF_FIELDS)[number]['key'];
 interface PrintInvoiceModalProps {
   invoice: InvoiceView | null;
   onClose: () => void;
+  /**
+   * Public page from WhatsApp (/i/<token>): data from that link, only the buyer's copy,
+   * no staff buttons, a "Download PDF" button and no close button.
+   */
+  publicToken?: string;
 }
 
 const money = (n: number | null | undefined) => Number(n || 0).toFixed(2);
@@ -136,13 +141,14 @@ const pct = (n: number) => n.toFixed(2);
 const dmy = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : d || '');
 
 /** Full print details (buyer address, references) for a stored invoice. */
-function usePrintData(invoice: InvoiceView | null): [PrintData | null, (print: PrintExtra) => void] {
+function usePrintData(invoice: InvoiceView | null, publicToken?: string): [PrintData | null, (print: PrintExtra) => void] {
   const [loaded, setLoaded] = useState<{ id: string; data: PrintData } | null>(null);
   const id = invoice?.id;
   useEffect(() => {
     if (!id) return;
     let alive = true;
-    fetch(`/api/invoices/${encodeURIComponent(id)}/print`, { cache: 'no-store', credentials: 'same-origin' })
+    const url = publicToken ? `/api/public/invoice/${encodeURIComponent(publicToken)}` : `/api/invoices/${encodeURIComponent(id)}/print`;
+    fetch(url, { cache: 'no-store', credentials: 'same-origin' })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (alive && j?.data) setLoaded({ id, data: j.data as PrintData });
@@ -151,15 +157,15 @@ function usePrintData(invoice: InvoiceView | null): [PrintData | null, (print: P
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, publicToken]);
   const setPrint = (print: PrintExtra) => setLoaded((l) => (l ? { ...l, data: { ...l.data, print } } : l));
   if (!invoice) return [null, setPrint];
   return [loaded && loaded.id === id ? loaded.data : invoice, setPrint];
 }
 
-export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, onClose }) => {
+export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, onClose, publicToken }) => {
   const company = useCompany();
-  const [inv, setPrint] = usePrintData(invoice);
+  const [inv, setPrint] = usePrintData(invoice, publicToken);
   const [refs, setRefs] = useState<Record<RefKey, string> | null>(null);
   const [saving, setSaving] = useState(false);
   const [refError, setRefError] = useState('');
@@ -171,7 +177,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   // Print layout: the usual GST invoice, or the IRP e-invoice format (chosen by itself once an IRN exists).
   const [format, setFormat] = useState<'gst' | 'einvoice' | null>(null);
   // Copies to print (remembered on this device) and whether the challan / payment photos follow them.
-  const [copies, setCopies] = useState<string[]>(() => savedCopies());
+  const [copies, setCopies] = useState<string[]>(() => (publicToken ? [COPY_LABELS[0].label] : savedCopies()));
   const [withPhotos, setWithPhotos] = useState(true);
   const toggleCopy = (label: string) =>
     setCopies((cur) => {
@@ -197,6 +203,27 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
       setPayMsg(e instanceof Error ? e.message : 'Could not create the link.');
     } finally {
       setPaying(false);
+    }
+  };
+  /** Public page: save the sheet on screen as a PDF file. */
+  const [downloading, setDownloading] = useState(false);
+  const downloadPdf = async () => {
+    if (!sheetRef.current || !inv) return;
+    setDownloading(true);
+    try {
+      const pdf = await sheetToPdf(sheetRef.current);
+      const url = URL.createObjectURL(pdf);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${String(inv.invoiceNumber || 'invoice').replace(/[^\w-]+/g, '-')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setPayMsg('Could not make the PDF. Use Print → Save as PDF instead.');
+    } finally {
+      setDownloading(false);
     }
   };
   /** PDF of the sheet on screen → the customer's WhatsApp (from the company number). */
@@ -564,7 +591,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
   const modal = (
     <div className="invoice-print-root fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex justify-center overflow-y-auto print:static print:block print:bg-white print:p-0 print:overflow-visible print:backdrop-blur-none items-stretch p-0">
       <div className="w-full bg-white text-black shadow-2xl overflow-hidden flex flex-col print:max-h-none print:rounded-none print:shadow-none print:overflow-visible print:max-w-none max-w-none h-full rounded-none">
-        <div className="print:hidden flex items-center justify-between px-5 py-3 bg-slate-900 text-white">
+        <div className="print:hidden flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-slate-900 text-white">
           <div className="flex items-center gap-2">
             <Printer className="h-5 w-5 text-emerald-400" />
             <h3 className="font-extrabold text-sm">Tax Invoice {inv.invoiceNumber}</h3>
@@ -577,7 +604,7 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg bg-slate-800 p-0.5 text-[11px] font-bold" role="group" aria-label="Copies to print">
+            <div className={`${publicToken ? 'hidden' : 'flex'} items-center gap-1 rounded-lg bg-slate-800 p-0.5 text-[11px] font-bold`} role="group" aria-label="Copies to print">
               {COPY_LABELS.map((c) => (
                 <button
                   key={c.label}
@@ -612,12 +639,19 @@ export const PrintInvoiceModal: React.FC<PrintInvoiceModalProps> = ({ invoice, o
                 <Pencil className="h-3.5 w-3.5" /> GRN / Challan
               </button>
             )}
+            {publicToken && (
+              <button disabled={downloading} onClick={downloadPdf} className="py-1.5 px-3 rounded-lg bg-[#25D366] hover:bg-[#1ebe5b] disabled:opacity-60 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
+                <Download className="h-4 w-4" /> {downloading ? 'Making PDF…' : 'Download PDF'}
+              </button>
+            )}
             <button onClick={() => window.print()} className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer">
               <Printer className="h-4 w-4" /> Print
             </button>
-            <button onClick={() => { setRefs(null); onClose(); }} className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer" title="Close">
-              <X className="h-5 w-5" />
-            </button>
+            {!publicToken && (
+              <button onClick={() => { setRefs(null); onClose(); }} className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer" title="Close">
+                <X className="h-5 w-5" />
+              </button>
+            )}
           </div>
         </div>
 

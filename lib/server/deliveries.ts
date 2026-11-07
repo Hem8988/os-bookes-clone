@@ -15,7 +15,8 @@ import { nextNumber } from './sequence';
 import { getSetting } from './settings';
 import { isStoredFile } from './storage';
 import { getWallet, postWallet } from './wallet';
-import { payUrlFor } from './payPage';
+import { invoiceViewUrl, payUrlFor } from './payPage';
+import { invoicePdfMaker } from './invoicePdf';
 
 export const PAYMENT_MODES = ['CASH', 'ONLINE', 'CHEQUE', 'CREDIT'] as const;
 export type PaymentMode = (typeof PAYMENT_MODES)[number];
@@ -463,8 +464,9 @@ export async function verifyDelivery(tx: Tx, actor: Actor, deliveryId: string, n
         actor.tenantId,
         customer,
         'INVOICE',
-        { invoiceNumber: inv.invoiceNumber, date: inv.date, amount: inv.grandTotal.toLocaleString('en-IN'), paid: inv.paidAmount.toLocaleString('en-IN'), outstanding: finalBalance.toLocaleString('en-IN'), link: appUrl ? `${appUrl}/customer?invoice=${inv.id}` : '', payLink: (await payUrlFor(actor.tenantId, inv.id)) || '' },
-        `Invoice ${inv.invoiceNumber}`
+        { invoiceNumber: inv.invoiceNumber, date: inv.date, amount: inv.grandTotal.toLocaleString('en-IN'), paid: inv.paidAmount.toLocaleString('en-IN'), outstanding: finalBalance.toLocaleString('en-IN'), link: invoiceViewUrl(inv.id) || (appUrl ? `${appUrl}/customer?invoice=${inv.id}` : ''), payLink: (await payUrlFor(actor.tenantId, inv.id)) || '' },
+        `Invoice ${inv.invoiceNumber}`,
+        invoicePdfMaker(inv.id, inv.invoiceNumber)
       );
       await prisma.invoice.update({ where: { id: inv.id }, data: { sentAt: new Date() } });
     });

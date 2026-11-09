@@ -26,6 +26,8 @@ export interface WebsiteContent {
   safety: { show: boolean; title: string; lead: string; tips: WebsiteStep[] };
   inquiry: { show: boolean; title: string; lead: string; steps: WebsiteStep[] };
   contact: { show: boolean; title: string; lead: string };
+  /** Hours: one line each ("Mon – Sat: 8 am – 8 pm"); none → the hours block is left out. */
+  footer: { about: string; hours: string[]; emergency: boolean };
 }
 
 /** The Indane range banner; the hero crops its cylinders out of it. */
@@ -102,6 +104,11 @@ export const DEFAULT_WEBSITE: WebsiteContent = {
     show: true,
     title: 'Talk to us',
     lead: 'For a new connection, a regular supply plan or an urgent refill.',
+  },
+  footer: {
+    about: '{company} is an Indane LPG distributor supplying {sizes} cylinders to hotels, restaurants, hospitals and factories, with delivery, empty pickup and bills on WhatsApp.',
+    hours: [],
+    emergency: true,
   },
 };
 

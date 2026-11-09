@@ -20,6 +20,7 @@ const SECTIONS: { key: SectionKey; title: string; about: string; canHide: boolea
   { key: 'safety', title: 'Using LPG safely', about: 'Safety tips. The 1906 helpline box always stays.', canHide: true },
   { key: 'inquiry', title: 'Send an inquiry', about: 'Text next to the inquiry form.', canHide: true },
   { key: 'contact', title: 'Talk to us', about: 'Heading and text. Phone, email and address come from Settings → Company.', canHide: true },
+  { key: 'footer', title: 'Footer (bottom of the page)', about: 'About text, working hours and the 1906 box. Phone, email and address come from Settings → Company.', canHide: false },
 ];
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -310,6 +311,26 @@ export function WebsiteEditor() {
             <TextField label="Text under the heading" value={s.lead} max={400} rows={2} onChange={(lead) => set('safety', { lead })} hint={LEAD_HINT} />
             <div className="pt-1 text-xs font-black uppercase tracking-wide text-slate-500">Safety tips</div>
             <StepsEditor steps={s.tips} onChange={(tips) => set('safety', { tips })} max={8} addLabel="Add tip" titleLabel="Bold start" textLabel="Rest of the tip" />
+          </>
+        );
+      }
+      case 'footer': {
+        const s = draft.footer;
+        return (
+          <>
+            <TextField label="About your business (under the company name)" value={s.about} max={400} rows={3} onChange={(about) => set('footer', { about })} hint={LEAD_HINT} />
+            <label className="block space-y-1">
+              <span className="block text-xs font-bold text-slate-700">Working hours (one line each, up to 6)</span>
+              <textarea
+                rows={4}
+                value={s.hours.join('\n')}
+                onChange={(e) => set('footer', { hours: e.target.value.split('\n').slice(0, 6).map((l) => l.slice(0, 60)) })}
+                placeholder={'Monday – Saturday: 8:00 am – 8:00 pm\nSunday: 9:00 am – 1:00 pm'}
+                className={inputClass}
+              />
+              <span className="block text-[11px] text-slate-500">Leave empty to hide the working hours.</span>
+            </label>
+            <Switch checked={s.emergency} onChange={(emergency) => set('footer', { emergency })} label="Show the red “Gas leak? 1906” box" />
           </>
         );
       }

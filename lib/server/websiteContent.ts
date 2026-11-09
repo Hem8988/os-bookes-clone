@@ -40,6 +40,7 @@ export function cleanWebsite(raw: unknown, tenantId: string): WebsiteContent {
   const safety = obj(obj(raw).safety);
   const inquiry = obj(obj(raw).inquiry);
   const contact = obj(obj(raw).contact);
+  const footer = obj(obj(raw).footer);
 
   const headline = text(hero.headline, 90);
   if (!headline) throw badRequest('Top section: the main heading cannot be empty.');
@@ -73,5 +74,10 @@ export function cleanWebsite(raw: unknown, tenantId: string): WebsiteContent {
     safety: { show: bool(safety.show, true), title: text(safety.title, 80), lead: text(safety.lead, 400), tips: steps(safety.tips, 8) },
     inquiry: { show: bool(inquiry.show, true), title: text(inquiry.title, 80), lead: text(inquiry.lead, 400), steps: steps(inquiry.steps, 5) },
     contact: { show: bool(contact.show, true), title: text(contact.title, 80), lead: text(contact.lead, 400) },
+    footer: {
+      about: text(footer.about, 400),
+      hours: (Array.isArray(footer.hours) ? footer.hours : []).slice(0, 6).map((s) => text(s, 60)).filter(Boolean),
+      emergency: bool(footer.emergency, true),
+    },
   };
 }

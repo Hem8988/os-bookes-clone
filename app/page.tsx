@@ -407,6 +407,102 @@ export default async function Home() {
 
       <footer className={styles.footer}>
         <div className={styles.wrap}>
+          <div className={styles.footerGrid}>
+            <div className={styles.footerBrand}>
+              <a href="#top" className={styles.footerLogo}>
+                {company.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={company.logo} alt="" />
+                ) : (
+                  <span className={styles.brandMark} aria-hidden="true" />
+                )}
+                {company.name}
+              </a>
+              {site.footer.about && <p>{fill(site.footer.about)}</p>}
+              <div className={styles.footerCtas}>
+                {phone && (
+                  <a href={`tel:${digits(phone)}`} className={`${styles.btn} ${styles.btnPrimary}`}>
+                    <PhoneIcon /> Call {phone}
+                  </a>
+                )}
+                {waLink && (
+                  <a href={waLink} target="_blank" rel="noreferrer" className={`${styles.btn} ${styles.btnWhatsapp}`}>
+                    <WhatsAppIcon /> WhatsApp
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <nav aria-label="Footer">
+              <h3 className={styles.footerHead}>Quick links</h3>
+              <ul className={styles.footerList}>
+                {nav.map(([id, label]) => (
+                  <li key={id}>
+                    <a href={`#${id}`}>{label}</a>
+                  </li>
+                ))}
+                <li>
+                  <a href={login.href}>{login.label}</a>
+                </li>
+              </ul>
+            </nav>
+
+            <div>
+              <h3 className={styles.footerHead}>Contact</h3>
+              <ul className={styles.footerList}>
+                {phone && (
+                  <li>
+                    <span className={styles.footerLabel}>Phone</span>
+                    <a href={`tel:${digits(phone)}`}>{phone}</a>
+                  </li>
+                )}
+                {company.phone && company.supportPhone && digits(company.phone) !== digits(company.supportPhone) && (
+                  <li>
+                    <span className={styles.footerLabel}>Office</span>
+                    <a href={`tel:${digits(company.phone)}`}>{company.phone}</a>
+                  </li>
+                )}
+                {waLink && wa && (
+                  <li>
+                    <span className={styles.footerLabel}>WhatsApp</span>
+                    <a href={waLink} target="_blank" rel="noreferrer">{wa}</a>
+                  </li>
+                )}
+                {company.email && (
+                  <li>
+                    <span className={styles.footerLabel}>Email</span>
+                    <a href={`mailto:${company.email}`}>{company.email}</a>
+                  </li>
+                )}
+                {address && (
+                  <li>
+                    <span className={styles.footerLabel}>Office and godown</span>
+                    <span className={styles.footerAddress}>{address}</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div>
+              {site.footer.hours.length > 0 && (
+                <>
+                  <h3 className={styles.footerHead}>Working hours</h3>
+                  <ul className={`${styles.footerList} ${styles.footerHours}`}>
+                    {site.footer.hours.map((h, i) => (
+                      <li key={`${h}-${i}`}>{h}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {site.footer.emergency && (
+                <a href="tel:1906" className={styles.footerEmergency}>
+                  <span>Gas leak? LPG emergency, 24 hours</span>
+                  <b>1906</b>
+                </a>
+              )}
+            </div>
+          </div>
+
           {/* sized so the whole name fits on one line, however long it is */}
           <p className={styles.wordmark} aria-hidden="true" style={{ fontSize: `clamp(2.6rem, ${Math.min(13, 150 / Math.max(company.name.length, 1)).toFixed(2)}vw, 11rem)` }}>
             {company.name}
@@ -416,7 +512,7 @@ export default async function Home() {
               © {new Date().getFullYear()} {company.legalName || company.name}
             </span>
             {company.gstin && <span>GSTIN {company.gstin}</span>}
-            <a href={login.href}>{login.label}</a>
+            <span>Authorised Indane LPG distributor</span>
           </div>
         </div>
       </footer>

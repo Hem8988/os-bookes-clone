@@ -58,6 +58,7 @@ import { InvoiceView, PrintInvoiceModal } from './PrintInvoiceModal';
 import ReportsModule from './ReportsModule';
 import RoutesModule from './RoutesModule';
 import { SettingsModule } from './SettingsModule';
+import { WebsiteEditor } from './WebsiteEditor';
 import { MENU, Sidebar } from './Sidebar';
 import { MobileMenu, MobileTabBar } from './MobileNav';
 import { MegaMenu } from './MegaMenu';
@@ -277,6 +278,8 @@ export default function Workspace() {
         return <AdminModule key={sub || 'users'} initialTab={(sub as 'users' | 'devices' | 'audit') || 'users'} />;
       case 'settings':
         return <SettingsModule />;
+      case 'website':
+        return can('settings.manage') ? <WebsiteEditor /> : null;
       case 'documents': {
         const po = crud(purchaseOrders, 'Refill order');
         const pur = crud(purchases, 'Purchase bill');

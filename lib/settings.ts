@@ -1,6 +1,8 @@
 // Admin-configurable settings with safe defaults. Shared between server
 // (enforcement) and the Settings screen (editing).
 
+import { DEFAULT_WEBSITE, type WebsiteContent } from './website';
+
 export interface CompanyProfile {
   name: string;
   legalName: string;
@@ -152,6 +154,8 @@ export interface SettingsMap {
   msg91: Msg91Settings;
   owner: OwnerReportPolicy;
   budgets: BudgetPolicy;
+  // Public website text and photos (Admin → Website).
+  website: WebsiteContent;
 }
 
 export type SettingKey = keyof SettingsMap;
@@ -212,6 +216,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
     statementDay: 0,
   },
   budgets: { heads: {} },
+  website: DEFAULT_WEBSITE,
   owner: {
     enabled: false,
     phones: '',

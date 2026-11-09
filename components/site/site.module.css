@@ -1285,6 +1285,13 @@ textarea.input {
   margin-left: -29.35%;
   margin-top: -3.73%;
 }
+/* A photo uploaded in Admin → Website: fills the same box instead of the banner crop. */
+.heroPhotoFill img {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  object-fit: cover;
+}
 @media (max-width: 860px) {
   .heroPhoto {
     margin-bottom: 32px;

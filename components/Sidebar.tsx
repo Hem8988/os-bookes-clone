@@ -178,6 +178,7 @@ export const MENU: MenuSection[] = [
       { tab: 'admin', sub: 'users', label: 'Users & roles', permission: 'users.manage' },
       { tab: 'admin', sub: 'devices', label: 'Devices', permission: 'devices.approve' },
       { tab: 'admin', sub: 'audit', label: 'Audit log', permission: 'audit.view' },
+      { tab: 'website', label: 'Website', permission: 'settings.manage' },
       { tab: 'settings', label: 'Settings', permission: 'settings.manage' },
     ],
   },

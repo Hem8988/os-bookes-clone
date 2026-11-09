@@ -4,6 +4,7 @@ import { audit } from '@/lib/server/audit';
 import { getAuth, requireAuth } from '@/lib/server/auth';
 import { badRequest, handle, ok, readJson } from '@/lib/server/http';
 import { getSetting, saveSetting } from '@/lib/server/settings';
+import { cleanWebsite } from '@/lib/server/websiteContent';
 
 type Ctx = { params: Promise<{ key: string }> };
 
@@ -36,7 +37,7 @@ export const PUT = handle(async (request: Request, ctx: Ctx) => {
       if (image && (typeof image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(image) || image.length > 400_000)) throw badRequest(`${label} must be a PNG/JPG image under 300 KB.`);
     }
   }
-  const saved = await saveSetting(auth.tenantId, key, body, auth.name);
+  const saved = await saveSetting(auth.tenantId, key, key === 'website' ? (cleanWebsite(body, auth.tenantId) as SettingsMap[typeof key]) : body, auth.name);
   await audit(prisma, auth, { action: 'SETTINGS_UPDATED', entityType: 'Setting', entityId: key, oldValue: before, newValue: saved, sensitive: key === 'security' });
   return ok(saved, 'Settings saved.');
 });

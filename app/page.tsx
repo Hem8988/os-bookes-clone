@@ -54,6 +54,11 @@ const waNumber = (v: string) => {
   const d = digits(v);
   return d.length === 10 ? `91${d}` : d;
 };
+/** 918988225521 → +91 89882 25521 */
+const showNumber = (v: string) => {
+  const d = waNumber(v);
+  return d.length === 12 && d.startsWith('91') ? `+91 ${d.slice(2, 7)} ${d.slice(7)}` : v;
+};
 /** Stagger delay for a revealed item. */
 const delay = (ms: number) => ({ '--d': `${ms}ms` }) as CSSProperties;
 
@@ -69,12 +74,14 @@ const PhoneIcon = () => (
 );
 
 export default async function Home() {
-  const [company, msg91, site, productRows, cookieStore] = await Promise.all([
+  const [company, msg91, site, productRows, cookieStore, waCompany] = await Promise.all([
     getSetting(TENANT, 'company'),
     getSetting(TENANT, 'msg91'),
     getSetting(TENANT, 'website'),
     prisma.product.findMany({ where: { tenantId: TENANT, active: true }, select: { id: true, name: true, weightVolume: true, weightUnit: true, category: true } }),
     cookies(),
+    // The company WhatsApp number linked by QR (WhatsApp → Numbers).
+    prisma.waSession.findFirst({ where: { tenantId: TENANT, isCompany: true, number: { not: null } }, select: { number: true } }),
   ]);
   const claims = verifySession(cookieStore.get(SESSION_COOKIE)?.value);
   const dashboard = claims ? ROLE_HOME[claims.role as Role] : null;
@@ -88,7 +95,7 @@ export default async function Home() {
   const lineup = (cylinders.length ? cylinders : [{ id: 'c19', kg: 19 }, { id: 'c47', kg: 47.5 }]).slice(0, 4);
 
   const phone = company.supportPhone || company.phone;
-  const wa = msg91.whatsappNumber || phone;
+  const wa = msg91.whatsappNumber || (waCompany?.number ? `+${waCompany.number}` : '') || phone;
   const waFor = (text: string) => (wa ? `https://wa.me/${waNumber(wa)}?text=${encodeURIComponent(`Hello ${company.name}, ${text}`)}` : null);
   const waLink = waFor('I want to order LPG cylinders.');
   const address = [company.address, [company.city, company.pincode].filter(Boolean).join(' - ')].filter(Boolean).join('\n');
@@ -447,7 +454,7 @@ export default async function Home() {
               </ul>
             </nav>
 
-            <div>
+            <div hidden={!phone && !waLink && !company.email && !address}>
               <h3 className={styles.footerHead}>Contact</h3>
               <ul className={styles.footerList}>
                 {phone && (
@@ -465,7 +472,7 @@ export default async function Home() {
                 {waLink && wa && (
                   <li>
                     <span className={styles.footerLabel}>WhatsApp</span>
-                    <a href={waLink} target="_blank" rel="noreferrer">{wa}</a>
+                    <a href={waLink} target="_blank" rel="noreferrer">{showNumber(wa)}</a>
                   </li>
                 )}
                 {company.email && (

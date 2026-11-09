@@ -16,6 +16,8 @@ import {
   Users,
   Wallet,
   Database,
+  ChevronRight,
+  Globe,
 } from 'lucide-react';
 import type { Permission } from '../lib/permissions';
 import { initials, useCompany } from '../lib/useCompany';
@@ -196,6 +198,7 @@ interface SidebarProps {
 }
 
 const MAX_FREQUENT = 8;
+const OPEN_KEY = 'deskshark.sidebarSections';
 
 /**
  * Only the everyday pages: pinned ones, then the ones this person opens most
@@ -214,7 +217,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, activeSub, can, onN
   const starter = MENU.flatMap((sec) => sec.items.filter((i) => can(i.permission)).slice(0, 2)).map((i) => byKey.get(menuKey(i.tab, i.sub))!).filter((i) => !usage.pinned.includes(i.key));
   const frequent = (used.length >= 3 ? used : [...used, ...starter.filter((i) => !used.includes(i))]).slice(0, MAX_FREQUENT);
   const isActive = (i: MenuItem) => i.tab === activeTab && (!i.sub || i.sub === activeSub);
-  const current = all.find((i) => isActive(i) && !pinned.includes(i) && !frequent.includes(i));
+  // Every section, folded; the one holding the open page is always unfolded. Remembered on this device.
+  const [openSections, setOpenSections] = React.useState<string[]>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(OPEN_KEY) || '[]');
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggleSection = (key: string) =>
+    setOpenSections((cur) => {
+      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify(next));
+      } catch {
+        /* storage off */
+      }
+      return next;
+    });
+  const sections = MENU.map((sec) => ({ ...sec, items: sec.items.filter((i) => can(i.permission)).map((i) => byKey.get(menuKey(i.tab, i.sub))!) })).filter((sec) => sec.items.length);
 
   const row = (i: (typeof all)[number], pin: boolean) => (
     <div key={i.key} className={`group flex items-center rounded-lg transition ${isActive(i) ? 'bg-emerald-600 text-white shadow' : 'hover:bg-slate-100'}`}>
@@ -248,6 +270,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, activeSub, can, onN
           <LayoutDashboard className="h-4 w-4" /> Dashboard
         </button>
       )}
+      {can('settings.manage') && (
+        <button onClick={() => onNavigate('website')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition mb-1 ${activeTab === 'website' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-700 hover:bg-slate-100 font-semibold'}`}>
+          <Globe className="h-4 w-4" /> Website
+        </button>
+      )}
       <button onClick={onOpenMenu} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 mb-1">
         <LayoutGrid className="h-4 w-4" /> All menus
       </button>
@@ -260,13 +287,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, activeSub, can, onN
       )}
       {heading(used.length >= 3 ? 'Most used' : 'Quick access')}
       <div className="space-y-0.5">{frequent.map((i) => row(i, false))}</div>
-      {current && (
-        <>
-          {heading('Open now')}
-          <div className="space-y-0.5">{row(current, false)}</div>
-        </>
-      )}
-      <p className="mt-auto px-3 pt-4 text-[10px] leading-snug text-slate-400">Pages you use most show here. Everything else: <button onClick={onOpenMenu} className="font-bold text-emerald-700">All menus</button> (top bar). ☆ pins a page.</p>
+
+      {heading('All sections')}
+      <div className="space-y-0.5">
+        {sections.map((sec) => {
+          const Icon = sec.icon;
+          const holdsActive = sec.items.some(isActive);
+          const isOpen = holdsActive || openSections.includes(sec.key);
+          return (
+            <div key={sec.key}>
+              <button
+                onClick={() => toggleSection(sec.key)}
+                aria-expanded={isOpen}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition hover:bg-slate-100 ${holdsActive ? 'font-black text-emerald-700' : 'font-bold text-slate-700'}`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="flex-1 truncate text-left">{sec.label}</span>
+                <span className="text-[10px] font-semibold text-slate-400">{sec.items.length}</span>
+                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {isOpen && <div className="ml-4 border-l border-slate-200 pl-2 py-0.5 space-y-0.5">{sec.items.map((i) => row(i, usage.pinned.includes(i.key)))}</div>}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-auto px-3 pt-4 text-[10px] leading-snug text-slate-400">☆ pins a page to the top. Search every page from <button onClick={onOpenMenu} className="font-bold text-emerald-700">All menus</button>.</p>
     </aside>
   );
 };

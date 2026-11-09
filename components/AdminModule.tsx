@@ -77,7 +77,7 @@ function UsersPanel() {
       </table>)}</Paged>
       {creating && <CreateUserModal onClose={() => setCreating(false)} onDone={(m) => { showToast(m); setCreating(false); void load(); }} onError={(m) => showToast(m, 'error')} />}
       {/* Own row: current password + this device stays signed in. Others: admin sets a new one. */}
-      {passwordFor && <ChangePasswordModal user={passwordFor.id === me ? undefined : passwordFor} onClose={() => setPasswordFor(null)} onDone={(m) => { showToast(m); setPasswordFor(null); }} />}
+      {passwordFor && <ChangePasswordModal user={passwordFor.id === me ? undefined : { id: passwordFor.id, name: passwordFor.name }} onClose={() => setPasswordFor(null)} onDone={(m) => { showToast(m); setPasswordFor(null); }} />}
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} onDone={(m) => { showToast(m); setEditing(null); void load(); }} onError={(m) => showToast(m, 'error')} />}
     </Card>
   );

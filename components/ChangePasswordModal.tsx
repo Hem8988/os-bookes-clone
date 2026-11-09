@@ -17,7 +17,10 @@ function weakness(p: string): string | null {
   return null;
 }
 
-export function ChangePasswordModal({ user, onClose, onDone }: { user?: { id: string; name: string }; onClose: () => void; onDone: (message: string) => void }) {
+/** Whose password the Super Admin resets: a login (id), or the login of an employee / customer. */
+export type PasswordTarget = { name: string; id?: string; employeeId?: string; customerId?: string };
+
+export function ChangePasswordModal({ user, onClose, onDone }: { user?: PasswordTarget; onClose: () => void; onDone: (message: string) => void }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -34,7 +37,7 @@ export function ChangePasswordModal({ user, onClose, onDone }: { user?: { id: st
     setError('');
     try {
       const { message } = user
-        ? await apiWithMessage(`/api/users/${user.id}`, { password: next }, 'PATCH')
+        ? await apiWithMessage('/api/users/reset-password', { userId: user.id, employeeId: user.employeeId, customerId: user.customerId, password: next })
         : await apiWithMessage('/api/auth/password', { currentPassword: current, newPassword: next });
       onDone(user ? `${user.name} ka password badal diya. Unhe naye password se login karna hoga.` : message || 'Password changed.');
     } catch (e) {

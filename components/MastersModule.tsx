@@ -56,6 +56,7 @@ import { AddEditCompanyModal } from './AddEditCompanyModal';
 import { AddEditCategoryModal } from './AddEditCategoryModal';
 import { AddEditVendorModal } from './AddEditVendorModal';
 import { AddEditEmployeeModal } from './AddEditEmployeeModal';
+import { ResetPasswordButton } from './ResetPasswordButton';
 import { AddEditExpenseModal } from './AddEditExpenseModal';
 import { AddEditIncomeModal } from './AddEditIncomeModal';
 import { AddEditPaymentModal } from './AddEditPaymentModal';
@@ -1456,6 +1457,7 @@ export const MastersModule: React.FC<MastersModuleProps> = ({
                         >
                           <Edit3 className="h-3.5 w-3.5" />
                         </button>
+                        <ResetPasswordButton target={{ name: st.name, employeeId: st.id }} />
                         <button
                           onClick={() => handleDeleteEmployeeClick(st)}
                           className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white transition-all cursor-pointer"

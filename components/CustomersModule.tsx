@@ -26,6 +26,7 @@ import { AddEditVendorModal } from './AddEditVendorModal';
 import { CustomerLedgerModal } from './CustomerLedgerModal';
 import { DepositReceiptModal } from './DepositReceiptModal';
 import { MonthlyCustomerRateModal } from './MonthlyCustomerRateModal';
+import { ResetPasswordButton } from './ResetPasswordButton';
 import { Paged, WhoStamp, today } from './ui';
 
 /** 2026-09 → "Sep 26" */
@@ -792,6 +793,7 @@ export const CustomersModule: React.FC<CustomersModuleProps> = ({
                     >
                       <Edit className="h-4 w-4" />
                     </button>
+                    <ResetPasswordButton target={{ name: c.name, customerId: c.id }} className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400" />
                     {onDeleteCustomer && (
                       <button
                         onClick={() => handleDeleteClick(c)}
